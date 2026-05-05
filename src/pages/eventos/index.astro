@@ -1,0 +1,67 @@
+---
+import { getCollection } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import AtmosphericBanner from '@components/AtmosphericBanner.astro';
+import EventCard from '@components/EventCard.astro';
+import { isUpcoming } from '@/lib/format';
+
+const all = await getCollection('eventos', ({ data }) => !data.draft);
+all.sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+const upcoming = all.filter((e) => isUpcoming(e.data.date));
+const past = all.filter((e) => !isUpcoming(e.data.date)).reverse();
+---
+
+<PublicLayout
+  title="Eventos"
+  description="Tenidas, interlogiales, aniversarios y eventos públicos de la R∴L∴S∴ Masada No. 324."
+>
+  <AtmosphericBanner
+    title="Eventos"
+    subtitle="Tenidas, interlogiales y actos públicos de la logia"
+    height="sm"
+  />
+
+  <section class="section">
+    <div class="container">
+      <h2>Próximos eventos</h2>
+      {
+        upcoming.length > 0 ? (
+          <div class="grid-3">
+            {upcoming.map((evento) => (
+              <EventCard evento={evento} />
+            ))}
+          </div>
+        ) : (
+          <div class="empty">
+            <p>No hay eventos próximos publicados. Vuelve pronto.</p>
+          </div>
+        )
+      }
+    </div>
+  </section>
+
+  {
+    past.length > 0 && (
+      <section class="section">
+        <div class="container">
+          <h2>Eventos anteriores</h2>
+          <div class="grid-3">
+            {past.map((evento) => (
+              <EventCard evento={evento} past />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+</PublicLayout>
+
+<style>
+  .empty {
+    padding: 3rem;
+    text-align: center;
+    color: var(--md-sys-color-on-surface-variant);
+    border: 1px dashed var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+  }
+</style>

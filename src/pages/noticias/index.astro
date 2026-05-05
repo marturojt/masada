@@ -1,0 +1,106 @@
+---
+import { getCollection } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import AtmosphericBanner from '@components/AtmosphericBanner.astro';
+import { formatShortDate } from '@/lib/format';
+
+const all = (await getCollection('noticias', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
+);
+---
+
+<PublicLayout
+  title="Noticias"
+  description="Avisos, comunicados y noticias de la R∴L∴S∴ Masada No. 324."
+>
+  <AtmosphericBanner title="Noticias" subtitle="Avisos y comunicados de la logia" height="sm" />
+
+  <section class="section">
+    <div class="container">
+      {
+        all.length === 0 ? (
+          <div class="empty">
+            <p>Aún no hay noticias publicadas. Vuelve pronto.</p>
+          </div>
+        ) : (
+          <div class="news-list">
+            {all.map((n) => (
+              <a class="news-item" href={`/noticias/${n.slug}/`}>
+                <div class="news-item__body">
+                  <p class="news-item__date">{formatShortDate(n.data.date)}</p>
+                  <h2 class="news-item__title">{n.data.title}</h2>
+                  {n.data.excerpt && <p class="news-item__excerpt">{n.data.excerpt}</p>}
+                  {n.data.tags.length > 0 && (
+                    <ul class="news-item__tags">
+                      {n.data.tags.map((t) => (
+                        <li>#{t}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </a>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .empty {
+    padding: 3rem;
+    text-align: center;
+    color: var(--md-sys-color-on-surface-variant);
+    border: 1px dashed var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+  }
+  .news-list {
+    display: grid;
+    gap: 1.25rem;
+  }
+  .news-item {
+    display: block;
+    background: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .news-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    text-decoration: none;
+    opacity: 1;
+  }
+  .news-item__date {
+    font-size: 0.8rem;
+    color: var(--md-sys-color-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.4rem;
+    font-weight: 600;
+  }
+  .news-item__title {
+    margin: 0 0 0.5rem;
+    font-size: 1.4rem;
+  }
+  .news-item__excerpt {
+    margin: 0 0 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .news-item__tags {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .news-item__tags li {
+    font-size: 0.78rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+</style>

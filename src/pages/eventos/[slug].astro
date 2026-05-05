@@ -1,0 +1,245 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import { formatEventDate, isUpcoming } from '@/lib/format';
+
+export async function getStaticPaths() {
+  const all = await getCollection('eventos', ({ data }) => !data.draft);
+  return all.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+interface Props {
+  entry: CollectionEntry<'eventos'>;
+}
+
+const { entry } = Astro.props;
+const { data } = entry;
+const { Content } = await entry.render();
+
+const dateLabel = formatEventDate(data.date, data.endDate);
+const upcoming = isUpcoming(data.date);
+
+const flyerSrc = data.flyer
+  ? typeof data.flyer === 'string'
+    ? data.flyer
+    : data.flyer.src
+  : null;
+
+const rsvpEmail = data.rsvpEmail ?? 'hola@masada324.org';
+const mailtoSubject = encodeURIComponent(`Asistencia: ${data.title}`);
+const mailtoBody = encodeURIComponent(
+  `Hola, me gustaría confirmar mi asistencia al evento "${data.title}" del ${dateLabel}.\n\nNombre completo:\nNúmero de acompañantes:\n`,
+);
+const waText = encodeURIComponent(
+  `Hola, me gustaría confirmar mi asistencia al evento "${data.title}" del ${dateLabel}.\n\nNombre completo:\nLogia:\n`,
+);
+const rsvpHref = data.rsvpWhatsapp
+  ? `https://wa.me/${data.rsvpWhatsapp}?text=${waText}`
+  : `mailto:${rsvpEmail}?subject=${mailtoSubject}&body=${mailtoBody}`;
+const rsvpLabel = data.rsvpWhatsapp ? 'Confirmar por WhatsApp' : 'Confirmar asistencia';
+const rsvpIcon = data.rsvpWhatsapp ? '💬' : '✉';
+
+const eventJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Event',
+  name: data.title,
+  startDate: data.date.toISOString(),
+  endDate: data.endDate?.toISOString(),
+  location: {
+    '@type': 'Place',
+    name: data.location,
+    ...(data.address ? { address: data.address } : {}),
+  },
+  ...(flyerSrc ? { image: new URL(flyerSrc, Astro.site).toString() } : {}),
+  organizer: {
+    '@type': 'Organization',
+    name: 'R∴L∴S∴ Masada No. 324',
+    url: 'https://masada324.org',
+  },
+  eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+};
+---
+
+<PublicLayout
+  title={data.title}
+  description={data.excerpt ?? `${data.title} — ${dateLabel}`}
+  image={flyerSrc ?? undefined}
+>
+  <article class="event">
+    <div class="event__hero">
+      <div class="container event__hero-grid">
+        <div class="event__media">
+          {
+            flyerSrc ? (
+              <img
+                src={flyerSrc}
+                alt={data.flyerAlt ?? `Flyer del evento: ${data.title}`}
+                loading="eager"
+                decoding="async"
+              />
+            ) : (
+              <div class="event__placeholder" aria-hidden="true">
+                <span class="therefore">∴</span>
+              </div>
+            )
+          }
+        </div>
+
+        <div class="event__meta">
+          <p class="event__type">
+            {data.type}
+            {!upcoming && <span class="event__past-badge"> · Pasado</span>}
+          </p>
+          <h1 class="event__title">{data.title}</h1>
+
+          <dl class="event__details">
+            <div>
+              <dt>Fecha</dt>
+              <dd>{dateLabel}</dd>
+            </div>
+            <div>
+              <dt>Lugar</dt>
+              <dd>
+                {data.location}
+                {data.address && <><br /><span class="muted">{data.address}</span></>}
+              </dd>
+            </div>
+            <div>
+              <dt>Audiencia</dt>
+              <dd>
+                {
+                  {
+                    publico: 'Abierto al público',
+                    hermanos: 'Solo hermanos',
+                    invitacion: 'Solo por invitación',
+                  }[data.audience]
+                }
+              </dd>
+            </div>
+          </dl>
+
+          {
+            upcoming && (
+              <div class="event__cta">
+                <a class="btn btn--primary" href={rsvpHref} target={data.rsvpWhatsapp ? '_blank' : undefined} rel={data.rsvpWhatsapp ? 'noopener noreferrer' : undefined}>
+                  <span aria-hidden="true">{rsvpIcon}</span>
+                  <span>{rsvpLabel}</span>
+                </a>
+                <a class="btn btn--ghost" href="/eventos/">← Todos los eventos</a>
+              </div>
+            )
+          }
+        </div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="container container--narrow event__content">
+        <Content />
+      </div>
+    </section>
+  </article>
+
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(eventJsonLd)} />
+</PublicLayout>
+
+<style>
+  .event__hero {
+    background: var(--md-sys-color-surface-container-low);
+    padding-block: clamp(2rem, 5vw, 4rem);
+  }
+  .event__hero-grid {
+    display: grid;
+    gap: 2.5rem;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 800px) {
+    .event__hero-grid {
+      grid-template-columns: minmax(280px, 1fr) 1.4fr;
+      align-items: center;
+    }
+  }
+  .event__media img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+  }
+  .event__placeholder {
+    aspect-ratio: 4 / 5;
+    border-radius: var(--radius-md);
+    background: linear-gradient(
+      135deg,
+      var(--md-sys-color-primary-container),
+      var(--md-sys-color-tertiary-container)
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 8rem;
+    color: var(--md-sys-color-primary);
+    opacity: 0.5;
+  }
+  .event__type {
+    display: inline-block;
+    padding: 0.25rem 0.85rem;
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 1rem;
+    font-weight: 600;
+  }
+  .event__past-badge {
+    opacity: 0.85;
+  }
+  .event__title {
+    font-size: clamp(1.8rem, 3vw + 1rem, 3rem);
+    margin: 0 0 1.5rem;
+  }
+  .event__details {
+    display: grid;
+    gap: 1rem;
+    margin: 0 0 1.5rem;
+  }
+  .event__details > div {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: 1rem;
+    align-items: baseline;
+  }
+  .event__details dt {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--md-sys-color-on-surface-variant);
+    font-weight: 600;
+    margin: 0;
+  }
+  .event__details dd {
+    margin: 0;
+    color: var(--md-sys-color-on-surface);
+  }
+  .muted {
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 0.9rem;
+  }
+  .event__cta {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .event__content :global(p) {
+    text-align: justify;
+  }
+  .event__content :global(img) {
+    border-radius: var(--radius-md);
+    margin: 1.5rem 0;
+  }
+</style>

@@ -1,0 +1,117 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="site-footer__ornament" aria-hidden="true">
+    <span class="ornament-line"></span>
+    <span class="ornament-symbol">∴</span>
+    <span class="ornament-line"></span>
+  </div>
+  <div class="container site-footer__inner">
+    <div class="site-footer__col">
+      <p class="site-footer__title">
+        R<span class="therefore">∴</span>L<span class="therefore">∴</span>S<span class="therefore">∴</span> Masada No. 324
+      </p>
+      <p class="site-footer__sub">
+        Jurisdiccionada a la M<span class="therefore">∴</span>R<span class="therefore">∴</span>G<span class="therefore">∴</span>L<span class="therefore">∴</span> Valle de México
+      </p>
+    </div>
+    <div class="site-footer__col">
+      <p>
+        <a href="mailto:hola@masada324.org" class="site-footer__email">hola@masada324.org</a>
+      </p>
+      <p class="site-footer__copyright">
+        © {year} <span class="therefore">E∴V∴</span> · Conocimiento libre.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: 5rem;
+    padding-bottom: 2.5rem;
+    background: var(--md-sys-color-surface-container-lowest);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .site-footer__ornament {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 0;
+    padding-inline: 1.25rem;
+  }
+
+  .ornament-line {
+    flex: 1;
+    height: 1px;
+    background: var(--gold-border);
+  }
+
+  .ornament-symbol {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    color: var(--gold);
+    opacity: 0.7;
+    padding-block: 1.5rem;
+  }
+
+  .site-footer__inner {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .site-footer__inner {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .site-footer__title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.4rem;
+    color: var(--gold);
+  }
+
+  [data-theme="light"] .site-footer__title {
+    color: var(--gold-dark);
+  }
+
+  .site-footer__sub {
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 0.85rem;
+    margin: 0;
+    letter-spacing: 0.03em;
+  }
+
+  .site-footer__email {
+    color: var(--gold);
+    font-size: 0.95rem;
+    letter-spacing: 0.03em;
+    transition: color 0.2s ease;
+  }
+
+  [data-theme="light"] .site-footer__email {
+    color: var(--gold-dark);
+  }
+
+  .site-footer__email:hover {
+    color: var(--gold-light);
+  }
+
+  [data-theme="light"] .site-footer__email:hover {
+    color: var(--gold);
+  }
+
+  .site-footer__copyright {
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 0.82rem;
+    margin-top: 0.4rem;
+    opacity: 0.7;
+  }
+</style>

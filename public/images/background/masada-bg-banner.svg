@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a3a"/>
+      <stop offset="50%" stop-color="#3a2a5a"/>
+      <stop offset="100%" stop-color="#5a4a7a"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a4830"/>
+      <stop offset="100%" stop-color="#2a1a10"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1300" cy="200" r="80" fill="rgba(255,255,255,0.15)"/>
+  <path d="M0,650 L200,500 L400,580 L650,420 L900,520 L1200,400 L1400,500 L1600,460 L1600,900 L0,900 Z" fill="url(#rock)"/>
+  <path d="M0,720 L300,650 L550,700 L800,620 L1100,680 L1400,640 L1600,700 L1600,900 L0,900 Z" fill="#1a1108" opacity="0.85"/>
+  <text x="50%" y="48%" text-anchor="middle" font-family="Georgia, serif" font-size="48" fill="rgba(255,255,255,0.05)" letter-spacing="20">MASADA</text>
+</svg>

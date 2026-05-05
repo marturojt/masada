@@ -1,0 +1,127 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import { formatLongDate } from '@/lib/format';
+
+export async function getStaticPaths() {
+  const all = await getCollection('noticias', ({ data }) => !data.draft);
+  return all.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+interface Props {
+  entry: CollectionEntry<'noticias'>;
+}
+
+const { entry } = Astro.props;
+const { data } = entry;
+const { Content } = await entry.render();
+
+const coverSrc = data.cover
+  ? typeof data.cover === 'string'
+    ? data.cover
+    : data.cover.src
+  : null;
+---
+
+<PublicLayout
+  title={data.title}
+  description={data.excerpt ?? data.title}
+  image={coverSrc ?? undefined}
+>
+  <article class="news">
+    <div class="container container--narrow">
+      <header class="news__header">
+        <p class="news__date">{formatLongDate(data.date)}</p>
+        <h1 class="news__title">{data.title}</h1>
+        {data.author && <p class="news__author">por {data.author}</p>}
+      </header>
+
+      {
+        coverSrc && (
+          <img
+            class="news__cover"
+            src={coverSrc}
+            alt={data.coverAlt ?? data.title}
+            loading="eager"
+            decoding="async"
+          />
+        )
+      }
+
+      <div class="news__content">
+        <Content />
+      </div>
+
+      {
+        data.tags.length > 0 && (
+          <ul class="news__tags">
+            {data.tags.map((t) => (
+              <li>#{t}</li>
+            ))}
+          </ul>
+        )
+      }
+
+      <div class="news__back">
+        <a href="/noticias/" class="btn btn--ghost">← Todas las noticias</a>
+      </div>
+    </div>
+  </article>
+</PublicLayout>
+
+<style>
+  .news {
+    padding-block: clamp(2rem, 4vw, 4rem);
+  }
+  .news__header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .news__date {
+    color: var(--md-sys-color-primary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+  }
+  .news__title {
+    margin: 0 0 0.5rem;
+  }
+  .news__author {
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0;
+  }
+  .news__cover {
+    width: 100%;
+    border-radius: var(--radius-md);
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-md);
+  }
+  .news__content :global(p) {
+    text-align: justify;
+  }
+  .news__content :global(img) {
+    border-radius: var(--radius-md);
+    margin: 1.5rem 0;
+  }
+  .news__tags {
+    list-style: none;
+    padding: 0;
+    margin: 2rem 0 1rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .news__tags li {
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: var(--md-sys-color-surface-container);
+    font-size: 0.8rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .news__back {
+    margin-top: 2rem;
+    text-align: center;
+  }
+</style>

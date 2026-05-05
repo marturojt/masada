@@ -1,0 +1,187 @@
+---
+import { getCollection } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import AtmosphericBanner from '@components/AtmosphericBanner.astro';
+
+const all = (await getCollection('cuadro')).sort((a, b) => b.data.anio - a.data.anio);
+const requestedYear = Astro.url.searchParams.get('año') ?? Astro.url.searchParams.get('year');
+const selected =
+  (requestedYear && all.find((e) => String(e.data.anio) === requestedYear)) ?? all[0];
+
+type Cargo = { cargo: string; nombre: string; grado?: string };
+
+const dignatarios: Cargo[] = selected
+  ? [
+      { cargo: 'Venerable Maestro', ...selected.data.venerableMaestro },
+      ...(selected.data.primerVigilante
+        ? [{ cargo: 'Primer Vigilante', ...selected.data.primerVigilante }]
+        : []),
+      ...(selected.data.segundoVigilante
+        ? [{ cargo: 'Segundo Vigilante', ...selected.data.segundoVigilante }]
+        : []),
+      ...(selected.data.orador ? [{ cargo: 'Orador', ...selected.data.orador }] : []),
+      ...(selected.data.secretario ? [{ cargo: 'Secretario', ...selected.data.secretario }] : []),
+      ...(selected.data.tesorero ? [{ cargo: 'Tesorero', ...selected.data.tesorero }] : []),
+    ]
+  : [];
+---
+
+<PublicLayout
+  title="Cuadro Logial"
+  description="Cuadro de Dignatarios, Oficiales y miembros activos de la R∴L∴S∴ Masada No. 324."
+>
+  <AtmosphericBanner
+    title="Cuadro Logial"
+    subtitle={selected ? `Periodo masónico ${selected.data.anioVulgar}` : undefined}
+    height="sm"
+  />
+
+  <section class="section">
+    <div class="container">
+      {
+        all.length > 1 && (
+          <nav class="years" aria-label="Seleccionar año">
+            {all.map((entry) => (
+              <a
+                href={`/cuadro-logial/?año=${entry.data.anio}`}
+                class:list={['years__item', { 'is-active': entry.id === selected?.id }]}
+              >
+                {entry.data.anioVulgar}
+              </a>
+            ))}
+          </nav>
+        )
+      }
+
+      {
+        !selected ? (
+          <div class="empty">
+            <p>El cuadro logial está siendo actualizado. Vuelve pronto.</p>
+          </div>
+        ) : (
+          <>
+            <h2 class="text-center">Dignatarios</h2>
+            <div class="grid-3 dignatarios">
+              {dignatarios.map((d) => (
+                <article class="role-card">
+                  <p class="role-card__role">{d.cargo}</p>
+                  <p class="role-card__name">
+                    {d.grado && <span class="role-card__grade">{d.grado}</span>}
+                    {d.nombre}
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            {selected.data.oficiales.length > 0 && (
+              <>
+                <h2 class="text-center oficiales-title">Oficiales</h2>
+                <div class="grid-3 dignatarios">
+                  {selected.data.oficiales.map((d) => (
+                    <article class="role-card role-card--secondary">
+                      <p class="role-card__role">{d.cargo}</p>
+                      <p class="role-card__name">
+                        {d.grado && <span class="role-card__grade">{d.grado}</span>}
+                        {d.nombre}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )
+      }
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .years {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+    justify-content: center;
+  }
+  .years__item {
+    padding: 0.35rem 0.9rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gold-border);
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    background: var(--md-sys-color-surface-container);
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .years__item:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  .years__item.is-active {
+    background: var(--gold);
+    color: var(--obsidian);
+    border-color: var(--gold);
+  }
+  .dignatarios {
+    margin-bottom: 3rem;
+  }
+  .oficiales-title {
+    margin-top: 2rem;
+  }
+  .role-card {
+    text-align: center;
+    padding: 1.75rem 1.25rem;
+    background: var(--gold-muted);
+    color: var(--md-sys-color-on-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gold-border);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .role-card:hover {
+    border-color: rgba(201 168 76 / 0.6);
+    box-shadow: var(--shadow-gold);
+  }
+  .role-card--secondary {
+    background: var(--md-sys-color-surface-container);
+    border: 1px solid var(--gold-border);
+    opacity: 0.85;
+  }
+  .role-card--secondary:hover {
+    opacity: 1;
+  }
+  .role-card__role {
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin: 0 0 0.5rem;
+    color: var(--gold);
+  }
+  [data-theme="light"] .role-card__role {
+    color: var(--gold-dark);
+  }
+  .role-card__name {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    margin: 0;
+    line-height: 1.4;
+  }
+  .role-card__grade {
+    display: block;
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    opacity: 0.6;
+    margin-bottom: 0.2rem;
+  }
+  .empty {
+    padding: 3rem;
+    text-align: center;
+    color: var(--md-sys-color-on-surface-variant);
+    border: 1px dashed var(--gold-border);
+    border-radius: var(--radius-md);
+  }
+</style>

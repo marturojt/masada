@@ -1,0 +1,208 @@
+---
+interface Props {
+  title?: string;
+  subtitle?: string;
+  height?: 'xs' | 'sm' | 'md' | 'lg';
+  align?: 'center' | 'start';
+}
+
+const {
+  title,
+  subtitle,
+  height = 'md',
+  align = 'center',
+} = Astro.props;
+
+const hasContent = title || subtitle;
+---
+
+<section class:list={['atm', `atm--${height}`, `atm--${align}`, { 'atm--titled': hasContent }]}>
+  <!-- Capa base: patrón geométrico sutil -->
+  <div class="atm__pattern" aria-hidden="true"></div>
+  <!-- Capa de luz central dorada -->
+  <div class="atm__glow" aria-hidden="true"></div>
+  <!-- Líneas de borde doradas -->
+  <div class="atm__edge atm__edge--top" aria-hidden="true"></div>
+  <div class="atm__edge atm__edge--bottom" aria-hidden="true"></div>
+
+  <div class:list={['atm__inner', 'container']}>
+    {hasContent && (
+      <div class="atm__content">
+        <span class="atm__mark" aria-hidden="true">∴</span>
+        {title && <h1 class="atm__title">{title}</h1>}
+        {subtitle && <p class="atm__subtitle">{subtitle}</p>}
+        <div class="atm__rule" aria-hidden="true">
+          <span class="atm__rule-line"></span>
+          <span class="atm__rule-symbol">◆</span>
+          <span class="atm__rule-line"></span>
+        </div>
+      </div>
+    )}
+    <slot />
+  </div>
+</section>
+
+<style>
+  /* ── Base ── */
+  .atm {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--obsidian);
+    color: #fff;
+  }
+
+  .atm--xs  { min-height: 80px; }
+  .atm--sm  { min-height: 180px; }
+  .atm--md  { min-height: 300px; }
+  .atm--lg  { min-height: 500px; }
+
+  /* ── Patrón geométrico (rombo repetido, data URI) ── */
+  .atm__pattern {
+    position: absolute;
+    inset: 0;
+    z-index: -3;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cpath d='M36 4 L68 36 L36 68 L4 36 Z' fill='none' stroke='%23C9A84C' stroke-width='0.5'/%3E%3C/svg%3E");
+    background-size: 72px 72px;
+    opacity: 0.055;
+    animation: drift 50s linear infinite;
+  }
+
+  @keyframes drift {
+    from { background-position: 0 0; }
+    to   { background-position: 72px 72px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atm__pattern { animation: none; }
+  }
+
+  /* ── Resplandor central dorado ── */
+  .atm__glow {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background: radial-gradient(
+      ellipse 80% 60% at 50% 50%,
+      rgba(201 168 76 / 0.07) 0%,
+      rgba(201 168 76 / 0.02) 45%,
+      transparent 70%
+    );
+  }
+
+  /* ── Líneas doradas de borde ── */
+  .atm__edge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    z-index: 1;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(201 168 76 / 0.5) 20%,
+      rgba(201 168 76 / 0.7) 50%,
+      rgba(201 168 76 / 0.5) 80%,
+      transparent 100%
+    );
+  }
+
+  .atm__edge--top    { top: 0; }
+  .atm__edge--bottom { bottom: 0; }
+
+  /* ── Contenido ── */
+  .atm__inner {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: inherit;
+    padding-block: clamp(2rem, 5vw, 4.5rem);
+  }
+
+  .atm--start .atm__inner {
+    justify-content: flex-start;
+  }
+
+  .atm--titled .atm__inner {
+    padding-block: clamp(2.5rem, 6vw, 5rem);
+  }
+
+  /* ── Bloque de título ── */
+  .atm__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    text-align: center;
+    width: 100%;
+  }
+
+  .atm--start .atm__content {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .atm__mark {
+    font-family: var(--font-label);
+    font-size: 0.75rem;
+    letter-spacing: 0.35em;
+    color: var(--gold);
+    opacity: 0.8;
+    margin-bottom: 1.25rem;
+    display: block;
+  }
+
+  .atm__title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2rem, 4vw + 0.75rem, 3.5rem);
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    color: #fff;
+    margin: 0 0 0.5em;
+    text-shadow: 0 2px 20px rgba(0 0 0 / 0.5);
+  }
+
+  .atm__subtitle {
+    font-family: var(--font-label);
+    font-size: clamp(0.65rem, 0.7vw + 0.55rem, 0.78rem);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255 255 255 / 0.55);
+    margin: 0 0 1.5rem;
+  }
+
+  /* ── Regla decorativa ── */
+  .atm__rule {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: min(200px, 100%);
+    margin-top: 0.25rem;
+  }
+
+  .atm__rule-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(201 168 76 / 0.5));
+  }
+
+  .atm__rule-line:last-of-type {
+    background: linear-gradient(90deg, rgba(201 168 76 / 0.5), transparent);
+  }
+
+  .atm__rule-symbol {
+    font-size: 0.45rem;
+    color: var(--gold);
+    opacity: 0.65;
+    letter-spacing: 0;
+  }
+
+  /* ── Variant xs: divisor decorativo mínimo ── */
+  .atm--xs .atm__inner {
+    padding-block: 0;
+    min-height: 80px;
+  }
+</style>

@@ -1,0 +1,177 @@
+---
+import PublicLayout from '@layouts/PublicLayout.astro';
+import AtmosphericBanner from '@components/AtmosphericBanner.astro';
+
+const mailtoBody = encodeURIComponent(
+  'Me gustaría saber más acerca de ustedes y conocer el proceso de ingreso.\n\nNombre completo:\nEdad:\nCiudad:\nOcupación:\nMotivo del interés:\n',
+);
+const mailtoSubject = encodeURIComponent('Solicitud de información — Ingreso a la Órden');
+const mailto = `mailto:hola@masada324.org?subject=${mailtoSubject}&body=${mailtoBody}`;
+---
+
+<PublicLayout
+  title="Ingreso a la Órden"
+  description="Información sobre el proceso de ingreso a la Francmasonería en la R∴L∴S∴ Masada No. 324."
+>
+  <AtmosphericBanner title="Ingreso a la Órden" height="sm" />
+
+  <section class="section">
+    <div class="container container--narrow">
+      <h2 class="text-center">¿Por qué ingresar a la Órden?</h2>
+      <p class="text-justify">
+        En realidad, el ingreso en la Francmasonería se fundamenta en una decisión libre,
+        individual y responsable. La masonería no hace ningún tipo de proselitismo, por lo que
+        cualquier solicitud debe emanar de la voluntad y el convencimiento del solicitante.
+      </p>
+      <p class="text-justify">
+        Nosotros, la R<span class="therefore">∴</span>L<span class="therefore">∴</span>S<span
+          class="therefore">∴</span
+        > Masada 324, somos una logia jurisdiccionada a la Muy Respetable Gran Logia del Valle de
+        México, y somos una institución absolutamente abierta a todas aquellas personas
+        interesadas en saber algo más sobre la Francmasonería, sea por simple curiosidad, sea
+        porque contemplan la posibilidad de solicitar su ingreso. Consideramos que es del todo
+        recomendable disponer del suficiente conocimiento sobre los principios y finalidades de la
+        Francmasonería para poder tomar una decisión libre y fundamentada.
+      </p>
+    </div>
+  </section>
+
+  <AtmosphericBanner height="sm">
+    <div class="hero">
+      <h2 class="hero__title">Requisitos para ser Masón</h2>
+      <p class="hero__subtitle">
+        Como cualquier otra institución, es necesario cumplir con ciertos requisitos.
+      </p>
+    </div>
+  </AtmosphericBanner>
+
+  <section class="section">
+    <div class="container container--narrow">
+      <p>
+        Toda persona interesada en pertenecer a la Francmasonería ha de reunir los siguientes tres
+        requisitos:
+      </p>
+
+      <ol class="requirements">
+        <li>
+          <h3>Ser una persona <span class="strong-mark">LIBRE</span></h3>
+          <p class="text-justify">
+            Puesto que la solicitud de iniciación a la Masonería ha de ser consecuencia de la
+            innata libertad individual, lejos de toda presión, influencia, dependencia o
+            circunstancia que la coarte.
+          </p>
+        </li>
+        <li>
+          <h3>Ser una persona de <span class="strong-mark">BUENAS COSTUMBRES</span></h3>
+          <p class="text-justify">
+            Es decir, digna de confianza, honrada en su vida privada, en su forma de trabajar y de
+            buena reputación.
+          </p>
+        </li>
+        <li>
+          <h3>Creer en un <span class="strong-mark">PRINCIPIO SUPERIOR</span></h3>
+          <p class="text-justify">
+            O Causa Primera de todo lo creado, al que se denomina comúnmente como Dios, y que los
+            masones, respetando siempre la libertad del individuo ante cualquier creencia
+            particular, nombran como Gran Arquitecto del Universo.
+          </p>
+        </li>
+      </ol>
+
+      <p class="text-justify">
+        Además, para ser miembro es preciso ser varón, mayor de 21 años, sin distinción de
+        nacionalidad, grupo social o religión, tener una mínima capacidad de comprensión de los
+        conceptos filosóficos de la Orden y disponer de una "ciencia, arte, oficio o renta", tal
+        como expresan los antiguos lineamientos de la Orden.
+      </p>
+
+      <p class="text-justify">
+        Si deseas pertenecer a la Orden o conocer más acerca de nosotros, escríbenos y alguno de
+        nosotros se pondrá en contacto contigo.
+      </p>
+
+      <div class="cta">
+        <a class="btn btn--primary" href={mailto}>
+          <span aria-hidden="true">✉</span>
+          <span>Contáctanos</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .hero {
+    text-align: center;
+  }
+  .hero__title {
+    font-family: var(--font-display);
+    margin: 0 0 0.5em;
+    color: var(--gold-light);
+    letter-spacing: 0.08em;
+    text-shadow: 0 2px 16px rgb(0 0 0 / 0.5);
+  }
+  .hero__subtitle {
+    max-width: 60ch;
+    margin: 0 auto;
+    color: rgba(255 255 255 / 0.8);
+    text-shadow: 0 1px 8px rgb(0 0 0 / 0.4);
+  }
+  .requirements {
+    list-style: none;
+    counter-reset: req;
+    padding: 0;
+    margin: 2rem 0;
+    display: grid;
+    gap: 1.25rem;
+  }
+  .requirements li {
+    counter-increment: req;
+    position: relative;
+    padding: 1.5rem 1.5rem 1.5rem 4.5rem;
+    background: var(--md-sys-color-surface-container);
+    border: 1px solid var(--gold-border);
+    border-radius: var(--radius-md);
+    transition: border-color 0.2s ease;
+  }
+  .requirements li:hover {
+    border-color: rgba(201 168 76 / 0.55);
+  }
+  .requirements li::before {
+    content: counter(req);
+    position: absolute;
+    top: 1.25rem;
+    left: 1.25rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0;
+    border: 1px solid var(--gold);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--gold);
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .requirements h3 {
+    margin: 0 0 0.5rem;
+  }
+  .requirements p {
+    margin: 0;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .strong-mark {
+    color: var(--gold);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  [data-theme="light"] .strong-mark {
+    color: var(--gold-dark);
+  }
+  .cta {
+    text-align: center;
+    margin-top: 2rem;
+  }
+</style>

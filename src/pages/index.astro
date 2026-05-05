@@ -1,0 +1,410 @@
+---
+import { getCollection } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import AtmosphericBanner from '@components/AtmosphericBanner.astro';
+import EventCard from '@components/EventCard.astro';
+import { isUpcoming, formatShortDate } from '@/lib/format';
+
+const allEventos = await getCollection('eventos', ({ data }) => !data.draft);
+const upcoming = allEventos
+  .filter((e) => isUpcoming(e.data.date))
+  .sort((a, b) => a.data.date.getTime() - b.data.date.getTime())
+  .slice(0, 3);
+
+const allNoticias = await getCollection('noticias', ({ data }) => !data.draft);
+const latestNoticias = allNoticias
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .slice(0, 3);
+---
+
+<PublicLayout
+  title="R∴L∴S∴ Masada No. 324"
+  description="R∴L∴S∴ Masada No. 324 — Jurisdiccionada a la M∴R∴G∴L∴ Valle de México. Conocimiento libre, eventos, biblioteca y formulario de ingreso."
+>
+  <AtmosphericBanner height="lg">
+    <div class="hero">
+      <p class="hero__eyebrow">
+        ∴ &nbsp; Respetable Logia Simbólica &nbsp; ∴
+      </p>
+      <h1 class="hero__title">
+        Masada <span class="hero__number">No. 324</span>
+      </h1>
+      <div class="hero__divider" aria-hidden="true"></div>
+      <p class="hero__subtitle">
+        Jurisdiccionada a la M<span class="therefore">∴</span>R<span class="therefore">∴</span>G<span class="therefore">∴</span>L<span class="therefore">∴</span> Valle de México
+      </p>
+    </div>
+  </AtmosphericBanner>
+
+  <section class="section">
+    <div class="container container--narrow">
+      <h2 class="text-center section-heading section-heading--center">Síntesis histórica de la epopeya de Masada</h2>
+      <p class="text-justify">
+        Trasladémonos al año 44 E<span class="therefore">∴</span>V<span class="therefore">∴</span>,
+        cuando muerto el rey Agripa, Judea volvió a quedar bajo la tutela de Roma. Por afrentoso a
+        Dios, no era tolerable el servir a un gobernador romano, ni el pago de tributos al
+        emperador Vespasiano. Decidiéndose los judíos a ocupar la meseta de <strong>Masada</strong>
+        como bastión defensivo y pasando el tiempo, en el año 66 E<span class="therefore">∴</span>V<span
+          class="therefore">∴</span
+        > se produjo un estallido social en el que los judíos perdieron su patria, el templo de
+        Salomón y la práctica de su religión a manos de los romanos, motivando la dispersión de
+        muchos de ellos por todas partes del mundo.
+      </p>
+      <p class="text-justify">
+        El historiador Josefo Flavio que acompañaba a las tropas romanas que entraron el día 16 de
+        abril del año 73 E<span class="therefore">∴</span>V<span class="therefore">∴</span> a la
+        fortaleza de <strong>Masada</strong>, después de la heroica defensa y resistencia, vió la
+        carnicería que dentro había, encontrando armas, escudos, víveres, todos ellos apilados, así
+        como 957 cadáveres diseminados entre las ruinas humeantes; pudiendo entrevistar a tres
+        supervivientes de la hecatombe: dos niños y una mujer escaparon de la matanza y suicidio
+        realizados, comentándole ellos detalladamente todo lo acontecido durante la vigilia de la
+        noche anterior al asalto de los romanos.
+      </p>
+      <p class="text-justify">
+        De parte de los sobrevivientes supo que el comandante Eleazar Ben Jair, con su
+        caracterizada elocuencia de convencimiento, motivó a los defensores de la fortaleza de <strong
+          >Masada</strong
+        > para tomar la decisión del suicidio antes que rendirse ante los romanos, dirigiéndoles a
+        todos esta arenga:
+      </p>
+      <blockquote>
+        <p>
+          Desde que el hombre primitivo empezó a pensar, las palabras de nuestros antepasados y las
+          de los dioses, apoyadas por las acciones y los espíritus de nuestros predecesores, nos
+          han hecho entender constantemente que la calamidad del hombre es la vida, y no la muerte.
+          La muerte da libertad a nuestras almas y las deja irse a su propia y pura casa, donde no
+          conocerán calamidades; pero mientras están confinadas dentro de un cuerpo mortal y
+          comparten sus miserias, en estricta verdad están muertas.
+        </p>
+        <p>
+          Porque la asociación de lo divino con lo mortal es muy impropia. El alma puede, por
+          supuesto, hacer mucho cuando está aprisionada en el cuerpo; hace del cuerpo su gran
+          órgano del sentir, moviéndolo de manera invisible e impulsándolo en sus acciones más allá
+          del alcance de la naturaleza mortal. Pero cuando se libera del peso que la arrastra hacia
+          la tierra y se le cuelga alrededor, el alma vuelve a su lugar natural y en verdad
+          adquiere un poder bendito y una fuerza completamente libre, y permanece tan invisible a
+          los ojos humanos como el mismo Dios.
+        </p>
+        <p>
+          Muramos sin ser esclavos de nuestros enemigos, y dejemos este mundo como hombres libres
+          en compañía de nuestras mujeres e hijos.
+        </p>
+        <p>
+          Todos ustedes son hombres de verdadero coraje que, contemplando esta vida como una
+          especie de servicio que debemos prestar a la naturaleza, la soportan a regañadientes.
+          Apresuren a liberar sus almas de sus cuerpos y que ningún infortunio les apriete o les
+          ahuyente el deseo de vida inmortal, impulsándoles a informar a sus amigos que van a
+          partir.
+        </p>
+      </blockquote>
+    </div>
+  </section>
+
+  <AtmosphericBanner height="sm">
+    <div class="hero hero--sm">
+      <p class="hero__eyebrow">∴ &nbsp; Nuestros servicios &nbsp; ∴</p>
+      <h2 class="hero__title hero__title--sm">¿En qué podemos ayudarte?</h2>
+    </div>
+  </AtmosphericBanner>
+
+  <section class="section">
+    <div class="container">
+      <div class="grid-3">
+        <a class="service-card reveal" href="/ingreso/" style="--reveal-delay:0ms">
+          <span class="service-card__icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2"/><path d="M12 8v4l3 3"/></svg>
+          </span>
+          <h3>Ingreso a la Órden</h3>
+          <p>
+            El ingreso a la Masonería es un paso muy importante en la vida de todo Hombre. Si
+            deseas entrar es necesario que te informes de qué se trata.
+          </p>
+          <span class="service-card__cta">Solicitar ingreso →</span>
+        </a>
+        <a class="service-card reveal" href="/biblioteca/" style="--reveal-delay:100ms">
+          <span class="service-card__icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </span>
+          <h3>Biblioteca</h3>
+          <p>
+            Somos defensores del conocimiento libre. Por ello ponemos a tu disposición algunos
+            libros electrónicos que consideramos te serán útiles.
+          </p>
+          <span class="service-card__cta">Visitar biblioteca →</span>
+        </a>
+        <a class="service-card reveal" href="/cuadro-logial/" style="--reveal-delay:200ms">
+          <span class="service-card__icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </span>
+          <h3>Cuadro Logial</h3>
+          <p>
+            Cuadro de Dignatarios y Oficiales electos y miembros activos del taller para el periodo
+            masónico en curso.
+          </p>
+          <span class="service-card__cta">Ver cuadro logial →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {
+    upcoming.length > 0 && (
+      <section class="section section--alt">
+        <div class="container">
+          <header class="section-head">
+            <h2>Próximos eventos</h2>
+            <a href="/eventos/" class="btn btn--ghost">Ver todos</a>
+          </header>
+          <div class="grid-3">
+            {upcoming.map((evento) => (
+              <EventCard evento={evento} />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  {
+    latestNoticias.length > 0 && (
+      <section class="section">
+        <div class="container">
+          <header class="section-head">
+            <h2>Últimas noticias</h2>
+            <a href="/noticias/" class="btn btn--ghost">Ver todas</a>
+          </header>
+          <div class="grid-3">
+            {latestNoticias.map((n) => (
+              <a class="news-card" href={`/noticias/${n.slug}/`}>
+                <p class="news-card__date">{formatShortDate(n.data.date)}</p>
+                <h3>{n.data.title}</h3>
+                {n.data.excerpt && <p class="news-card__excerpt">{n.data.excerpt}</p>}
+                <span class="news-card__cta">Leer más →</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  <AtmosphericBanner height="xs" />
+</PublicLayout>
+
+<style>
+  .hero {
+    text-align: center;
+    padding-block: 1.5rem;
+  }
+  .hero__eyebrow {
+    font-family: var(--font-label);
+    font-size: 0.72rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 1.5rem;
+    opacity: 0.9;
+    text-shadow: 0 1px 6px rgb(0 0 0 / 0.5);
+  }
+  .hero__title {
+    font-family: var(--font-display);
+    margin: 0;
+    font-size: clamp(3rem, 7vw + 1rem, 6rem);
+    font-weight: 400;
+    color: #fff;
+    text-shadow: 0 2px 30px rgb(0 0 0 / 0.5);
+    letter-spacing: 0.04em;
+    line-height: 1.05;
+  }
+  .hero__number {
+    display: block;
+    font-size: 0.55em;
+    font-weight: 300;
+    letter-spacing: 0.2em;
+    color: var(--gold-light);
+    margin-top: 0.2em;
+    opacity: 0.9;
+  }
+  .hero__divider {
+    width: 4rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 1.75rem auto;
+    opacity: 0.7;
+  }
+  .hero__subtitle {
+    margin: 0;
+    font-family: var(--font-label);
+    font-size: clamp(0.65rem, 0.8vw + 0.5rem, 0.8rem);
+    color: rgba(255 255 255 / 0.65);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 8px rgb(0 0 0 / 0.5);
+  }
+  .hero--sm {
+    padding-block: 0.5rem;
+  }
+  .hero__title--sm {
+    font-size: clamp(1.8rem, 3.5vw + 0.5rem, 3rem);
+    color: #fff;
+    font-weight: 400;
+  }
+  .section--alt {
+    background: var(--md-sys-color-surface-container-lowest);
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--gold-border);
+    padding-bottom: 1rem;
+  }
+  .section-head h2 {
+    margin: 0;
+  }
+  /* ── Service cards ── */
+  .service-card {
+    display: block;
+    background: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--gold-border);
+    border-radius: var(--radius-md);
+    padding: 2rem 1.5rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .service-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .service-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md), var(--shadow-gold);
+    border-color: rgba(201 168 76 / 0.55);
+    text-decoration: none;
+    opacity: 1;
+  }
+  .service-card:hover::before {
+    opacity: 1;
+  }
+  .service-card__icon {
+    display: inline-flex;
+    color: var(--gold);
+    margin-bottom: 1.25rem;
+    opacity: 0.85;
+  }
+  [data-theme="light"] .service-card__icon {
+    color: var(--gold-dark);
+  }
+  .reveal.is-visible {
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+  .service-card h3 {
+    margin: 0 0 0.6rem;
+    font-size: 1.1rem;
+    letter-spacing: 0.06em;
+  }
+  .service-card p {
+    color: var(--md-sys-color-on-surface-variant);
+    text-align: justify;
+    margin: 0 0 1.25rem;
+    font-size: 0.93rem;
+    line-height: 1.65;
+  }
+  .service-card__cta {
+    color: var(--gold);
+    font-family: var(--font-label);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  [data-theme="light"] .service-card__cta {
+    color: var(--gold-dark);
+  }
+  /* ── News cards ── */
+  .news-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--gold-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .news-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md), var(--shadow-gold);
+    border-color: rgba(201 168 76 / 0.55);
+    text-decoration: none;
+    opacity: 1;
+  }
+  .news-card__date {
+    font-size: 0.72rem;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-family: var(--font-label);
+    margin: 0;
+  }
+  [data-theme="light"] .news-card__date {
+    color: var(--gold-dark);
+  }
+  .news-card h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    letter-spacing: 0.04em;
+  }
+  .news-card__excerpt {
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.6;
+  }
+  .news-card__cta {
+    color: var(--gold);
+    font-family: var(--font-label);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: auto;
+    padding-top: 0.5rem;
+  }
+  [data-theme="light"] .news-card__cta {
+    color: var(--gold-dark);
+  }
+</style>
+
+<script>
+  const revealEls = document.querySelectorAll<HTMLElement>('.reveal');
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12 }
+    );
+    revealEls.forEach((el) => observer.observe(el));
+  } else {
+    revealEls.forEach((el) => el.classList.add('is-visible'));
+  }
+</script>

@@ -1,0 +1,84 @@
+---
+import Header from '@components/Header.astro';
+import Footer from '@components/Footer.astro';
+import '@styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  noIndex?: boolean;
+}
+
+const {
+  title = 'R∴L∴S∴ Masada No. 324',
+  description = 'Respetable Logia Simbólica Masada No. 324 — Jurisdiccionada a la M∴R∴G∴L∴ Valle de México.',
+  image = '/images/og-default.jpg',
+  noIndex = false,
+} = Astro.props;
+
+const fullTitle = title === 'R∴L∴S∴ Masada No. 324' ? title : `${title} · Masada 324`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://masada324.org');
+const ogImage = new URL(image, Astro.site ?? 'https://masada324.org');
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical.toString()} />
+    {noIndex && <meta name="robots" content="noindex, nofollow" />}
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="application/rss+xml" title="Noticias · Masada 324" href="/rss.xml" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_MX" />
+    <meta property="og:site_name" content="R∴L∴S∴ Masada No. 324" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical.toString()} />
+    <meta property="og:image" content={ogImage.toString()} />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage.toString()} />
+
+    <!-- Tipografía -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Cinzel:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap"
+    />
+
+    <!-- schema.org Organization -->
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'R∴L∴S∴ Masada No. 324',
+      alternateName: 'Logia Masada 324',
+      url: 'https://masada324.org',
+      email: 'hola@masada324.org',
+      memberOf: {
+        '@type': 'Organization',
+        name: 'Muy Respetable Gran Logia Valle de México',
+      },
+    })} />
+  </head>
+  <body>
+    <Header />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

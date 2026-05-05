@@ -1,0 +1,106 @@
+---
+// Toggle entre dark/light. Persistido en localStorage. Respeta prefers-color-scheme la primera vez.
+---
+
+<button
+  id="theme-toggle"
+  type="button"
+  class="theme-toggle"
+  aria-label="Cambiar tema"
+  title="Cambiar tema"
+>
+  <svg class="icon icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="4" fill="currentColor" />
+    <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <line x1="12" y1="2" x2="12" y2="5" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="5" y2="12" />
+      <line x1="19" y1="12" x2="22" y2="12" />
+      <line x1="4.2" y1="4.2" x2="6.3" y2="6.3" />
+      <line x1="17.7" y1="17.7" x2="19.8" y2="19.8" />
+      <line x1="4.2" y1="19.8" x2="6.3" y2="17.7" />
+      <line x1="17.7" y1="6.3" x2="19.8" y2="4.2" />
+    </g>
+  </svg>
+  <svg class="icon icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"
+      fill="currentColor"
+    />
+  </svg>
+</button>
+
+<style>
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gold-border);
+    background: transparent;
+    color: var(--gold);
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  }
+  .theme-toggle:hover {
+    border-color: var(--gold);
+    color: var(--gold-light);
+    background: var(--gold-muted);
+  }
+  [data-theme="light"] .theme-toggle {
+    color: var(--gold-dark);
+    border-color: rgba(139 105 20 / 0.4);
+  }
+  [data-theme="light"] .theme-toggle:hover {
+    border-color: var(--gold-dark);
+    color: var(--gold-dark);
+    background: rgba(139 105 20 / 0.1);
+  }
+  .icon {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  /* Mostrar luna en tema claro (para cambiar a oscuro), sol en tema oscuro */
+  :global([data-theme="dark"]) .icon--moon {
+    display: none;
+  }
+  :global([data-theme="light"]) .icon--sun,
+  :global(:root:not([data-theme])) .icon--sun {
+    display: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme])) .icon--moon {
+      display: none;
+    }
+    :global(:root:not([data-theme])) .icon--sun {
+      display: inline-block;
+    }
+  }
+</style>
+
+<script is:inline>
+  // Aplicar tema antes del paint para evitar flash
+  (function () {
+    const stored = localStorage.getItem('masada-theme');
+    if (stored === 'dark' || stored === 'light') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  })();
+</script>
+
+<script>
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const root = document.documentElement;
+      const current =
+        root.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const next = current === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      localStorage.setItem('masada-theme', next);
+    });
+  }
+</script>

@@ -1,0 +1,279 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+
+const links = [
+  { href: '/', label: 'Inicio' },
+  { href: '/cuadro-logial/', label: 'Cuadro Logial' },
+  { href: '/eventos/', label: 'Eventos' },
+  { href: '/noticias/', label: 'Noticias' },
+  { href: '/biblioteca/', label: 'Biblioteca' },
+  { href: '/ingreso/', label: 'Ingreso' },
+];
+
+const path = Astro.url.pathname;
+const isActive = (href: string) =>
+  href === '/' ? path === '/' : path === href || path.startsWith(href);
+---
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="brand" href="/" aria-label="Inicio">
+      <span class="brand__mark" aria-hidden="true">M</span>
+      <span class="brand__text">
+        <span class="brand__title">Masada <span class="therefore">N°324</span></span>
+        <span class="brand__subtitle">R<span class="therefore">∴</span>L<span class="therefore">∴</span>S<span class="therefore">∴</span></span>
+      </span>
+    </a>
+
+    <nav class="nav" aria-label="Navegación principal">
+      <button class="nav__toggle" type="button" aria-controls="primary-nav" aria-expanded="false">
+        <span class="sr-only">Menú</span>
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path
+            d="M3 6h18M3 12h18M3 18h18"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+      <ul id="primary-nav" class="nav__list">
+        {
+          links.map((l) => (
+            <li>
+              <a href={l.href} class:list={['nav__link', { 'is-active': isActive(l.href) }]}>
+                {l.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <ThemeToggle />
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--md-sys-color-surface) 94%, transparent);
+    backdrop-filter: saturate(120%) blur(12px);
+    border-bottom: 1px solid var(--gold-border);
+  }
+
+  .site-header__inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-block: 0.875rem;
+  }
+
+  /* ── Brand ── */
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--md-sys-color-on-surface);
+    text-decoration: none;
+    margin-right: auto;
+  }
+
+  .brand:hover {
+    text-decoration: none;
+    opacity: 1;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .brand__mark {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0;
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .brand:hover .brand__mark {
+    background: var(--gold);
+    color: var(--obsidian);
+  }
+
+  [data-theme="light"] .brand__mark {
+    border-color: var(--gold-dark);
+    color: var(--gold-dark);
+  }
+
+  [data-theme="light"] .brand:hover .brand__mark {
+    background: var(--gold-dark);
+    color: #FFF8E1;
+  }
+
+  .brand__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+
+  .brand__title {
+    font-family: var(--font-label);
+    font-size: 0.88rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+  }
+
+  .brand__subtitle {
+    font-family: var(--font-label);
+    font-size: 0.6rem;
+    letter-spacing: 0.22em;
+    color: var(--gold);
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+
+  [data-theme="light"] .brand__subtitle {
+    color: var(--gold-dark);
+  }
+
+  /* ── Nav ── */
+  .nav__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 0;
+    align-items: center;
+  }
+
+  .nav__link {
+    display: inline-block;
+    padding: 0.5rem 0.9rem;
+    border-radius: 0;
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: var(--font-label);
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: color 0.15s ease;
+    position: relative;
+  }
+
+  .nav__link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0.9rem;
+    right: 0.9rem;
+    height: 1px;
+    background: var(--gold);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.2s ease;
+  }
+
+  .nav__link:hover,
+  .nav__link.is-active {
+    color: var(--gold);
+    text-decoration: none;
+    opacity: 1;
+  }
+
+  [data-theme="light"] .nav__link:hover,
+  [data-theme="light"] .nav__link.is-active {
+    color: var(--gold-dark);
+  }
+
+  [data-theme="light"] .nav__link::after {
+    background: var(--gold-dark);
+  }
+
+  .nav__link:hover::after,
+  .nav__link.is-active::after {
+    transform: scaleX(1);
+  }
+
+  /* ── Toggle hamburger ── */
+  .nav__toggle {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--gold-border);
+    border-radius: var(--radius-sm);
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .nav__toggle:hover {
+    border-color: var(--gold);
+    color: var(--gold-light);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 880px) {
+    .nav__toggle {
+      display: inline-flex;
+    }
+
+    .nav__list {
+      position: absolute;
+      top: calc(100% + 1px);
+      left: 0;
+      right: 0;
+      background: var(--md-sys-color-surface);
+      border-bottom: 1px solid var(--gold-border);
+      flex-direction: column;
+      gap: 0;
+      padding: 0.75rem 1rem 1.25rem;
+      display: none;
+    }
+
+    .nav__list.is-open {
+      display: flex;
+    }
+
+    .nav__link {
+      width: 100%;
+      padding-block: 0.85rem;
+    }
+
+    .nav__link::after {
+      left: 0;
+      right: 0;
+    }
+  }
+</style>
+
+<script>
+  const toggle = document.querySelector<HTMLButtonElement>('.nav__toggle');
+  const list = document.getElementById('primary-nav');
+  if (toggle && list) {
+    toggle.addEventListener('click', () => {
+      const isOpen = list.classList.toggle('is-open');
+      toggle.setAttribute('aria-expanded', String(isOpen));
+    });
+  }
+</script>

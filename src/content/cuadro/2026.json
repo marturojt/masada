@@ -1,0 +1,15 @@
+{
+  "anio": 2026,
+  "anioVulgar": "2026 E∴V∴",
+  "venerableMaestro": { "nombre": "Mario Arturo Jiménez Terrón" },
+  "primerVigilante": { "nombre": "Luis Luna Ávila" },
+  "segundoVigilante": { "nombre": "José Ernesto Margalli Pérez" },
+  "orador": { "nombre": "Mauricio Morelos López" },
+  "secretario": { "nombre": "Alberto Arteaga Orive" },
+  "tesorero": { "nombre": "Miller Albeiro Ruíz Bambaue" },
+  "oficiales": [
+    { "cargo": "Primer Diácono", "nombre": "David Liévano Soberanes" },
+    { "cargo": "Maestro de Ceremonias", "nombre": "José Carlos Bonilla Paniagua" },
+    { "cargo": "Representante ante la M∴R∴G∴L∴ Valle de México", "nombre": "Arturo Ignacio Solís Luna" }
+  ]
+}

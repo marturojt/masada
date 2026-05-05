@@ -1,0 +1,101 @@
+---
+interface Props {
+  title?: string;
+  subtitle?: string;
+  image?: string;
+  height?: 'sm' | 'md' | 'lg';
+  align?: 'center' | 'start';
+}
+
+const {
+  title,
+  subtitle,
+  image = '/images/background/masada-bg-banner.svg',
+  height = 'md',
+  align = 'center',
+} = Astro.props;
+---
+
+<section
+  class:list={['banner', `banner--${height}`, `banner--${align}`]}
+  style={`--banner-image: url('${image}')`}
+>
+  <div class="banner__bg img-filter" aria-hidden="true"></div>
+  <div class="banner__overlay" aria-hidden="true"></div>
+  {(title || subtitle) && (
+    <div class="banner__content container">
+      {title && <h1 class="banner__title">{title}</h1>}
+      {subtitle && <p class="banner__subtitle">{subtitle}</p>}
+      <slot />
+    </div>
+  )}
+  {!title && !subtitle && <slot />}
+</section>
+
+<style>
+  .banner {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    color: #fff;
+  }
+  .banner--sm {
+    min-height: 220px;
+  }
+  .banner--md {
+    min-height: 320px;
+  }
+  .banner--lg {
+    min-height: 480px;
+  }
+  .banner__bg {
+    position: absolute;
+    inset: -2rem;
+    background-image: var(--banner-image);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    z-index: -2;
+  }
+  .banner__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(0 0 0 / 0.55) 0%,
+      rgba(0 0 0 / 0.72) 100%
+    );
+    z-index: -1;
+  }
+  .banner__content {
+    position: relative;
+    padding-block: clamp(2.5rem, 6vw, 5rem);
+    color: #fff;
+  }
+  .banner--center .banner__content {
+    text-align: center;
+  }
+  .banner__title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw + 1rem, 3.5rem);
+    margin: 0 0 0.5em;
+    text-shadow: 0 2px 12px rgb(0 0 0 / 0.4);
+  }
+  .banner__subtitle {
+    font-size: clamp(1rem, 1vw + 0.7rem, 1.3rem);
+    margin: 0;
+    opacity: 0.95;
+    text-shadow: 0 1px 6px rgb(0 0 0 / 0.4);
+  }
+  /* Sin parallax en touch (mejor UX/perf) */
+  @media (hover: none) {
+    .banner__bg {
+      background-attachment: scroll;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner__bg {
+      background-attachment: scroll;
+    }
+  }
+</style>
