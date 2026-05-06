@@ -2,14 +2,14 @@ import { defineCollection, z } from 'astro:content';
 
 const eventos = defineCollection({
   type: 'content',
-  schema: ({ image }) =>
+  schema: () =>
     z.object({
       title: z.string(),
       date: z.coerce.date(),
       endDate: z.coerce.date().optional(),
       location: z.string(),
       address: z.string().optional(),
-      flyer: image().optional(),
+      flyer: z.string().optional(),
       flyerAlt: z.string().optional(),
       type: z.enum(['tenida', 'interlogial', 'aniversario', 'publico', 'otro']).default('otro'),
       audience: z.enum(['publico', 'hermanos', 'invitacion']).default('publico'),

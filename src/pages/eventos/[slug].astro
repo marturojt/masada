@@ -19,11 +19,7 @@ const { Content } = await entry.render();
 const dateLabel = formatEventDate(data.date, data.endDate);
 const upcoming = isUpcoming(data.date);
 
-const flyerSrc = data.flyer
-  ? typeof data.flyer === 'string'
-    ? data.flyer
-    : data.flyer.src
-  : null;
+const flyerSrc = data.flyer ?? null;
 
 const rsvpEmail = data.rsvpEmail ?? 'hola@masada324.org';
 const mailtoSubject = encodeURIComponent(`Asistencia: ${data.title}`);
@@ -164,8 +160,6 @@ const eventJsonLd = {
     height: auto;
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
-    aspect-ratio: 4 / 5;
-    object-fit: cover;
   }
   .event__placeholder {
     aspect-ratio: 4 / 5;
