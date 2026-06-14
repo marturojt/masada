@@ -1,0 +1,123 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatShortDate, slugifyTag } from '@/lib/format';
+
+interface Props {
+  notes: CollectionEntry<'noticias'>[];
+}
+
+const { notes } = Astro.props;
+---
+
+<div class="news-list">
+  {
+    notes.map((n) => (
+      <article class="news-item">
+        <p class="news-item__date">{formatShortDate(n.data.date)}</p>
+        <h2 class="news-item__title">
+          <a class="news-item__link" href={`/noticias/${n.slug}/`}>
+            {n.data.title}
+          </a>
+        </h2>
+        {n.data.excerpt && <p class="news-item__excerpt">{n.data.excerpt}</p>}
+        {n.data.tags.length > 0 && (
+          <ul class="news-item__tags">
+            {n.data.tags.map((t) => (
+              <li>
+                <a class="tag" href={`/noticias/tag/${slugifyTag(t)}/`}>
+                  #{t}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
+    ))
+  }
+</div>
+
+<style>
+  .news-list {
+    display: grid;
+    gap: 1.25rem;
+  }
+  .news-item {
+    position: relative;
+    background: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--gold-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .news-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md), var(--shadow-gold);
+    border-color: rgba(201 168 76 / 0.55);
+  }
+  .news-item__date {
+    font-size: 0.8rem;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.4rem;
+    font-weight: 600;
+    font-family: var(--font-label);
+  }
+  [data-theme='light'] .news-item__date {
+    color: var(--gold-dark);
+  }
+  .news-item__title {
+    margin: 0 0 0.5rem;
+    font-size: 1.4rem;
+  }
+  .news-item__link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .news-item__link:hover {
+    color: inherit;
+    text-decoration: none;
+    opacity: 1;
+  }
+  /* Stretched link: toda la tarjeta es clicable hacia la nota */
+  .news-item__link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+  .news-item__excerpt {
+    margin: 0 0 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .news-item__tags {
+    position: relative;
+    z-index: 1;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+    padding: 0.1rem 0.55rem;
+    border: 1px solid var(--gold-border);
+    border-radius: 999px;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .tag:hover {
+    color: var(--gold);
+    border-color: var(--gold);
+    text-decoration: none;
+    opacity: 1;
+  }
+  [data-theme='light'] .tag:hover {
+    color: var(--gold-dark);
+    border-color: var(--gold-dark);
+  }
+</style>

@@ -1,7 +1,7 @@
 ---
 import { getCollection, type CollectionEntry } from 'astro:content';
 import PublicLayout from '@layouts/PublicLayout.astro';
-import { formatLongDate } from '@/lib/format';
+import { formatLongDate, slugifyTag } from '@/lib/format';
 
 export async function getStaticPaths() {
   const all = await getCollection('noticias', ({ data }) => !data.draft);
@@ -56,7 +56,9 @@ const coverSrc = data.cover
         data.tags.length > 0 && (
           <ul class="news__tags">
             {data.tags.map((t) => (
-              <li>#{t}</li>
+              <li>
+                <a href={`/noticias/tag/${slugifyTag(t)}/`}>#{t}</a>
+              </li>
             ))}
           </ul>
         )
@@ -113,12 +115,26 @@ const coverSrc = data.cover
     gap: 0.5rem;
     flex-wrap: wrap;
   }
-  .news__tags li {
+  .news__tags a {
+    display: inline-block;
     padding: 0.25rem 0.75rem;
     border-radius: 999px;
+    border: 1px solid var(--gold-border);
     background: var(--md-sys-color-surface-container);
     font-size: 0.8rem;
     color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .news__tags a:hover {
+    color: var(--gold);
+    border-color: var(--gold);
+    text-decoration: none;
+    opacity: 1;
+  }
+  :global([data-theme='light']) .news__tags a:hover {
+    color: var(--gold-dark);
+    border-color: var(--gold-dark);
   }
   .news__back {
     margin-top: 2rem;

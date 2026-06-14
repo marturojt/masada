@@ -49,28 +49,23 @@ const cuadro = defineCollection({
     oficiales: z
       .array(z.object({ cargo: z.string(), nombre: z.string(), grado: z.string().optional() }))
       .default([]),
+    maestros: z.array(z.string()).default([]),
+    companeros: z.array(z.string()).default([]),
+    aprendices: z.array(z.string()).default([]),
   }),
 });
 
-const books = defineCollection({
+const pastmasters = defineCollection({
   type: 'data',
   schema: z.object({
     items: z.array(
       z.object({
-        id: z.union([z.string(), z.number()]),
-        title: z.string(),
-        author: z.string(),
-        cover: z.string().optional(),
-        files: z
-          .object({
-            pdf: z.string().optional(),
-            epub: z.string().optional(),
-            kindle: z.string().optional(),
-          })
-          .default({}),
+        anio: z.number().int(),
+        nombre: z.string(),
+        vigente: z.boolean().default(false),
       }),
     ),
   }),
 });
 
-export const collections = { eventos, noticias, cuadro, books };
+export const collections = { eventos, noticias, cuadro, pastmasters };

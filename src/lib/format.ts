@@ -43,3 +43,13 @@ export function formatEventDate(start: Date, end?: Date): string {
 export function isUpcoming(date: Date): boolean {
   return date.getTime() >= Date.now() - 1000 * 60 * 60 * 6;
 }
+
+/** Convierte una etiqueta en un slug apto para URL (sin acentos ni símbolos). */
+export function slugifyTag(tag: string): string {
+  return tag
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}

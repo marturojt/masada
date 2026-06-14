@@ -1,0 +1,65 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import PublicLayout from '@layouts/PublicLayout.astro';
+import AtmosphericBanner from '@components/AtmosphericBanner.astro';
+import NewsList from '@components/NewsList.astro';
+import { slugifyTag } from '@/lib/format';
+
+export async function getStaticPaths() {
+  const all = await getCollection('noticias', ({ data }) => !data.draft);
+
+  const groups = new Map<string, { label: string; notes: CollectionEntry<'noticias'>[] }>();
+  for (const note of all) {
+    for (const tag of note.data.tags) {
+      const slug = slugifyTag(tag);
+      if (!slug) continue;
+      if (!groups.has(slug)) groups.set(slug, { label: tag, notes: [] });
+      groups.get(slug)!.notes.push(note);
+    }
+  }
+
+  return [...groups.entries()].map(([slug, { label, notes }]) => ({
+    params: { tag: slug },
+    props: {
+      label,
+      notes: notes.sort((a, b) => b.data.date.getTime() - a.data.date.getTime()),
+    },
+  }));
+}
+
+interface Props {
+  label: string;
+  notes: CollectionEntry<'noticias'>[];
+}
+
+const { label, notes } = Astro.props;
+const count = notes.length;
+---
+
+<PublicLayout
+  title={`Noticias · #${label}`}
+  description={`Noticias de la R∴L∴S∴ Masada No. 324 etiquetadas con #${label}.`}
+>
+  <AtmosphericBanner
+    title={`#${label}`}
+    subtitle={`${count} ${count === 1 ? 'nota' : 'notas'} con esta etiqueta`}
+    height="sm"
+  />
+
+  <section class="section">
+    <div class="container">
+      <NewsList notes={notes} />
+
+      <div class="tag-back">
+        <a href="/noticias/" class="btn btn--ghost">← Todas las noticias</a>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .tag-back {
+    margin-top: 2rem;
+    text-align: center;
+  }
+</style>
