@@ -264,14 +264,15 @@ si divergieron.
 
 ## Despliegue
 
-La tesorería se sirve en **https://tesoreria.masada324.org** (subdominio sin
-acento, propio y separado del sitio público, que sigue en masada324.org sin
-cambios). El subdominio ya existe; lo que falta es montar la aplicación detrás.
+La tesorería está **en producción en https://tesoreria.masada324.org** desde el
+24 de agosto de 2026 (subdominio sin acento, propio y separado del sitio público,
+que sigue en masada324.org sin cambios). Lo que sigue documenta cómo quedó
+montada; sirve de referencia para reconstruirla o para montar un ambiente igual.
 
 El sitio público no se toca: su despliegue sigue siendo `deploy/publish.sh` desde
 la raíz y ninguna de las dos aplicaciones puede tirar a la otra.
 
-### Lo que el agente de despliegue tiene que hacer
+### Cómo está montada (y cómo se volvería a montar)
 
 1. **Usuario de sistema propio** (`tesoreria`), sin shell de login si se puede.
    Código en `/home/tesoreria/app` (clon del repo, se usa solo `tesoreria/`),
@@ -353,7 +354,7 @@ asumía y no se cumplían:
 
 3. **`masada324.org` está detrás de Cloudflare con el proxy activo.** Eso agrega
    un salto: Cloudflare manda `X-Forwarded-For: <cliente>` y Apache le añade la
-   IP de Cloudflare, así que `ipDelCliente()` —que toma el último salto— veía la
+   IP de Cloudflare, así que `ipDelCliente()`, que toma el último salto, veía la
    IP de Cloudflare y no la del usuario, y la bitácora quedaba inservible.
    Resuelto en el borde con `mod_remoteip` y `CF-Connecting-IP`, sin tocar el
    código: la app sigue tomando el último salto y ahora ese salto es el cliente

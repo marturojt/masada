@@ -11,7 +11,7 @@ Dos proyectos, con sus propias dependencias y su propio `package.json`:
 | Carpeta | Qué es |
 |---|---|
 | raíz | Sitio público. Astro 4 + MDX, salida estática. https://masada324.org |
-| `tesoreria/` | Sistema interno de tesorería. Astro 7 con SSR + PostgreSQL. Solo local |
+| `tesoreria/` | Sistema interno de tesorería. Astro 7 con SSR + PostgreSQL. En producción: https://tesoreria.masada324.org |
 
 El sitio no depende de la tesorería. Lo único que las conecta es la exportación del
 cuadro logial, que escribe `src/content/cuadro/<año>.json` y solo cuando se pide.

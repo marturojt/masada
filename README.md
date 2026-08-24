@@ -130,7 +130,9 @@ Un Past Master es quien **concluyó** el cargo de V∴M∴; el venerable vigente
 
 Sistema interno, no público: padrón de hermanos, cápitas, ingresos y egresos con
 comprobantes, doble firma del tesorero y el Venerable Maestro, y cortes mensuales.
-Astro 7 con SSR, PostgreSQL y su propio `package.json`.
+Astro 7 con SSR, PostgreSQL y su propio `package.json`. En producción en
+https://tesoreria.masada324.org, en un subdominio propio y proceso aparte: el
+sitio público no depende de ella.
 
 ```bash
 cd tesoreria
