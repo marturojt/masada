@@ -328,5 +328,38 @@ la raíz y ninguna de las dos aplicaciones puede tirar a la otra.
 7. **Verificación**: entrar a https://tesoreria.masada324.org, iniciar sesión y
    recorrer el tablero. `masada324.org` debe seguir sirviendo el sitio de siempre.
 
-Este procedimiento no se ha ejecutado nunca en el VPS: son las condiciones que el
-diseño asume. Lo que truene, se corrige y se anota aquí.
+### Lo que se encontró al ejecutarlo (2026-08-24)
+
+El procedimiento se ejecutó por primera vez en el VPS. Tres cosas que el diseño
+asumía y no se cumplían:
+
+1. **`security.allowedDomains` era obligatorio, no opcional.** Su default es
+   `[]`, y con la lista vacía Astro **ignora `Host` y todas las `X-Forwarded-*`**
+   y arma `url.origin` como `http://localhost:4322`. Como `checkOrigin` compara
+   la cabecera `Origin` del navegador contra `url.origin`, detrás del proxy
+   **todo POST daba 403**. Está corregido en `astro.config.mjs`, con el dominio
+   de producción y las dos variantes locales. Comprobado contra los módulos
+   reales de Astro (`validate-headers.js` y `origin-check.js`): antes
+   `http://localhost:4322` → 403, después `https://tesoreria.masada324.org`
+   → pasa. De paso, `astro dev` ahora funciona por `127.0.0.1` además de por
+   `localhost`; antes solo por `localhost`.
+
+2. **El Node del sistema es 20.19.2 y `astro@7.2.2` exige `>=22.12.0`.** No se
+   subió el Node del sistema porque lo comparten otras seis aplicaciones del
+   servidor. Hay un Node 22 LTS aislado en
+   `/opt/nodejs/node-v22.23.2-linux-x64/bin/node`, que es el que usan la unidad
+   de systemd y los comandos de mantenimiento. **Para correr `npm`, `migrar`,
+   `sembrar` o `respaldo` en el VPS hay que usar ese Node, no el del `PATH`.**
+
+3. **`masada324.org` está detrás de Cloudflare con el proxy activo.** Eso agrega
+   un salto: Cloudflare manda `X-Forwarded-For: <cliente>` y Apache le añade la
+   IP de Cloudflare, así que `ipDelCliente()` —que toma el último salto— veía la
+   IP de Cloudflare y no la del usuario, y la bitácora quedaba inservible.
+   Resuelto en el borde con `mod_remoteip` y `CF-Connecting-IP`, sin tocar el
+   código: la app sigue tomando el último salto y ahora ese salto es el cliente
+   real. El límite de intentos por IP (25) ya toleraba IP compartida, así que
+   esto nunca fue riesgo de bloqueo, solo de trazabilidad.
+
+El detalle de operación del lado servidor (unidad de systemd, vhost, respaldo
+por timer, cómo reiniciar) vive en el repo `serverAdmin`, en
+`tesoreria-masada-despliegue.md`.
