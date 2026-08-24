@@ -30,7 +30,22 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-BASE_TRABAJO="$(basename "${DATABASE_URL%%\?*}")"
+# La URL se parte en tres: lo que va antes del nombre de la base, el nombre, y
+# la cadena de consulta. Hacerlo con ${VAR%/*} sobre la URL completa está mal
+# cuando la conexión es por socket unix —postgres:///base?host=/var/run/postgresql—
+# porque la última diagonal está dentro de host= y lo que se recorta es la ruta
+# del socket, no la base. Eso da un "socket /var/run/postgres no existe" que no
+# se parece en nada al problema real.
+CONSULTA=""
+SIN_CONSULTA="$DATABASE_URL"
+case "$DATABASE_URL" in
+  *\?*)
+    CONSULTA="?${DATABASE_URL#*\?}"
+    SIN_CONSULTA="${DATABASE_URL%%\?*}"
+    ;;
+esac
+PREFIJO="${SIN_CONSULTA%/*}"
+BASE_TRABAJO="${SIN_CONSULTA##*/}"
 DESTINO="${2:-${BASE_TRABAJO}_restauro}"
 
 if [ "$DESTINO" = "$BASE_TRABAJO" ]; then
@@ -38,13 +53,13 @@ if [ "$DESTINO" = "$BASE_TRABAJO" ]; then
   exit 1
 fi
 
-BASE_ADMIN="${DATABASE_URL%/*}/postgres"
+BASE_ADMIN="$PREFIJO/postgres$CONSULTA"
 
 echo "==> Restaurando $DUMP en la base $DESTINO"
 psql --dbname="$BASE_ADMIN" -v ON_ERROR_STOP=1 -c "drop database if exists \"$DESTINO\""
 psql --dbname="$BASE_ADMIN" -v ON_ERROR_STOP=1 -c "create database \"$DESTINO\""
 
-URL_DESTINO="${DATABASE_URL%/*}/$DESTINO"
+URL_DESTINO="$PREFIJO/$DESTINO$CONSULTA"
 pg_restore --dbname="$URL_DESTINO" --no-owner --no-privileges "$DUMP"
 
 echo ""
