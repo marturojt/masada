@@ -115,9 +115,12 @@ Todo esto lo hace el tesorero, no requiere código:
 
 ## Pendientes de código
 
-- [ ] **Desplegar la tesorería** cuando se decida. El camino está descrito al final
-      de `tesoreria/README.md`, pero no está probado: falta el usuario de sistema,
-      la unidad systemd, el vhost de Apache en un subdominio y el rol de PostgreSQL.
+- [ ] **Desplegar la tesorería** en **https://tesoreria.masada324.org** (el
+      subdominio ya existe). El procedimiento completo para el agente de despliegue
+      está en `tesoreria/README.md`, sección "Despliegue": usuario de sistema,
+      rol y base de PostgreSQL, `.env` de producción, unidad systemd, vhost de
+      Apache con proxy a 127.0.0.1:4322 y respaldo diario. No se ha ejecutado
+      nunca; lo que truene se corrige y se anota.
 - [ ] **Desplegar el sitio** para que la tenida de junio deje de aparecer como
       próxima: `bash deploy/publish.sh`.
 - [ ] **Histórico completo de Past Masters**: hoy están 2022 a 2025 en

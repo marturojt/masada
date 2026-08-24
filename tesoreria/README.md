@@ -262,22 +262,71 @@ sesión válida. No se transcodifican: el original es el dato probatorio.
 carpeta se puede construir sola. `npm run estilos` los sincroniza y el build avisa
 si divergieron.
 
-## Si algún día se despliega
+## Despliegue
 
-Hoy todo corre en local. Cuando toque publicarlo, el camino que encaja con el VPS
-de la logia es:
+La tesorería se sirve en **https://tesoreria.masada324.org** (subdominio sin
+acento, propio y separado del sitio público, que sigue en masada324.org sin
+cambios). El subdominio ya existe; lo que falta es montar la aplicación detrás.
 
-- Usuario de sistema propio, código en `/home/tesoreria/app`, comprobantes en
-  `/home/tesoreria/comprobantes` con modo 700.
-- Unidad systemd con `Restart=always`, `NODE_ENV=production`, bind a `127.0.0.1`,
-  `ProtectSystem=strict` y `ReadWritePaths` acotado a comprobantes y respaldos.
-- Apache como proxy inverso en un **subdominio propio**, no en una subruta del
-  sitio público: así las cookies quedan aisladas y se puede usar el prefijo
-  `__Host-`. Con `LimitRequestBody` para las subidas y quitando las cabeceras
-  `X-Forwarded-Host` y `Forwarded` en el borde.
-- Rol y base propios en PostgreSQL, `.env` en modo 600, `TS_ENTORNO=produccion` y
-  `TS_CONFIAR_PROXY=true`.
-- Respaldo diario por timer, con copia fuera del servidor.
+El sitio público no se toca: su despliegue sigue siendo `deploy/publish.sh` desde
+la raíz y ninguna de las dos aplicaciones puede tirar a la otra.
 
-Nada de esto está probado todavía: son las condiciones que el diseño ya asume, no
-un procedimiento verificado.
+### Lo que el agente de despliegue tiene que hacer
+
+1. **Usuario de sistema propio** (`tesoreria`), sin shell de login si se puede.
+   Código en `/home/tesoreria/app` (clon del repo, se usa solo `tesoreria/`),
+   comprobantes en `/home/tesoreria/comprobantes` con modo 700 y dueño de ese
+   usuario. Los comprobantes son datos del tesorero, no código: sobreviven a
+   cualquier redeploy y van en el respaldo junto con la base.
+
+2. **PostgreSQL**: rol y base propios, por ejemplo:
+   ```sql
+   create role tesoreria login;
+   create database masada_tesoreria owner tesoreria;
+   ```
+   Conexión por socket unix de preferencia:
+   `postgres:///masada_tesoreria?host=/var/run/postgresql`.
+
+3. **Aplicación** (Node 22.12 o más nuevo):
+   ```bash
+   cd /home/tesoreria/app/tesoreria
+   npm ci
+   cp .env.example .env && chmod 600 .env
+   npm run migrar
+   npm run sembrar       # interactivo, crea el Tesorero y el V∴M∴
+   npm run build
+   ```
+   El `.env` de producción cambia respecto al de local exactamente en esto:
+   ```
+   DATABASE_URL=postgres:///masada_tesoreria?host=/var/run/postgresql
+   COMPROBANTES_DIR=/home/tesoreria/comprobantes
+   TS_ORIGEN=https://tesoreria.masada324.org
+   TS_ENTORNO=produccion
+   TS_COOKIE_NOMBRE=__Host-ts_sesion
+   TS_CONFIAR_PROXY=true
+   HOST=127.0.0.1
+   PORT=4322
+   ```
+
+4. **Unidad systemd** con `Restart=always`, `NODE_ENV=production`,
+   `ExecStart=/usr/bin/node dist/server/entry.mjs`, `User=tesoreria`,
+   `ProtectSystem=strict` y `ReadWritePaths` acotado a comprobantes y respaldos.
+   El proceso escucha solo en 127.0.0.1:4322, nunca expuesto directo.
+
+5. **Apache**: vhost de `tesoreria.masada324.org` con TLS (certbot), proxy
+   inverso a `http://127.0.0.1:4322`, `LimitRequestBody 10485760` para las
+   subidas, y en el borde **quitar** las cabeceras `X-Forwarded-Host` y
+   `Forwarded` que vengan del cliente (la app confía en el proxy con
+   `TS_CONFIAR_PROXY=true`, así que el proxy debe ser quien las controle).
+
+6. **Respaldo diario** por timer de systemd: `npm run respaldo` genera el volcado
+   de la base y el tar de comprobantes, con manifiesto. Van juntos siempre, con
+   copia fuera del servidor. Un respaldo no probado no es respaldo:
+   `bash scripts/restaurar.sh <dump>` lo restaura en una base aparte y compara
+   conteos.
+
+7. **Verificación**: entrar a https://tesoreria.masada324.org, iniciar sesión y
+   recorrer el tablero. `masada324.org` debe seguir sirviendo el sitio de siempre.
+
+Este procedimiento no se ha ejecutado nunca en el VPS: son las condiciones que el
+diseño asume. Lo que truene, se corrige y se anota aquí.
