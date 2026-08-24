@@ -1,0 +1,198 @@
+---
+/*
+ * Alta de un egreso. Todavía no mueve dinero: primero lo firman el tesorero y el
+ * Venerable Maestro, y después se registra la entrega.
+ *
+ * El pago de cápitas a la Gran Tesorería tiene su propia pantalla, porque lleva
+ * el cálculo que ella envía y los meses que ampara.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { crearEgreso } from '@lib/casos/egresos';
+import { emitirNonce } from '@lib/csrf';
+import { listarConceptos } from '@lib/datos/conceptos';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaEgreso } from '@lib/esquemas/egreso';
+import { hoyISO } from '@lib/fechas';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const ejercicio = await ejercicioVigente();
+
+const todos = await listarConceptos({ naturaleza: 'egreso', soloSeleccionables: true });
+/* La Gran Tesorería va por su propia pantalla. */
+const conceptos = todos.filter((c) => c.tipo_especial !== 'gran_tesoreria');
+const hermanos = await hermanosActivos();
+
+const ETIQUETAS: Record<string, string> = {
+  fecha_solicitud: 'Fecha',
+  concepto_id: 'Concepto',
+  beneficiario: 'Beneficiario',
+  descripcion: 'Descripción',
+  monto: 'Monto solicitado',
+  hermano_id: 'Hermano',
+  requiere_comprobacion: 'Por comprobar',
+  notas: 'Notas',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { fecha_solicitud: hoyISO() };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaEgreso,
+    proposito: 'egreso_nuevo',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      const creado = await crearEgreso(
+        {
+          sesion,
+          nonce: resultado.nonce,
+          idPeticion: Astro.locals.idPeticion,
+          proposito: 'egreso_nuevo',
+        },
+        resultado.datos,
+        resultado.archivos,
+      );
+      return Astro.redirect(`/egresos/${creado.id}?ok=egreso`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const nonce = await emitirNonce(sesion.idHash, 'egreso_nuevo');
+
+const opcionesConcepto: Opcion[] = conceptos.map((c) => ({
+  valor: String(c.id),
+  texto: c.requiere_hermano ? `${c.nombre} (pide hermano)` : c.nombre,
+}));
+
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Nuevo egreso" sesion={sesion} angosto>
+  <h1>Nuevo egreso</h1>
+  <p class="apagado">
+    Al guardarlo queda registrado y pendiente de las dos firmas. El dinero sale de la
+    caja cuando se registre la entrega, no antes.
+  </p>
+
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+    <Campo
+      nombre="fecha_solicitud"
+      etiqueta={ETIQUETAS.fecha_solicitud!}
+      tipo="date"
+      valor={valores.fecha_solicitud}
+      error={errores.fecha_solicitud}
+      min={ejercicio.fecha_inicio}
+      max={ejercicio.fecha_fin}
+      requerido
+    />
+
+    <Selector
+      nombre="concepto_id"
+      etiqueta={ETIQUETAS.concepto_id!}
+      opciones={opcionesConcepto}
+      valor={valores.concepto_id}
+      error={errores.concepto_id}
+      vacio="Elige un concepto"
+      requerido
+    />
+
+    <Campo
+      nombre="beneficiario"
+      etiqueta={ETIQUETAS.beneficiario!}
+      valor={valores.beneficiario}
+      error={errores.beneficiario}
+      ayuda="A quién se le paga: proveedor, hermano, Gran Logia."
+      requerido
+    />
+
+    <Campo
+      nombre="descripcion"
+      etiqueta={ETIQUETAS.descripcion!}
+      valor={valores.descripcion}
+      error={errores.descripcion}
+      ayuda="Qué se paga. Este texto queda en el corte mensual."
+      requerido
+    />
+
+    <Campo
+      nombre="monto"
+      etiqueta={ETIQUETAS.monto!}
+      valor={valores.monto}
+      error={errores.monto}
+      modoTeclado="decimal"
+      monto
+      requerido
+    />
+
+    <Selector
+      nombre="hermano_id"
+      etiqueta={ETIQUETAS.hermano_id!}
+      opciones={opcionesHermano}
+      valor={valores.hermano_id}
+      error={errores.hermano_id}
+      vacio="No aplica"
+      ayuda="Obligatorio en los pagos de grado a la Gran Logia."
+    />
+
+    <div class="campo">
+      <span class="campo__etiqueta">{ETIQUETAS.requiere_comprobacion}</span>
+      <label style="display: block; font-size: 0.85rem;">
+        <input
+          type="checkbox"
+          name="requiere_comprobacion"
+          style="width: auto;"
+          checked={valores.requiere_comprobacion === 'on'}
+        />
+        {' '}Se entrega dinero y después se comprueba con recibos
+      </label>
+      <span class="campo__ayuda">
+        Márcalo para compras de vino, alimentos y gastos parecidos. Si no lo marcas, al
+        registrar la entrega será obligatoria la imagen del comprobante de pago.
+      </span>
+    </div>
+
+    <Campo
+      nombre="notas"
+      etiqueta={ETIQUETAS.notas!}
+      valor={valores.notas}
+      error={errores.notas}
+      largo
+      filas={2}
+    />
+
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Registrar egreso</button>
+      <a class="btn btn--ghost" href="/egresos">Cancelar</a>
+    </div>
+  </Formulario>
+</LayoutAdmin>

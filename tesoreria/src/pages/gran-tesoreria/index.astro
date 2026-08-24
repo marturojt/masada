@@ -1,0 +1,373 @@
+---
+/*
+ * Centro del dominio Gran Tesorería: el estatus a plomo, el cálculo esperado
+ * contra la membresía, las obligaciones y los pagos.
+ *
+ * Regla del dominio: el cálculo interno sirve para conciliar; lo exigible es lo
+ * que reporta la Gran Tesorería. Una diferencia se muestra, nunca bloquea.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { generarEgresoDePago } from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import {
+  NOMBRE_ESTATUS_OBLIGACION,
+  NOMBRE_TIPO_OBLIGACION,
+  calculoEsperado,
+  estadoAplomo,
+  listarObligaciones,
+  listarPagosGT,
+  membresiaActual,
+  periodosCubiertos,
+} from '@lib/datos/gt';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { formatoFechaCorta, nombrePeriodo, nombrePeriodoCorto } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_BOLSA } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+let errores: Record<string, string> = {};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else if (entrada.accion === 'generar_egreso') {
+    const r = await validar(entrada, {
+      esquema: esquemaVacio,
+      proposito: 'gt_generar_egreso',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+    } else {
+      const ids = Object.keys(entrada.crudos)
+        .filter((k) => k.startsWith('obl_'))
+        .map((k) => Number(k.slice(4)))
+        .filter((n) => Number.isInteger(n) && n > 0);
+      try {
+        const creado = await generarEgresoDePago(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          ids,
+        );
+        return Astro.redirect(`/egresos/${creado.egresoId}?ok=egreso`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { _general: error.message };
+        estado = 422;
+      }
+    }
+  } else {
+    errores = { _general: 'Acción no reconocida.' };
+    estado = 400;
+  }
+}
+
+const [aplomo, esperado, membresia, obligaciones, pagos, cubiertos] = await Promise.all([
+  estadoAplomo(),
+  calculoEsperado(),
+  membresiaActual(),
+  listarObligaciones(anio),
+  listarPagosGT(anio),
+  periodosCubiertos(anio),
+]);
+
+const pendientes = obligaciones.filter(
+  (o) => o.estatus === 'pendiente_pago' || o.estatus === 'parcialmente_pagada',
+);
+const totalEsperado = esperado.reduce((s, e) => s + e.subtotal_centavos, 0);
+const nonceGenerar = await emitirNonce(sesion.idHash, 'gt_generar_egreso');
+
+const CLASE_ESTATUS: Record<string, string> = {
+  pendiente_pago: 'insignia--alerta',
+  parcialmente_pagada: 'insignia--pendiente',
+  pagada: 'insignia--ok',
+  cancelada: '',
+};
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Gran Tesorería" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>
+      {
+        aplomo.ordinario_a_plomo ? 'Ordinario: A PLOMO' : `Ordinario: PENDIENTE`
+      }
+      {aplomo.cubierto_hasta && ` · cubierto hasta ${nombrePeriodoCorto(aplomo.cubierto_hasta.slice(0, 7))}`}
+    </span>
+    {aplomo.regularizaciones_pendientes > 0 && (
+      <span>{aplomo.regularizaciones_pendientes} regularización(es) pendientes</span>
+    )}
+    {aplomo.otras_pendientes > 0 && <span>{aplomo.otras_pendientes} trámite(s) pendientes</span>}
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} />
+
+  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+    <h1>Gran Tesorería</h1>
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+      <a class="btn btn--primary" href="/gran-tesoreria/obligaciones/nueva">Capturar obligación</a>
+      <a class="btn btn--ghost" href="/gran-tesoreria/membresias">Membresías</a>
+      <a class="btn btn--ghost" href="/gran-tesoreria/tarifas">Tarifas GT</a>
+      <a class="btn btn--ghost" href="/gran-tesoreria/conciliacion">Conciliación</a>
+    </div>
+  </div>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1.25rem;">
+      <section class="tarjeta">
+        <h2>Estatus ante la Gran Tesorería</h2>
+        <p style="margin: 0;">
+          {
+            aplomo.ordinario_a_plomo ? (
+              <span class="insignia insignia--ok">A plomo en lo ordinario</span>
+            ) : (
+              <span class="insignia insignia--alerta">
+                Pendiente desde {aplomo.primer_pendiente ? nombrePeriodo(aplomo.primer_pendiente.slice(0, 7)) : '—'}
+              </span>
+            )
+          }
+        </p>
+        <p class="apagado" style="font-size: 0.85rem; margin: 0.5rem 0 0;">
+          {aplomo.cubierto_hasta
+            ? `Último periodo ordinario cubierto: ${nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}.`
+            : 'Ningún periodo ordinario cubierto todavía.'}
+          {aplomo.regularizaciones_pendientes > 0 &&
+            ` Regularizaciones pendientes: ${aplomo.regularizaciones_pendientes}.`}
+        </p>
+        <p class="apagado" style="font-size: 0.78rem; margin: 0.5rem 0 0;">
+          Meses de {anio}:{' '}
+          {cubiertos.map((c) => (c.cubierto ? '●' : '·')).join(' ')}
+        </p>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Cálculo esperado</h2>
+        {
+          membresia === null ? (
+            <p class="apagado" style="margin: 0;">
+              Sin membresía capturada. <a href="/gran-tesoreria/membresias">Captura la primera</a>
+              {' '}para poder conciliar.
+            </p>
+          ) : esperado.length === 0 ? (
+            <p class="apagado" style="margin: 0;">
+              Sin tarifas GT vigentes. <a href="/gran-tesoreria/tarifas">Captúralas</a> para
+              calcular el esperado.
+            </p>
+          ) : (
+            <>
+              <table class="tabla">
+                <tbody>
+                  {esperado.map((e) => (
+                    <tr>
+                      <th scope="row">
+                        {e.concepto === 'capita'
+                          ? `Cápitas (${e.cantidad} hermanos)`
+                          : (e.descripcion ?? e.concepto)}
+                      </th>
+                      <td class="num">{formatoMXN(e.subtotal_centavos)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>Total esperado</td>
+                    <td class="num">{formatoMXN(totalEsperado)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <p class="apagado" style="font-size: 0.78rem; margin: 0.5rem 0 0;">
+                Con la membresía del {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}
+                {' '}({membresia.con_capita} generan cápita). El exigible es siempre el que
+                reporte la Gran Tesorería.
+              </p>
+            </>
+          )
+        }
+      </section>
+    </div>
+
+    <section class="tarjeta">
+      <h2>Obligaciones pendientes</h2>
+      {
+        pendientes.length === 0 ? (
+          <p class="apagado">Nada pendiente de pago.</p>
+        ) : (
+          <Formulario csrf={sesion.csrfToken} nonce={nonceGenerar} accionInterna="generar_egreso">
+            <div class="tabla-envoltura">
+              <table class="tabla">
+                <thead>
+                  <tr>
+                    <th scope="col">Pagar</th>
+                    <th scope="col">Folio</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Ampara</th>
+                    <th scope="col" class="num">Reportado</th>
+                    <th scope="col" class="num">Saldo</th>
+                    <th scope="col">Estatus</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendientes.map((o) => (
+                    <tr>
+                      <td>
+                        <input type="checkbox" name={`obl_${o.id}`} style="width: auto;" />
+                      </td>
+                      <td>
+                        <a href={`/gran-tesoreria/obligaciones/${o.id}`}>{o.folio}</a>
+                      </td>
+                      <td>{NOMBRE_TIPO_OBLIGACION[o.tipo]}</td>
+                      <td>
+                        {o.periodo_desde === o.periodo_hasta
+                          ? nombrePeriodoCorto(o.periodo_desde.slice(0, 7))
+                          : `${nombrePeriodoCorto(o.periodo_desde.slice(0, 7))} a ${nombrePeriodoCorto(o.periodo_hasta.slice(0, 7))}`}
+                      </td>
+                      <td class="num">{formatoMXN(o.monto_reportado_centavos)}</td>
+                      <td class="num">{formatoMXN(o.saldo_centavos)}</td>
+                      <td>
+                        <span class:list={['insignia', CLASE_ESTATUS[o.estatus]]}>
+                          {NOMBRE_ESTATUS_OBLIGACION[o.estatus]}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">
+                Generar egreso de pago con las marcadas
+              </button>
+              <span class="apagado" style="font-size: 0.8rem;">
+                El egreso pasa por las dos firmas; al entregar el dinero, el pago GT y sus
+                aplicaciones se registran solos.
+              </span>
+            </div>
+          </Formulario>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Historial de obligaciones {anio}</h2>
+      {
+        obligaciones.length === 0 ? (
+          <p class="apagado">Sin obligaciones capturadas.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Folio</th>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Ampara</th>
+                  <th scope="col" class="num">Reportado</th>
+                  <th scope="col" class="num">Esperado</th>
+                  <th scope="col" class="num">Pagado</th>
+                  <th scope="col">Estatus</th>
+                </tr>
+              </thead>
+              <tbody>
+                {obligaciones.map((o) => (
+                  <tr>
+                    <td>
+                      <a href={`/gran-tesoreria/obligaciones/${o.id}`}>{o.folio}</a>
+                    </td>
+                    <td>{NOMBRE_TIPO_OBLIGACION[o.tipo]}</td>
+                    <td>
+                      {o.periodo_desde === o.periodo_hasta
+                        ? nombrePeriodoCorto(o.periodo_desde.slice(0, 7))
+                        : `${nombrePeriodoCorto(o.periodo_desde.slice(0, 7))} a ${nombrePeriodoCorto(o.periodo_hasta.slice(0, 7))}`}
+                    </td>
+                    <td class="num">{formatoMXN(o.monto_reportado_centavos)}</td>
+                    <td class="num">
+                      {o.monto_esperado_centavos !== null ? (
+                        <>
+                          {formatoMXN(o.monto_esperado_centavos)}
+                          {o.monto_esperado_centavos !== o.monto_reportado_centavos && (
+                            <>
+                              {' '}
+                              <span class="insignia insignia--pendiente">
+                                {formatoMXN(Math.abs(o.monto_reportado_centavos - o.monto_esperado_centavos))} dif.
+                              </span>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td class="num">{formatoMXN(o.pagado_centavos)}</td>
+                    <td>
+                      <span class:list={['insignia', CLASE_ESTATUS[o.estatus]]}>
+                        {NOMBRE_ESTATUS_OBLIGACION[o.estatus]}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Pagos {anio}</h2>
+      {
+        pagos.length === 0 ? (
+          <p class="apagado">Sin pagos registrados.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Folio</th>
+                  <th scope="col">Fecha</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Bolsa</th>
+                  <th scope="col">Cubre</th>
+                  <th scope="col">Egreso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagos.map((p) => (
+                  <tr>
+                    <td>{p.folio}</td>
+                    <td>{formatoFechaCorta(p.fecha_pago)}</td>
+                    <td class="num">{formatoMXN(p.monto_centavos)}</td>
+                    <td>{NOMBRE_BOLSA[p.bolsa]}</td>
+                    <td>{p.obligaciones ?? '—'}</td>
+                    <td>
+                      {p.egreso_id ? (
+                        <a href={`/egresos/${p.egreso_id}`}>{p.egreso_folio}</a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

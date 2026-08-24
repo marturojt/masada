@@ -1,0 +1,82 @@
+---
+/* Alta de hermano. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import FormularioHermano from '@componentes/FormularioHermano.astro';
+import { crearHermano } from '@lib/casos/hermanos';
+import { listarCargos } from '@lib/datos/cargos';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { emitirNonce } from '@lib/csrf';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaHermano } from '@lib/esquemas/hermano';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const ejercicio = await ejercicioVigente();
+const cargos = await listarCargos();
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  grado: 'aprendiz',
+  motivo_ingreso: 'afiliacion',
+  fecha_ingreso: `${ejercicio.anio}-01-01`,
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaHermano,
+    proposito: 'hermano_nuevo',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      const id = await crearHermano(
+        {
+          sesion,
+          nonce: resultado.nonce,
+          anio: ejercicio.anio,
+          idPeticion: Astro.locals.idPeticion,
+        },
+        resultado.datos,
+      );
+      return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+/*
+ * Se emite un nonce nuevo en cada render: el anterior no se consumió si la
+ * validación falló, y de todas formas expira solo.
+ */
+const nonce = await emitirNonce(sesion.idHash, 'hermano_nuevo');
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Alta de hermano" sesion={sesion} angosto>
+  <h1>Alta de hermano</h1>
+  <p class="apagado">
+    La fecha de ingreso define su cápita del ejercicio {ejercicio.anio}.
+  </p>
+
+  <FormularioHermano
+    csrf={sesion.csrfToken}
+    nonce={nonce}
+    valores={valores}
+    errores={errores}
+    cargos={cargos}
+    anio={ejercicio.anio}
+    textoBoton="Guardar hermano"
+    cancelarA="/hermanos"
+  />
+</LayoutAdmin>

@@ -1,0 +1,231 @@
+---
+/*
+ * Captura de una obligación ante la Gran Tesorería: el documento que ella emite
+ * con lo exigible. El monto esperado (membresía por tarifas) se precalcula como
+ * referencia; una diferencia se muestra, no bloquea.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { capturarObligacion } from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import {
+  NOMBRE_TIPO_OBLIGACION,
+  calculoEsperado,
+  estadoAplomo,
+  membresiaActual,
+} from '@lib/datos/gt';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaObligacion } from '@lib/esquemas/gt';
+import { hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const ETIQUETAS: Record<string, string> = {
+  tipo: 'Tipo de obligación',
+  periodo_desde: 'Ampara desde',
+  periodo_hasta: 'Ampara hasta',
+  fecha_documento: 'Fecha del documento',
+  monto_reportado: 'Monto reportado por GT',
+  monto_esperado: 'Monto esperado',
+  membresia_id: 'Membresía',
+  hermano_id: 'Hermano (solo trámites)',
+  calculo: 'Documento del cálculo',
+  observaciones: 'Observaciones',
+};
+
+const [esperadoRows, membresia, aplomo, hermanos] = await Promise.all([
+  calculoEsperado(),
+  membresiaActual(),
+  estadoAplomo(),
+  hermanosActivos(),
+]);
+const totalEsperado = esperadoRows.reduce((s, e) => s + e.subtotal_centavos, 0);
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  tipo: 'ordinaria',
+  periodo_desde: periodoActual(),
+  periodo_hasta: periodoActual(),
+  fecha_documento: hoyISO(),
+  monto_esperado: totalEsperado > 0 ? aPesosTexto(totalEsperado) : '',
+  membresia_id: membresia ? String(membresia.id) : '',
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaObligacion,
+    proposito: 'gt_obligacion',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      const creada = await capturarObligacion(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+        resultado.archivos.calculo,
+      );
+      return Astro.redirect(`/gran-tesoreria/obligaciones/${creada.id}?ok=obligacion`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const nonce = await emitirNonce(sesion.idHash, 'gt_obligacion');
+
+const opcionesTipo: Opcion[] = (
+  ['ordinaria', 'regularizacion', 'tramite', 'extraordinaria'] as const
+).map((t) => ({ valor: t, texto: NOMBRE_TIPO_OBLIGACION[t] }));
+
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Capturar obligación GT" sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+    {membresia && (
+      <span>Membresía vigente: {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</span>
+    )}
+  </div>
+
+  <h1>Capturar obligación</h1>
+  <p class="apagado">
+    Lo exigible es lo que la Gran Tesorería reporta en su documento. El esperado interno
+    (membresía por tarifas) va como referencia: si difieren, se registra la diferencia y
+    se paga lo reportado.
+  </p>
+
+  {
+    !aplomo.ordinario_a_plomo && (
+      <div class="aviso aviso--error">
+        Aviso: la logia no está a plomo en lo ordinario
+        {aplomo.primer_pendiente && (
+          <> (pendiente desde {nombrePeriodo(aplomo.primer_pendiente.slice(0, 7))})</>
+        )}
+        . Los trámites ante la Gran Tesorería suelen requerir estar a plomo; el sistema lo
+        avisa pero no lo impide, porque la palabra final la tiene la Gran Tesorería.
+      </div>
+    )
+  }
+
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+    <Selector
+      nombre="tipo"
+      etiqueta={ETIQUETAS.tipo!}
+      opciones={opcionesTipo}
+      valor={valores.tipo}
+      error={errores.tipo}
+      requerido
+    />
+
+    <Campo
+      nombre="periodo_desde"
+      etiqueta={ETIQUETAS.periodo_desde!}
+      tipo="month"
+      valor={valores.periodo_desde}
+      error={errores.periodo_desde}
+      requerido
+      ayuda="En regularizaciones puede ser un mes de años anteriores."
+    />
+
+    <Campo
+      nombre="periodo_hasta"
+      etiqueta={ETIQUETAS.periodo_hasta!}
+      tipo="month"
+      valor={valores.periodo_hasta}
+      error={errores.periodo_hasta}
+      requerido
+    />
+
+    <Campo
+      nombre="fecha_documento"
+      etiqueta={ETIQUETAS.fecha_documento!}
+      tipo="date"
+      valor={valores.fecha_documento}
+      error={errores.fecha_documento}
+      requerido
+    />
+
+    <Campo
+      nombre="monto_reportado"
+      etiqueta={ETIQUETAS.monto_reportado!}
+      valor={valores.monto_reportado}
+      error={errores.monto_reportado}
+      modoTeclado="decimal"
+      monto
+      requerido
+    />
+
+    <Campo
+      nombre="monto_esperado"
+      etiqueta={ETIQUETAS.monto_esperado!}
+      valor={valores.monto_esperado}
+      error={errores.monto_esperado}
+      modoTeclado="decimal"
+      monto
+      ayuda={totalEsperado > 0
+        ? `Precalculado con la membresía y tarifas vigentes: ${formatoMXN(totalEsperado)}. Ajústalo si esta obligación ampara otra cosa.`
+        : 'Opcional. Sin membresía o tarifas capturadas no hay cálculo interno.'}
+    />
+
+    <input type="hidden" name="membresia_id" value={valores.membresia_id} />
+
+    <Selector
+      nombre="hermano_id"
+      etiqueta={ETIQUETAS.hermano_id!}
+      opciones={opcionesHermano}
+      valor={valores.hermano_id}
+      error={errores.hermano_id}
+      vacio="No aplica"
+      ayuda="Obligatorio si el tipo es trámite de grado."
+    />
+
+    <Campo
+      nombre="calculo"
+      etiqueta={ETIQUETAS.calculo!}
+      tipo="file"
+      error={errores.calculo}
+      aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+      ayuda="El documento o estado de cuenta que emite la Gran Tesorería."
+    />
+
+    <Campo
+      nombre="observaciones"
+      etiqueta={ETIQUETAS.observaciones!}
+      valor={valores.observaciones}
+      error={errores.observaciones}
+      largo
+      filas={2}
+    />
+
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Capturar obligación</button>
+      <a class="btn btn--ghost" href="/gran-tesoreria">Cancelar</a>
+    </div>
+  </Formulario>
+</LayoutAdmin>

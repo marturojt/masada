@@ -1,0 +1,138 @@
+---
+/*
+ * Constancia de una aportación en especie. No es un recibo de dinero: hace
+ * constar la entrega de un bien o servicio. Por eso no lleva monto en letra
+ * y dice explícitamente que no generó movimiento en el libro de caja.
+ */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import { obtenerAportacion } from '@lib/casos/aportaciones';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaLarga } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+void sesion;
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const aportacion = await obtenerAportacion(id);
+if (!aportacion || aportacion.tipo !== 'especie') {
+  return new Response(
+    'Esa aportación no tiene constancia: las monetarias generan recibo, no constancia.',
+    { status: 404 },
+  );
+}
+
+const cantidadTexto = aportacion.cantidad
+  ? `${Number(aportacion.cantidad)} ${aportacion.unidad ?? 'pieza(s)'}`
+  : null;
+---
+
+<LayoutImpresion
+  titulo={`Constancia ${aportacion.folio}`}
+  periodo={`Constancia de aportación en especie ${aportacion.folio}`}
+  volverA="/aportaciones"
+  firmas={['El Tesorero', 'Recibió conforme']}
+>
+  <p class="marco-tipo">CONSTANCIA · NO ES RECIBO DE DINERO</p>
+
+  <table class="constancia">
+    <tbody>
+      <tr>
+        <th scope="row">Folio</th>
+        <td><strong>{aportacion.folio}</strong></td>
+        <th scope="row" style="text-align: right;">Fecha</th>
+        <td>{formatoFechaLarga(aportacion.fecha)}</td>
+      </tr>
+      <tr>
+        <th scope="row">Aportó</th>
+        <td colspan="3">{aportacion.aportante_nombre}</td>
+      </tr>
+      <tr>
+        <th scope="row">Lo aportado</th>
+        <td colspan="3">
+          {aportacion.descripcion}
+          {cantidadTexto && <> · {cantidadTexto}</>}
+        </td>
+      </tr>
+      {
+        aportacion.destino && (
+          <tr>
+            <th scope="row">Destino</th>
+            <td colspan="3">{aportacion.destino}</td>
+          </tr>
+        )
+      }
+      {
+        aportacion.valor_estimado_centavos != null && (
+          <tr>
+            <th scope="row">Valor estimado</th>
+            <td colspan="3">
+              {formatoMXN(aportacion.valor_estimado_centavos)}
+              <span class="nota-valor"> (estimación informativa, no un cobro ni un ingreso)</span>
+            </td>
+          </tr>
+        )
+      }
+    </tbody>
+  </table>
+
+  <p class="leyenda">
+    La Tesorería de la R∴L∴S∴ Masada No. 324 hace constar que recibió la aportación en
+    especie arriba descrita. Esta constancia no ampara dinero: la aportación no generó
+    ningún movimiento en el libro de caja y su valor estimado, cuando se anota, es solo
+    informativo. Registrada en el sistema de tesorería con el folio {aportacion.folio}.
+  </p>
+</LayoutImpresion>
+
+<style>
+  .marco-tipo {
+    font-family: var(--font-label);
+    font-size: 8pt;
+    letter-spacing: 0.14em;
+    text-align: center;
+    border: 1.5px dashed #666666;
+    padding: 0.35rem;
+    margin: 0.75rem 0 0;
+    color: #444444;
+  }
+
+  .constancia {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.75rem;
+  }
+
+  .constancia th,
+  .constancia td {
+    border: 1px dashed #999999;
+    padding: 0.55rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+    font-size: 10.5pt;
+  }
+
+  .constancia th {
+    width: 9.5rem;
+    font-family: var(--font-label);
+    font-size: 8pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #444444;
+    font-weight: 400;
+    background: #fafafa;
+  }
+
+  .nota-valor {
+    font-size: 8.5pt;
+    color: #666666;
+  }
+
+  .leyenda {
+    font-size: 8.5pt;
+    color: #444444;
+    margin-top: 1.2rem;
+    text-align: justify;
+  }
+</style>

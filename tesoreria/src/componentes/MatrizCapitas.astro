@@ -1,0 +1,165 @@
+---
+/*
+ * Rejilla de hermanos por los doce meses del ejercicio. Es la vista que responde
+ * de un vistazo quién está al corriente y de qué mes debe cada quien.
+ */
+import type { AdeudoMes, EstadoCuenta } from '@lib/datos/capitas';
+import { formatoCifra } from '@lib/dinero';
+import { MESES_CORTOS, nombrePeriodo } from '@lib/fechas';
+
+interface Props {
+  anio: number;
+  adeudos: AdeudoMes[];
+  estados: EstadoCuenta[];
+}
+
+const { anio, adeudos, estados } = Astro.props;
+
+/* hermano -> mes (1..12) -> cargo del mes */
+const porHermano = new Map<number, Map<number, AdeudoMes>>();
+for (const a of adeudos) {
+  const mes = Number(a.periodo.slice(5, 7));
+  const fila = porHermano.get(a.hermano_id) ?? new Map<number, AdeudoMes>();
+  fila.set(mes, a);
+  porHermano.set(a.hermano_id, fila);
+}
+
+const SIMBOLO: Record<string, string> = {
+  cubierto: '●',
+  parcial: '◐',
+  vencido_parcial: '◐',
+  vencido: '✕',
+  pendiente: '·',
+};
+
+const CLASE: Record<string, string> = {
+  cubierto: 'celda--cubierto',
+  parcial: 'celda--parcial',
+  vencido_parcial: 'celda--vencido',
+  vencido: 'celda--vencido',
+  pendiente: 'celda--pendiente',
+};
+
+const ETIQUETA: Record<string, string> = {
+  cubierto: 'cubierto',
+  parcial: 'parcial',
+  vencido_parcial: 'vencido, pago parcial',
+  vencido: 'vencido',
+  pendiente: 'pendiente',
+};
+
+const meses = Array.from({ length: 12 }, (_, i) => i + 1);
+
+/*
+ * Se declara aquí y no en la plantilla: en el cuerpo de un .astro, un
+ * new Map<number, AdeudoMes>() se lee como JSX y el compilador se pierde.
+ */
+const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
+---
+
+<div class="tabla-envoltura">
+  <table class="tabla tabla--matriz">
+    <caption>Cápitas {anio}, mes por mes</caption>
+    <thead>
+      <tr>
+        <th scope="col">Hermano</th>
+        {meses.map((m) => <th scope="col" class="celda">{MESES_CORTOS[m - 1]}</th>)}
+        <th scope="col" class="num">Adeudo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        estados.map((e) => {
+          const fila = porHermano.get(e.hermano_id) ?? SIN_CARGOS;
+          return (
+            <tr>
+              <td>
+                <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>
+                {e.estatus === 'baja' && (
+                  <>
+                    {' '}
+                    <span class="insignia">Baja</span>
+                  </>
+                )}
+                {e.modalidad === 'promocion' && (
+                  <>
+                    {' '}
+                    <span class="insignia insignia--pendiente">Promoción</span>
+                  </>
+                )}
+              </td>
+              {meses.map((m) => {
+                const cargo = fila.get(m);
+                if (!cargo) {
+                  return (
+                    <td class="celda celda--vacio">
+                      <span aria-hidden="true">–</span>
+                      <span class="solo-lectores">sin cargo</span>
+                    </td>
+                  );
+                }
+                const titulo =
+                  `${nombrePeriodo(cargo.periodo.slice(0, 7))}: ` +
+                  `${ETIQUETA[cargo.estado_pago]}, esperado ${formatoCifra(cargo.monto_esperado_centavos)}` +
+                  (cargo.pagado_centavos > 0
+                    ? `, pagado ${formatoCifra(cargo.pagado_centavos)}`
+                    : '') +
+                  (cargo.condonado_centavos > 0
+                    ? `, exento ${formatoCifra(cargo.condonado_centavos)}`
+                    : '');
+                return (
+                  <td class:list={['celda', CLASE[cargo.estado_pago]]} title={titulo}>
+                    <span aria-hidden="true">{SIMBOLO[cargo.estado_pago]}</span>
+                    <span class="solo-lectores">{titulo}</span>
+                  </td>
+                );
+              })}
+              <td class="num">
+                {e.adeudo_centavos > 0 ? formatoCifra(e.adeudo_centavos) : '—'}
+              </td>
+            </tr>
+          );
+        })
+      }
+    </tbody>
+  </table>
+</div>
+
+<p class="apagado" style="font-size: 0.8rem;">
+  ● cubierto · ◐ parcial · ✕ vencido · · pendiente · – sin cargo ese mes
+</p>
+
+<style>
+  .tabla--matriz .celda {
+    text-align: center;
+    padding: 0.3rem 0.2rem;
+    font-size: 0.95rem;
+  }
+
+  .celda--cubierto {
+    color: var(--md-sys-color-tertiary);
+  }
+
+  .celda--parcial {
+    color: var(--gold);
+  }
+
+  .celda--vencido {
+    color: var(--md-sys-color-error);
+  }
+
+  .celda--pendiente,
+  .celda--vacio {
+    color: var(--md-sys-color-outline);
+  }
+
+  /* Visible para lectores de pantalla, no en la pantalla. */
+  .solo-lectores {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>

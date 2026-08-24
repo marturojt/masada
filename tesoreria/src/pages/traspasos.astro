@@ -1,0 +1,197 @@
+---
+/*
+ * Traspasos entre bolsas: el depósito del efectivo de las tenidas al banco, o un
+ * retiro. No son ingresos ni egresos, así que el total de la caja no cambia,
+ * solo el lugar donde está el dinero.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { registrarTraspaso } from '@lib/casos/traspasos';
+import { emitirNonce } from '@lib/csrf';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { saldoDeCaja } from '@lib/datos/movimientos';
+import { listarTraspasos } from '@lib/datos/traspasos';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaTraspaso } from '@lib/esquemas/corte';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_BOLSA } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const ETIQUETAS: Record<string, string> = {
+  fecha: 'Fecha',
+  direccion: 'Dirección',
+  monto: 'Monto',
+  descripcion: 'Descripción',
+  ficha: 'Ficha o comprobante',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { fecha: hoyISO(), direccion: 'deposito' };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaTraspaso,
+    proposito: 'traspaso_nuevo',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await registrarTraspaso(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+        resultado.archivos.ficha,
+      );
+      return Astro.redirect('/traspasos?ok=pago', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const [traspasos, caja] = await Promise.all([listarTraspasos(anio), saldoDeCaja(anio)]);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const nonce = await emitirNonce(sesion.idHash, 'traspaso_nuevo');
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Traspasos" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Banco: {formatoMXN(caja.banco)}</span>
+    <span>Efectivo: {formatoMXN(caja.efectivo)}</span>
+    <span>Total: {formatoMXN(caja.saldo)}</span>
+  </div>
+
+  {aviso && <div class="aviso">Traspaso registrado.</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Traspasos entre bolsas</h1>
+  <p class="apagado">
+    El depósito del efectivo de las tenidas al banco, o un retiro de la cuenta. El total
+    de la caja no cambia, solo el lugar del dinero. Un traspaso equivocado se corrige
+    registrando el inverso.
+  </p>
+
+  <div class="pila">
+    <section class="tarjeta">
+      <h2>Registrar traspaso</h2>
+      <div style="max-width: 26rem;">
+        <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+          <Selector
+            nombre="direccion"
+            etiqueta={ETIQUETAS.direccion!}
+            opciones={[
+              { valor: 'deposito', texto: 'Depósito: del efectivo al banco' },
+              { valor: 'retiro', texto: 'Retiro: del banco al efectivo' },
+            ]}
+            valor={valores.direccion}
+            error={errores.direccion}
+            requerido
+          />
+          <Campo
+            nombre="fecha"
+            etiqueta={ETIQUETAS.fecha!}
+            tipo="date"
+            valor={valores.fecha}
+            error={errores.fecha}
+            requerido
+          />
+          <Campo
+            nombre="monto"
+            etiqueta={ETIQUETAS.monto!}
+            valor={valores.monto}
+            error={errores.monto}
+            modoTeclado="decimal"
+            monto
+            requerido
+            ayuda={`Hoy hay ${formatoMXN(caja.efectivo)} en efectivo y ${formatoMXN(caja.banco)} en banco.`}
+          />
+          <Campo
+            nombre="descripcion"
+            etiqueta={ETIQUETAS.descripcion!}
+            valor={valores.descripcion}
+            error={errores.descripcion}
+            ayuda="Por ejemplo, depósito del efectivo de las tenidas de agosto."
+            requerido
+          />
+          <Campo
+            nombre="ficha"
+            etiqueta={ETIQUETAS.ficha!}
+            tipo="file"
+            error={errores.ficha}
+            aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+            ayuda="La ficha de depósito o el comprobante del retiro. Opcional pero recomendable."
+          />
+          <div class="formulario__acciones">
+            <button class="btn btn--primary" type="submit">Registrar traspaso</button>
+          </div>
+        </Formulario>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Traspasos de {anio}</h2>
+      {
+        traspasos.length === 0 ? (
+          <p class="apagado">Sin traspasos este ejercicio.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Movimiento</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Descripción</th>
+                  <th scope="col">Ficha</th>
+                  <th scope="col">Registró</th>
+                </tr>
+              </thead>
+              <tbody>
+                {traspasos.map((t) => (
+                  <tr>
+                    <td>{formatoFechaCorta(t.fecha)}</td>
+                    <td>
+                      {NOMBRE_BOLSA[t.de_bolsa]} → {NOMBRE_BOLSA[t.a_bolsa]}
+                    </td>
+                    <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                    <td>{t.descripcion}</td>
+                    <td>
+                      {t.archivo_id ? (
+                        <a href={`/comprobantes/${t.archivo_id}`}>Ver</a>
+                      ) : (
+                        <span class="apagado">—</span>
+                      )}
+                    </td>
+                    <td class="apagado">{t.creado_nombre ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

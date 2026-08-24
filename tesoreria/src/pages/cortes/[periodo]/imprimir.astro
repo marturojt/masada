@@ -1,0 +1,345 @@
+---
+/*
+ * Hoja imprimible del corte mensual, para leerla en tenida y archivarla.
+ * Se imprime con Ctrl+P: el servidor no genera PDF.
+ */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import {
+  NOMBRE_CLASIFICACION,
+  aportacionesEspecieDelPeriodo,
+  corteDelPeriodo,
+  corteGuardado,
+  informeMensual,
+  pagosGTDelPeriodo,
+} from '@lib/datos/cortes';
+import { estadoAplomo } from '@lib/datos/gt';
+import { listarMovimientos } from '@lib/datos/movimientos';
+import { traspasosDelPeriodo } from '@lib/datos/traspasos';
+import { NOMBRE_BOLSA } from '@lib/tipos';
+import { formatoCifra, formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+void sesion;
+
+const periodo = String(Astro.params.periodo ?? '');
+if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) {
+  return new Response('Periodo no válido', { status: 404 });
+}
+
+const calculado = await corteDelPeriodo(periodo);
+if (!calculado) return new Response('Ese mes no pertenece a ningún ejercicio', { status: 404 });
+
+const [guardado, movimientos, traspasos, informe, especie, pagosGT, aplomo] = await Promise.all([
+  corteGuardado(periodo),
+  listarMovimientos({ periodo }),
+  traspasosDelPeriodo(periodo),
+  informeMensual(periodo),
+  aportacionesEspecieDelPeriodo(periodo),
+  pagosGTDelPeriodo(periodo),
+  estadoAplomo(),
+]);
+
+const cerrado = guardado?.estado === 'cerrado';
+const ingresos = movimientos.filter((m) => m.tipo === 'ingreso');
+const egresos = movimientos.filter((m) => m.tipo === 'egreso');
+const informeIngresos = informe.filter((r) => r.tipo === 'ingreso');
+const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
+---
+
+<LayoutImpresion
+  titulo={`Corte de ${nombrePeriodo(periodo)}`}
+  periodo={`Corte de ${nombrePeriodo(periodo)}`}
+  borrador={!cerrado}
+  volverA={`/cortes/${periodo}`}
+>
+  <table class="resumen">
+    <tbody>
+      <tr>
+        <td>Saldo inicial</td>
+        <td class="num">{formatoMXN(calculado.saldo_inicial_centavos)}</td>
+      </tr>
+      <tr>
+        <td>Ingresos</td>
+        <td class="num">{formatoMXN(calculado.total_ingresos_centavos)}</td>
+      </tr>
+      <tr>
+        <td>Egresos</td>
+        <td class="num">{formatoMXN(calculado.total_egresos_centavos)}</td>
+      </tr>
+      <tr>
+        <td><strong>Saldo final</strong></td>
+        <td class="num">
+          <strong>{formatoMXN(calculado.saldo_final_centavos)}</strong>
+        </td>
+      </tr>
+      <tr>
+        <td>En banco</td>
+        <td class="num">{formatoMXN(calculado.banco_final_centavos)}</td>
+      </tr>
+      <tr>
+        <td>En efectivo</td>
+        <td class="num">{formatoMXN(calculado.efectivo_final_centavos)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {
+    informe.length > 0 && (
+      <>
+        <h2>Resumen por clasificación</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Clasificación</th>
+              <th scope="col">Concepto</th>
+              <th scope="col" class="num">Movimientos</th>
+              <th scope="col" class="num">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {informeIngresos.map((r) => (
+              <tr>
+                <td>{NOMBRE_CLASIFICACION[r.clasificacion] ?? r.clasificacion}</td>
+                <td>{r.concepto_nombre}</td>
+                <td class="num">{r.movimientos}</td>
+                <td class="num">{formatoCifra(r.monto_centavos)}</td>
+              </tr>
+            ))}
+            {informeEgresos.map((r) => (
+              <tr>
+                <td>{NOMBRE_CLASIFICACION[r.clasificacion] ?? r.clasificacion}</td>
+                <td>{r.concepto_nombre}</td>
+                <td class="num">{r.movimientos}</td>
+                <td class="num">({formatoCifra(r.monto_centavos)})</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
+  <h2>Ingresos</h2>
+  {
+    ingresos.length === 0 ? (
+      <p>Sin ingresos en el mes.</p>
+    ) : (
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Concepto</th>
+            <th scope="col">Detalle</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ingresos.map((m) => (
+            <tr>
+              <td>{formatoFechaCorta(m.fecha)}</td>
+              <td>{m.concepto_nombre}</td>
+              <td>
+                {m.hermano_nombre ? `${m.hermano_nombre} · ` : ''}
+                {m.descripcion}
+              </td>
+              <td class="num">{formatoCifra(m.monto_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Total de ingresos</td>
+            <td class="num">{formatoCifra(calculado.total_ingresos_centavos)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    )
+  }
+
+  <h2>Egresos</h2>
+  {
+    egresos.length === 0 ? (
+      <p>Sin egresos en el mes.</p>
+    ) : (
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Concepto</th>
+            <th scope="col">Detalle</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {egresos.map((m) => (
+            <tr>
+              <td>{formatoFechaCorta(m.fecha)}</td>
+              <td>{m.concepto_nombre}</td>
+              <td>{m.descripcion}</td>
+              <td class="num">{formatoCifra(m.monto_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Total de egresos</td>
+            <td class="num">{formatoCifra(calculado.total_egresos_centavos)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    )
+  }
+
+  {
+    traspasos.length > 0 && (
+      <>
+        <h2>Traspasos entre bolsas</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Movimiento</th>
+              <th scope="col">Detalle</th>
+              <th scope="col" class="num">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {traspasos.map((t) => (
+              <tr>
+                <td>{formatoFechaCorta(t.fecha)}</td>
+                <td>{NOMBRE_BOLSA[t.de_bolsa]} → {NOMBRE_BOLSA[t.a_bolsa]}</td>
+                <td>{t.descripcion}</td>
+                <td class="num">{formatoCifra(t.monto_centavos)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
+  {
+    cerrado && guardado && (
+      <>
+        <h2>Cápitas del mes</h2>
+        <table class="resumen">
+          <tbody>
+            <tr>
+              <td>Esperado</td>
+              <td class="num">{formatoMXN(guardado.capitas_esperadas_centavos)}</td>
+            </tr>
+            <tr>
+              <td>Cobrado</td>
+              <td class="num">{formatoMXN(guardado.capitas_cobradas_centavos)}</td>
+            </tr>
+            <tr>
+              <td>Pendiente de comprobar</td>
+              <td class="num">{formatoMXN(guardado.pendiente_comprobar_centavos)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
+  <h2>Gran Tesorería</h2>
+  <p>
+    {aplomo.ordinario_a_plomo
+      ? 'La logia está a plomo en sus obligaciones ordinarias'
+      : 'La logia tiene obligaciones ordinarias pendientes con la Gran Tesorería'}
+    {aplomo.cubierto_hasta && <>, cubierta hasta {nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}</>}
+    {aplomo.regularizaciones_pendientes > 0 && (
+      <>, con {aplomo.regularizaciones_pendientes} regularización(es) pendiente(s)</>
+    )}. Dato al momento de imprimir esta hoja.
+  </p>
+  {
+    pagosGT.length > 0 && (
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Pago</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Obligaciones que cubre</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pagosGT.map((pgt) => (
+            <tr>
+              <td>{pgt.folio}</td>
+              <td>{formatoFechaCorta(pgt.fecha_pago)}</td>
+              <td>{pgt.obligaciones ?? ''}</td>
+              <td class="num">{formatoCifra(pgt.monto_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
+  {
+    especie.length > 0 && (
+      <>
+        <h2>Aportaciones en especie</h2>
+        <p>
+          Se hacen constar fuera de las cifras: no son dinero y no entran en ningún saldo.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Folio</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Aportante</th>
+              <th scope="col">Lo aportado</th>
+              <th scope="col" class="num">Valor estimado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {especie.map((a) => (
+              <tr>
+                <td>{a.folio}</td>
+                <td>{formatoFechaCorta(a.fecha)}</td>
+                <td>{a.aportante_nombre}</td>
+                <td>
+                  {a.descripcion}
+                  {a.cantidad && <> · {Number(a.cantidad)} {a.unidad ?? 'pieza(s)'}</>}
+                  {a.destino && <> · {a.destino}</>}
+                </td>
+                <td class="num">
+                  {a.valor_estimado_centavos != null
+                    ? `≈ ${formatoCifra(a.valor_estimado_centavos)}`
+                    : 'Sin valuar'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
+  {
+    guardado?.observaciones && (
+      <>
+        <h2>Observaciones</h2>
+        <p style="white-space: pre-line;">{guardado.observaciones}</p>
+      </>
+    )
+  }
+
+  {
+    cerrado && guardado ? (
+      <p class="sello">
+        Corte cerrado por {guardado.cerrado_nombre}
+        {guardado.cerrado_en && <> el {formatoMomento(guardado.cerrado_en)}</>}.
+        {guardado.reaperturas > 0 && <> Reabierto {guardado.reaperturas} vez(ces).</>}
+      </p>
+    ) : (
+      <p class="sello">
+        Borrador: este mes todavía no se cierra, las cifras pueden cambiar.
+      </p>
+    )
+  }
+</LayoutImpresion>

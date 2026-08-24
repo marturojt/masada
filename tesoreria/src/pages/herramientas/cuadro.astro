@@ -1,0 +1,119 @@
+---
+/*
+ * Vista previa del cuadro logial que se publicaría en el sitio.
+ *
+ * Esta página no escribe nada: la escritura del archivo es una decisión explícita
+ * y se hace con el script, para poder revisar el diff antes de publicarlo en
+ * internet.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { consulta } from '@lib/db';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { listarPastMasters } from '@lib/datos/cargos';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const [cuadro] = await consulta<{ documento: Record<string, unknown> }>(
+  'select documento from v_cuadro_json where anio = $1',
+  [anio],
+);
+const [past] = await consulta<{ documento: { items: { anio: number; nombre: string }[] } }>(
+  'select documento from v_pastmasters_json',
+);
+const pastMasters = await listarPastMasters(vigente.anio);
+
+/* Mismo orden de claves que el archivo del sitio. */
+const CLAVES = [
+  'anio',
+  'anioVulgar',
+  'venerableMaestro',
+  'primerVigilante',
+  'segundoVigilante',
+  'orador',
+  'secretario',
+  'tesorero',
+  'oficiales',
+  'maestros',
+  'companeros',
+  'aprendices',
+];
+
+const documento = cuadro?.documento ?? {};
+const ordenado: Record<string, unknown> = {};
+for (const clave of CLAVES) {
+  if (documento[clave] !== undefined) ordenado[clave] = documento[clave];
+}
+const sobrantes = Object.keys(documento).filter((k) => !CLAVES.includes(k));
+
+const vistaPrevia = JSON.stringify(ordenado, null, 2);
+const vistaPast = JSON.stringify(past?.documento ?? { items: [] }, null, 2);
+---
+
+<LayoutAdmin titulo="Cuadro logial del sitio" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/herramientas">← Herramientas</a></span>
+    <span>Ejercicio {anio}</span>
+  </div>
+
+  <h1>Cuadro logial del sitio público</h1>
+  <p class="apagado">
+    Así se vería el archivo <code>src/content/cuadro/{anio}.json</code> del sitio con el
+    padrón de hoy. Solo cruzan nombre, grado y cargo: ni correos, ni teléfonos, ni fechas,
+    ni montos.
+  </p>
+
+  {
+    sobrantes.length > 0 && (
+      <div class="aviso aviso--error">
+        La proyección trae claves que no deberían publicarse: {sobrantes.join(', ')}.
+        Revisa la vista v_cuadro_json antes de exportar.
+      </div>
+    )
+  }
+
+  <section class="tarjeta">
+    <h2>Cómo se publica</h2>
+    <p style="font-size: 0.9rem;">
+      Desde la carpeta <code>tesoreria/</code>:
+    </p>
+    <pre style="font-size: 0.85rem; overflow-x: auto;"><code>npm run exportar:cuadro
+npm run exportar:cuadro -- --escribir</code></pre>
+    <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+      El primero solo muestra el diff. El segundo escribe los archivos del sitio. Después,
+      en la raíz del repositorio, <code>npm run build</code> valida el esquema y confirma
+      que el sitio compila.
+    </p>
+  </section>
+
+  <section class="tarjeta" style="margin-top: 1.25rem;">
+    <h2>cuadro/{anio}.json</h2>
+    <pre style="font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap;"><code
+      set:text={vistaPrevia}
+    /></pre>
+  </section>
+
+  <section class="tarjeta" style="margin-top: 1.25rem;">
+    <h2>pastmasters/historico.json</h2>
+    <p class="apagado" style="font-size: 0.85rem;">
+      Los Venerables Maestros de ejercicios ya concluidos, más el histórico capturado de
+      los años sin registro. El V∴M∴ vigente no aparece aquí, porque un past master es
+      siempre de un año que ya terminó.
+    </p>
+    <pre style="font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap;"><code
+      set:text={vistaPast}
+    /></pre>
+    {
+      pastMasters.length > 0 && (
+        <p class="apagado" style="font-size: 0.8rem; margin-bottom: 0;">
+          {pastMasters.filter((p) => p.derivado).length} derivado(s) del cuadro y{' '}
+          {pastMasters.filter((p) => !p.derivado).length} del histórico capturado.
+        </p>
+      )
+    }
+  </section>
+</LayoutAdmin>

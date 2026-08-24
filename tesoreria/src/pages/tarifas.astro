@@ -1,0 +1,222 @@
+---
+/*
+ * Tarifas de grado: lo que el candidato paga a la logia por su iniciación,
+ * aumento de salario, exaltación o afiliación.
+ *
+ * Cada cambio es una fila nueva con su fecha de vigencia, nunca retroactiva: lo
+ * ya capturado conserva el monto con el que se capturó, y la historia queda a la
+ * vista.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { z } from 'zod';
+import { capturarTarifa } from '@lib/casos/tarifas';
+import { emitirNonce } from '@lib/csrf';
+import {
+  NOMBRE_TARIFA,
+  TIPOS_TARIFA,
+  historialTarifas,
+  tarifasVigentes,
+} from '@lib/datos/tarifas';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { fechaISO, montoEnCentavos, notas, opcionDe } from '@lib/esquemas/comunes';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import type { Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const esquemaTarifa = z.object({
+  tipo_evento: opcionDe(
+    ['iniciacion', 'aumento_salario', 'exaltacion', 'afiliacion'],
+    'Elige el tipo de evento.',
+  ),
+  monto: montoEnCentavos('El monto'),
+  vigente_desde: fechaISO('La fecha de vigencia'),
+  notas: notas(500),
+});
+
+const ETIQUETAS: Record<string, string> = {
+  tipo_evento: 'Evento',
+  monto: 'Monto',
+  vigente_desde: 'Vigente desde',
+  notas: 'Notas',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { vigente_desde: hoyISO() };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaTarifa,
+    proposito: 'tarifa_nueva',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await capturarTarifa(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+      );
+      return Astro.redirect('/tarifas?ok=concepto', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const [vigentes, historial] = await Promise.all([tarifasVigentes(), historialTarifas()]);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const nonce = await emitirNonce(sesion.idHash, 'tarifa_nueva');
+
+const vigentePor = new Map(vigentes.map((t) => [t.tipo_evento, t]));
+
+const opcionesEvento: Opcion[] = TIPOS_TARIFA.map((t) => ({
+  valor: t,
+  texto: NOMBRE_TARIFA[t],
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Tarifas de grado" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Las tarifas aplican de su fecha de vigencia en adelante, nunca hacia atrás</span>
+  </div>
+
+  {aviso && <div class="aviso">Tarifa guardada.</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Tarifas de grado</h1>
+  <p class="apagado">
+    Lo que el candidato paga a la logia por cada evento. Al capturar un ingreso de cuota
+    de grado, el sistema muestra la tarifa vigente como referencia. Cambiar una tarifa no
+    toca nada de lo ya capturado.
+  </p>
+
+  <div class="pila">
+    <section class="tarjeta">
+      <h2>Vigentes hoy</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Evento</th>
+              <th scope="col" class="num">Tarifa</th>
+              <th scope="col">Vigente desde</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              TIPOS_TARIFA.map((tipo) => {
+                const t = vigentePor.get(tipo);
+                return (
+                  <tr>
+                    <td>{NOMBRE_TARIFA[tipo]}</td>
+                    <td class="num">
+                      {t ? formatoMXN(t.monto_centavos) : <span class="apagado">Sin capturar</span>}
+                    </td>
+                    <td>{t ? formatoFechaCorta(t.vigente_desde) : '—'}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Capturar tarifa</h2>
+      <div style="max-width: 26rem;">
+        <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+          <Selector
+            nombre="tipo_evento"
+            etiqueta={ETIQUETAS.tipo_evento!}
+            opciones={opcionesEvento}
+            valor={valores.tipo_evento}
+            error={errores.tipo_evento}
+            requerido
+          />
+          <Campo
+            nombre="monto"
+            etiqueta={ETIQUETAS.monto!}
+            valor={valores.monto}
+            error={errores.monto}
+            modoTeclado="decimal"
+            monto
+            requerido
+          />
+          <Campo
+            nombre="vigente_desde"
+            etiqueta={ETIQUETAS.vigente_desde!}
+            tipo="date"
+            valor={valores.vigente_desde}
+            error={errores.vigente_desde}
+            min={hoyISO()}
+            ayuda="Hoy o una fecha futura. Nunca hacia atrás."
+            requerido
+          />
+          <Campo
+            nombre="notas"
+            etiqueta={ETIQUETAS.notas!}
+            valor={valores.notas}
+            error={errores.notas}
+            ayuda="Por ejemplo, acordada en la tenida del 15 de agosto."
+            largo
+            filas={2}
+          />
+          <div class="formulario__acciones">
+            <button class="btn btn--primary" type="submit">Guardar tarifa</button>
+          </div>
+        </Formulario>
+      </div>
+    </section>
+
+    {
+      historial.length > 0 && (
+        <section class="tarjeta">
+          <h2>Historia</h2>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Evento</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Vigente desde</th>
+                  <th scope="col">Capturó</th>
+                  <th scope="col">Notas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historial.map((t) => (
+                  <tr>
+                    <td>{NOMBRE_TARIFA[t.tipo_evento]}</td>
+                    <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                    <td>{formatoFechaCorta(t.vigente_desde)}</td>
+                    <td class="apagado">{t.creado_nombre ?? '—'}</td>
+                    <td>{t.notas ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )
+    }
+  </div>
+</LayoutAdmin>

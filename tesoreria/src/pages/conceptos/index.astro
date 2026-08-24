@@ -1,0 +1,256 @@
+---
+/*
+ * Catálogo de conceptos. El tesorero puede agregar los que necesite; los que
+ * llevan lógica propia del sistema aparecen marcados y no se pueden desactivar.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { activarConcepto, crearConcepto } from '@lib/casos/conceptos';
+import { emitirNonce, emitirNonces } from '@lib/csrf';
+import { listarConceptos, usoDeConceptos } from '@lib/datos/conceptos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaActivarConcepto, esquemaConcepto } from '@lib/esquemas/movimiento';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import type { Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const ETIQUETAS: Record<string, string> = {
+  nombre: 'Nombre',
+  naturaleza: 'Naturaleza',
+  orden: 'Orden',
+  notas: 'Notas',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { naturaleza: 'egreso', orden: '100' };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const ctx = { sesion, idPeticion: Astro.locals.idPeticion };
+    try {
+      if (entrada.accion === 'nuevo') {
+        const r = await validar(entrada, {
+          esquema: esquemaConcepto,
+          proposito: 'concepto_nuevo',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = { ...valores, ...r.valores };
+          estado = r.estado;
+        } else {
+          await crearConcepto({ ...ctx, nonce: r.nonce }, r.datos);
+          return Astro.redirect('/conceptos?ok=concepto', 303);
+        }
+      } else if (entrada.accion === 'activar') {
+        const r = await validar(entrada, {
+          esquema: esquemaActivarConcepto,
+          proposito: 'concepto_activar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await activarConcepto(
+            { ...ctx, nonce: r.nonce },
+            r.datos.concepto_id,
+            r.datos.activo === 'si',
+          );
+          return Astro.redirect('/conceptos?ok=concepto', 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const conceptos = await listarConceptos({ incluirInactivos: true });
+const usos = new Map((await usoDeConceptos()).map((u) => [u.concepto_id, u.usos]));
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const nonceNuevo = await emitirNonce(sesion.idHash, 'concepto_nuevo');
+const noncesActivar = await emitirNonces(
+  sesion.idHash,
+  'concepto_activar',
+  conceptos.length,
+);
+
+const opcionesNaturaleza: Opcion[] = [
+  { valor: 'egreso', texto: 'Egreso' },
+  { valor: 'ingreso', texto: 'Ingreso' },
+];
+
+const ingresos = conceptos.filter((c) => c.naturaleza === 'ingreso');
+const egresos = conceptos.filter((c) => c.naturaleza === 'egreso');
+const indiceDe = (id: number): number => conceptos.findIndex((c) => c.id === id);
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Conceptos" sesion={sesion}>
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Catálogo de conceptos</h1>
+  <p class="apagado" style="font-size: 0.9rem;">
+    Los conceptos no se borran: se desactivan, y así los movimientos históricos
+    conservan el suyo. Los marcados como del sistema llevan lógica propia y no se
+    pueden desactivar.
+  </p>
+
+  {
+    [
+      { titulo: 'Egresos', lista: egresos },
+      { titulo: 'Ingresos', lista: ingresos },
+    ].map((grupo) => (
+      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+        <h2>{grupo.titulo}</h2>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Concepto</th>
+                <th scope="col">Reglas</th>
+                <th scope="col" class="num">Usos</th>
+                <th scope="col">Estado</th>
+                <th scope="col" />
+              </tr>
+            </thead>
+            <tbody>
+              {grupo.lista.map((c) => (
+                <tr>
+                  <td>
+                    <a href={`/conceptos/${c.id}`}>{c.nombre}</a>
+                    {!c.seleccionable && (
+                      <>
+                        {' '}
+                        <span class="insignia">Del sistema</span>
+                      </>
+                    )}
+                  </td>
+                  <td style="font-size: 0.8rem;">
+                    {c.requiere_hermano && <span class="insignia">Pide hermano</span>}{' '}
+                    {c.requiere_comprobante && <span class="insignia">Pide comprobante</span>}{' '}
+                    {c.por_comprobar_por_defecto && (
+                      <span class="insignia">Por comprobar</span>
+                    )}
+                  </td>
+                  <td class="num">{usos.get(c.id) ?? 0}</td>
+                  <td>
+                    {c.activo ? (
+                      <span class="insignia insignia--ok">Activo</span>
+                    ) : (
+                      <span class="insignia">Inactivo</span>
+                    )}
+                  </td>
+                  <td>
+                    {c.seleccionable && (
+                      <Formulario
+                        csrf={sesion.csrfToken}
+                        nonce={noncesActivar[indiceDe(c.id)] ?? ''}
+                        accionInterna="activar"
+                      >
+                        <input type="hidden" name="concepto_id" value={String(c.id)} />
+                        <input type="hidden" name="activo" value={c.activo ? 'no' : 'si'} />
+                        <button
+                          class="btn btn--ghost"
+                          type="submit"
+                          style="padding: 0.15rem 0.6rem; font-size: 0.72rem;"
+                        >
+                          {c.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </Formulario>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ))
+  }
+
+  <section class="tarjeta">
+    <h2>Agregar concepto</h2>
+    <details>
+      <summary style="cursor: pointer;">Nuevo concepto</summary>
+      <div style="margin-top: 1rem; max-width: 32rem;">
+        <Formulario csrf={sesion.csrfToken} nonce={nonceNuevo} accionInterna="nuevo">
+          <Campo
+            nombre="nombre"
+            etiqueta={ETIQUETAS.nombre!}
+            valor={valores.nombre}
+            error={errores.nombre}
+            requerido
+          />
+          <Selector
+            nombre="naturaleza"
+            etiqueta={ETIQUETAS.naturaleza!}
+            opciones={opcionesNaturaleza}
+            valor={valores.naturaleza}
+            error={errores.naturaleza}
+            requerido
+          />
+          <div class="campo">
+            <label class="campo__etiqueta" for="campo-requiere_hermano">Reglas</label>
+            <label style="display: block; font-size: 0.85rem;">
+              <input
+                id="campo-requiere_hermano"
+                type="checkbox"
+                name="requiere_hermano"
+                style="width: auto;"
+              />
+              {' '}Exige indicar el hermano
+            </label>
+            <label style="display: block; font-size: 0.85rem;">
+              <input type="checkbox" name="requiere_comprobante" style="width: auto;" checked />
+              {' '}Exige imagen de comprobante
+            </label>
+            <label style="display: block; font-size: 0.85rem;">
+              <input type="checkbox" name="por_comprobar_por_defecto" style="width: auto;" />
+              {' '}Normalmente se entrega por comprobar
+            </label>
+          </div>
+          <Campo
+            nombre="orden"
+            etiqueta={ETIQUETAS.orden!}
+            valor={valores.orden}
+            error={errores.orden}
+            modoTeclado="numeric"
+            ayuda="Controla el lugar en las listas. Menor aparece primero."
+          />
+          <Campo
+            nombre="notas"
+            etiqueta={ETIQUETAS.notas!}
+            valor={valores.notas}
+            error={errores.notas}
+            largo
+            filas={2}
+          />
+          <div class="formulario__acciones">
+            <button class="btn btn--primary" type="submit">Agregar concepto</button>
+          </div>
+        </Formulario>
+      </div>
+    </details>
+  </section>
+</LayoutAdmin>

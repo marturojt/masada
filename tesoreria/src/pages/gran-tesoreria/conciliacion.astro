@@ -1,0 +1,141 @@
+---
+/*
+ * Conciliación de los tres padrones: el interno, la Gran Secretaría y la Gran
+ * Tesorería. Es informativa: señala diferencias y exposición, no bloquea nada,
+ * porque cada realidad la gobierna un organismo distinto.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import {
+  NOMBRE_ESTADO_CONCILIACION,
+  NOMBRE_ESTATUS_EXTERNO,
+  conciliacionPadrones,
+  exposicionRegularizacion,
+} from '@lib/datos/gt';
+import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const [renglones, exposicion] = await Promise.all([
+  conciliacionPadrones(),
+  exposicionRegularizacion(),
+]);
+
+const conDiferencia = renglones.filter(
+  (r) => r.estado !== 'conciliado' && r.estado !== 'sin_diferencias',
+);
+
+const CLASE_ESTADO: Record<string, string> = {
+  conciliado: 'insignia--ok',
+  pendiente_gt: 'insignia--pendiente',
+  pendiente_formalizacion: 'insignia--pendiente',
+  inconsistencia: 'insignia--alerta',
+  sin_diferencias: '',
+};
+
+---
+
+<LayoutAdmin titulo="Conciliación de padrones" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+    <span>
+      {conDiferencia.length === 0
+        ? 'Sin diferencias entre padrones'
+        : `${conDiferencia.length} hermano(s) con diferencias`}
+    </span>
+  </div>
+
+  <h1>Conciliación de padrones</h1>
+  <p class="apagado">
+    Tres realidades distintas: el padrón interno lo gobierna la logia, el registro en
+    Gran Secretaría formaliza la pertenencia, y el de Gran Tesorería determina el cobro.
+    Esta vista solo señala las diferencias; no impide operar. El estatus externo de cada
+    hermano se actualiza desde su ficha.
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Los tres padrones</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Hermano</th>
+              <th>Interno</th>
+              <th>Gran Secretaría</th>
+              <th>Gran Tesorería</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {renglones.map((r) => (
+              <tr>
+                <td><a href={`/hermanos/${r.hermano_id}`}>{r.nombre_completo}</a></td>
+                <td>{r.interno ? 'Activo' : 'Baja'}</td>
+                <td>
+                  {NOMBRE_ESTATUS_EXTERNO[r.estatus_gs] ?? r.estatus_gs}
+                  {r.gs_fecha_registro && (
+                    <span class="apagado"> · {formatoFechaCorta(r.gs_fecha_registro)}</span>
+                  )}
+                </td>
+                <td>
+                  {NOMBRE_ESTATUS_EXTERNO[r.estatus_gt] ?? r.estatus_gt}
+                  {r.gt_fecha_registro && (
+                    <span class="apagado"> · {formatoFechaCorta(r.gt_fecha_registro)}</span>
+                  )}
+                </td>
+                <td>
+                  <span class:list={['insignia', CLASE_ESTADO[r.estado]]}>
+                    {NOMBRE_ESTADO_CONCILIACION[r.estado]}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Exposición a regularización</h2>
+      <p class="apagado">
+        Hermanos activos en el padrón interno que la Gran Tesorería aún no reconoce.
+        Cuando los regularice, cobrará los meses desde su ingreso: esta es la deuda
+        potencial que conviene tener a la vista antes de que llegue el documento.
+      </p>
+      {
+        exposicion.length === 0 ? (
+          <p class="apagado">Sin exposición: todos los activos están reconocidos por GT.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Hermano</th>
+                  <th>Estatus ante GT</th>
+                  <th>En el padrón desde</th>
+                  <th class="num">Meses potenciales</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exposicion.map((e) => (
+                  <tr>
+                    <td><a href={`/hermanos/${e.hermano_id}`}>{e.nombre_completo}</a></td>
+                    <td>{NOMBRE_ESTATUS_EXTERNO[e.estatus_gt] ?? e.estatus_gt}</td>
+                    <td>{nombrePeriodo(e.desde.slice(0, 7))}</td>
+                    <td class="num">{e.meses_potenciales}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+      <p class="apagado">
+        El monto en pesos depende de las tarifas que la Gran Tesorería aplique al
+        regularizar; por eso aquí se cuentan meses, no dinero. Una regularización se
+        captura como obligación nueva, nunca tocando meses ya cerrados.
+      </p>
+    </section>
+  </div>
+</LayoutAdmin>

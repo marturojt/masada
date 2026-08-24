@@ -1,0 +1,191 @@
+---
+/*
+ * Registro de un pago de cápita. Se aplica del mes más antiguo con saldo hacia
+ * adelante, y lo que sobra queda como saldo a favor.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { registrarPagoCapita } from '@lib/casos/capitas';
+import { emitirNonce } from '@lib/csrf';
+import { estadosDeCuenta } from '@lib/datos/capitas';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaPagoCapita } from '@lib/esquemas/capita';
+import { hoyISO } from '@lib/fechas';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import type { Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
+
+const ETIQUETAS: Record<string, string> = {
+  hermano_id: 'Hermano',
+  fecha: 'Fecha del pago',
+  bolsa: 'Bolsa',
+  monto: 'Monto',
+  descripcion: 'Descripción',
+  comprobante: 'Comprobante',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  hermano_id: Astro.url.searchParams.get('hermano') ?? '',
+  fecha: hoyISO(),
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaPagoCapita,
+    proposito: 'capita_pago',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await registrarPagoCapita(
+        { sesion, nonce: resultado.nonce, anio, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+        resultado.archivos.comprobante,
+      );
+      return Astro.redirect(`/capitas/hermano/${resultado.datos.hermano_id}?ok=pago`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const estados = await estadosDeCuenta(anio);
+const nonce = await emitirNonce(sesion.idHash, 'capita_pago');
+
+const opcionesHermano: Opcion[] = estados.map((e) => ({
+  valor: String(e.hermano_id),
+  texto:
+    e.adeudo_centavos > 0
+      ? `${e.nombre_completo} · debe ${formatoMXN(e.adeudo_centavos)}`
+      : `${e.nombre_completo} · al corriente`,
+  grupo: e.adeudo_centavos > 0 ? 'Con adeudo' : 'Al corriente',
+}));
+
+/* Se ordena para que el optgroup de adeudos salga primero. */
+opcionesHermano.sort((a, b) => (a.grupo === b.grupo ? 0 : a.grupo === 'Con adeudo' ? -1 : 1));
+
+const elegido = estados.find((e) => String(e.hermano_id) === valores.hermano_id);
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Registrar pago de cápita" sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Cápita mensual: {formatoMXN(ejercicio.capita_mensual_centavos)}</span>
+  </div>
+
+  <h1>Registrar pago de cápita</h1>
+  <p class="apagado">
+    El pago se aplica al mes más antiguo que deba y sigue hacia adelante. Si sobra
+    dinero, queda como saldo a favor, a la vista.
+  </p>
+
+  {
+    elegido && (
+      <div class="aviso">
+        {elegido.nombre_completo}:{' '}
+        {elegido.adeudo_centavos > 0
+          ? `debe ${formatoMXN(elegido.adeudo_centavos)} de ${elegido.meses_vencidos} mes(es) vencido(s)`
+          : 'está al corriente'}
+        {elegido.saldo_a_favor_centavos > 0 && (
+          <> · saldo a favor {formatoMXN(elegido.saldo_a_favor_centavos)}</>
+        )}
+      </div>
+    )
+  }
+
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+    <Selector
+      nombre="hermano_id"
+      etiqueta={ETIQUETAS.hermano_id!}
+      opciones={opcionesHermano}
+      valor={valores.hermano_id}
+      error={errores.hermano_id}
+      vacio="Elige un hermano"
+      requerido
+    />
+
+    <Campo
+      nombre="fecha"
+      etiqueta={ETIQUETAS.fecha!}
+      tipo="date"
+      valor={valores.fecha}
+      error={errores.fecha}
+      min={ejercicio.fecha_inicio}
+      max={ejercicio.fecha_fin}
+      requerido
+    />
+
+    <Campo
+      nombre="monto"
+      etiqueta={ETIQUETAS.monto!}
+      valor={valores.monto}
+      error={errores.monto}
+      modoTeclado="decimal"
+      ayuda={`En pesos. Un mes son ${formatoMXN(ejercicio.capita_mensual_centavos)}, la promoción ${formatoMXN(ejercicio.capita_promocion_centavos)}.`}
+      monto
+      requerido
+    />
+
+
+    <Selector
+      nombre="bolsa"
+      etiqueta="Bolsa"
+      opciones={[
+        { valor: 'efectivo', texto: 'Efectivo' },
+        { valor: 'banco', texto: 'Banco' },
+      ]}
+      valor={valores.bolsa ?? 'efectivo'}
+      error={errores.bolsa}
+      requerido
+      ayuda="Efectivo si pagó en la tenida, banco si fue transferencia o depósito."
+    />
+
+    <Campo
+      nombre="descripcion"
+      etiqueta={ETIQUETAS.descripcion!}
+      valor={valores.descripcion}
+      error={errores.descripcion}
+      ayuda="Opcional. Por ejemplo, transferencia del 3 de agosto."
+    />
+
+    <Campo
+      nombre="comprobante"
+      etiqueta={ETIQUETAS.comprobante!}
+      tipo="file"
+      error={errores.comprobante}
+      aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+      ayuda="Opcional. Si pagó en efectivo en la tenida, no hace falta."
+    />
+
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Registrar pago</button>
+      <a class="btn btn--ghost" href="/capitas">Cancelar</a>
+    </div>
+  </Formulario>
+</LayoutAdmin>

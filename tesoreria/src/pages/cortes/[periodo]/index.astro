@@ -1,0 +1,597 @@
+---
+/*
+ * Corte de un mes: borrador mientras está abierto, constancia una vez cerrado.
+ * Desde aquí se cierra el mes, se reabre (solo el V∴M∴) y se registran los
+ * movimientos de ajuste que corrigen un mes ya cerrado.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import TablaMovimientos from '@componentes/TablaMovimientos.astro';
+import { cerrarCorte, reabrirCorte, registrarAjuste } from '@lib/casos/cortes';
+import { emitirNonce, emitirNonces } from '@lib/csrf';
+import {
+  aportacionesEspecieDelPeriodo,
+  corteDelPeriodo,
+  corteGuardado,
+  pagosGTDelPeriodo,
+  reaperturasDe,
+} from '@lib/datos/cortes';
+import { estadoAplomo } from '@lib/datos/gt';
+import { listarMovimientos, totalesPorConcepto } from '@lib/datos/movimientos';
+import { pendientesDeComprobar } from '@lib/datos/egresos';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaAjuste, esquemaCierre, esquemaReapertura } from '@lib/esquemas/corte';
+import {
+  formatoFechaCorta,
+  formatoMomento,
+  hoyISO,
+  nombrePeriodo,
+  periodoActual,
+} from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { esVM, requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const soyVM = esVM(sesion);
+
+const periodo = String(Astro.params.periodo ?? '');
+if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) {
+  return new Response('Periodo no válido', { status: 404 });
+}
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+    seccion = entrada.accion;
+
+    try {
+      if (entrada.accion === 'cerrar') {
+        const r = await validar(entrada, {
+          esquema: esquemaCierre,
+          proposito: 'corte_cerrar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await cerrarCorte({ ...ctxBase, nonce: r.nonce }, periodo, r.datos.observaciones);
+          return Astro.redirect(`/cortes/${periodo}?ok=corte`, 303);
+        }
+      } else if (entrada.accion === 'reabrir') {
+        const r = await validar(entrada, {
+          esquema: esquemaReapertura,
+          proposito: 'corte_reabrir',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          const guardado = await corteGuardado(periodo);
+          if (!guardado) throw new ErrorDeNegocio('Ese mes no tiene corte cerrado.');
+          await reabrirCorte({ ...ctxBase, nonce: r.nonce }, guardado.id, r.datos.motivo);
+          return Astro.redirect(`/cortes/${periodo}?ok=corte`, 303);
+        }
+      } else if (entrada.accion === 'ajustar') {
+        const r = await validar(entrada, {
+          esquema: esquemaAjuste,
+          proposito: 'movimiento_ajuste',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await registrarAjuste({ ...ctxBase, nonce: r.nonce }, r.datos.movimiento_id, {
+            fecha: r.datos.fecha,
+            monto: r.datos.monto,
+            motivo: r.datos.motivo,
+          });
+          return Astro.redirect(`/cortes/${periodo}?ok=corte`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const calculado = await corteDelPeriodo(periodo);
+if (!calculado) return new Response('Ese mes no pertenece a ningún ejercicio', { status: 404 });
+
+const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo] =
+  await Promise.all([
+    corteGuardado(periodo),
+    listarMovimientos({ periodo }),
+    totalesPorConcepto(periodo),
+    pendientesDeComprobar(),
+    aportacionesEspecieDelPeriodo(periodo),
+    pagosGTDelPeriodo(periodo),
+    estadoAplomo(),
+  ]);
+
+const reaperturas = guardado ? await reaperturasDe(guardado.id) : [];
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const cerrado = guardado?.estado === 'cerrado';
+const esFuturo = periodo > periodoActual();
+
+/* Arrastres que impiden cerrar: entregados sin comprobar de meses anteriores. */
+const arrastres = porComprobar.filter(
+  (p) => p.fecha_entrega.slice(0, 7) < periodo,
+);
+
+const nonceCierre = await emitirNonce(sesion.idHash, 'corte_cerrar');
+const nonceReapertura = await emitirNonce(sesion.idHash, 'corte_reabrir');
+const noncesAjuste = await emitirNonces(
+  sesion.idHash,
+  'movimiento_ajuste',
+  soyVM ? movimientos.length : 0,
+);
+
+const ingresos = totales.filter((t) => t.tipo === 'ingreso');
+const egresos = totales.filter((t) => t.tipo === 'egreso');
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={`Corte de ${nombrePeriodo(periodo)}`} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/cortes">← Cortes</a></span>
+    <span>Ejercicio {calculado.anio}</span>
+    <span><a href={`/cortes/${periodo}/imprimir`}>Imprimir</a></span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  {seccion === null && <ResumenErrores errores={errores} />}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <div>
+      <h1 style="margin-bottom: 0.2rem;">Corte de {nombrePeriodo(periodo)}</h1>
+      <p class="apagado" style="margin: 0;">
+        {
+          cerrado ? (
+            <span class="insignia insignia--ok">Cerrado</span>
+          ) : esFuturo ? (
+            <span class="apagado">Mes por venir</span>
+          ) : (
+            <span class="insignia insignia--pendiente">Abierto, es un borrador</span>
+          )
+        }
+        {
+          guardado && guardado.reaperturas > 0 && (
+            <>
+              {' '}
+              <span class="insignia insignia--alerta">
+                Reabierto {guardado.reaperturas} vez(ces)
+              </span>
+            </>
+          )
+        }
+      </p>
+    </div>
+    <a class="btn btn--ghost" href={`/cortes/${periodo}/imprimir`}>Vista para imprimir</a>
+  </div>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Resumen</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <tbody>
+            <tr>
+              <th scope="row">Saldo inicial</th>
+              <td class="num">{formatoMXN(calculado.saldo_inicial_centavos)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Ingresos del mes</th>
+              <td class="num">{formatoMXN(calculado.total_ingresos_centavos)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Egresos del mes</th>
+              <td class="num">{formatoMXN(calculado.total_egresos_centavos)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Saldo final</th>
+              <td class="num">
+                <strong>{formatoMXN(calculado.saldo_final_centavos)}</strong>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">En banco</th>
+              <td class="num">
+                {formatoMXN(calculado.banco_inicial_centavos)} →{' '}
+                {formatoMXN(calculado.banco_final_centavos)}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">En efectivo</th>
+              <td class="num">
+                {formatoMXN(calculado.efectivo_inicial_centavos)} →{' '}
+                {formatoMXN(calculado.efectivo_final_centavos)}
+              </td>
+            </tr>
+            {
+              guardado && cerrado && (
+                <>
+                  <tr>
+                    <th scope="row">Cápitas esperadas del mes</th>
+                    <td class="num">{formatoMXN(guardado.capitas_esperadas_centavos)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Cápitas cobradas del mes</th>
+                    <td class="num">{formatoMXN(guardado.capitas_cobradas_centavos)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Pendiente de comprobar al cierre</th>
+                    <td class="num">{formatoMXN(guardado.pendiente_comprobar_centavos)}</td>
+                  </tr>
+                </>
+              )
+            }
+          </tbody>
+        </table>
+      </div>
+
+      {
+        cerrado && guardado && (
+          <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+            Cerrado por {guardado.cerrado_nombre}
+            {guardado.cerrado_en && <> el {formatoMomento(guardado.cerrado_en)}</>}.
+            {guardado.observaciones && <> {guardado.observaciones}</>}
+          </p>
+        )
+      }
+    </section>
+
+    {
+      (ingresos.length > 0 || egresos.length > 0) && (
+        <section class="tarjeta">
+          <h2>Por concepto</h2>
+          <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
+            <div style="flex: 1; min-width: 15rem;">
+              <h3>Ingresos</h3>
+              {ingresos.length === 0 ? (
+                <p class="apagado">Sin ingresos.</p>
+              ) : (
+                <table class="tabla">
+                  <tbody>
+                    {ingresos.map((t) => (
+                      <tr>
+                        <th scope="row">{t.concepto_nombre}</th>
+                        <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>Total</td>
+                      <td class="num">{formatoMXN(calculado.total_ingresos_centavos)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+            <div style="flex: 1; min-width: 15rem;">
+              <h3>Egresos</h3>
+              {egresos.length === 0 ? (
+                <p class="apagado">Sin egresos.</p>
+              ) : (
+                <table class="tabla">
+                  <tbody>
+                    {egresos.map((t) => (
+                      <tr>
+                        <th scope="row">{t.concepto_nombre}</th>
+                        <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>Total</td>
+                      <td class="num">{formatoMXN(calculado.total_egresos_centavos)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </div>
+        </section>
+      )
+    }
+
+    <section class="tarjeta">
+      <h2>Gran Tesorería</h2>
+      <p class="apagado">
+        {aplomo.ordinario_a_plomo
+          ? 'La logia está a plomo en lo ordinario'
+          : 'Hay obligaciones ordinarias pendientes con la Gran Tesorería'}
+        {aplomo.cubierto_hasta && <>, cubierta hasta {nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}</>}
+        {aplomo.regularizaciones_pendientes > 0 && (
+          <>, {aplomo.regularizaciones_pendientes} regularización(es) pendiente(s)</>
+        )}. El detalle vive en <a href="/gran-tesoreria">Gran Tesorería</a>.
+      </p>
+      {
+        pagosGT.length === 0 ? (
+          <p class="apagado">Sin pagos a la Gran Tesorería en este mes.</p>
+        ) : (
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Pago</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Obligaciones que cubre</th>
+                <th scope="col" class="num">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagosGT.map((pgt) => (
+                <tr>
+                  <td>{pgt.folio}</td>
+                  <td>{formatoFechaCorta(pgt.fecha_pago)}</td>
+                  <td>{pgt.obligaciones ?? ''}</td>
+                  <td class="num">{formatoMXN(pgt.monto_centavos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      }
+    </section>
+
+    {
+      especie.length > 0 && (
+        <section class="tarjeta">
+          <h2>Aportaciones en especie del mes</h2>
+          <p class="apagado">
+            Constan en el informe pero fuera de las cifras: no son dinero y no entran en
+            ningún saldo.
+          </p>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Folio</th>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Aportante</th>
+                  <th scope="col">Lo aportado</th>
+                  <th scope="col" class="num">Valor estimado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {especie.map((a) => (
+                  <tr>
+                    <td>
+                      <a href={`/aportaciones/${a.id}/constancia`}>{a.folio}</a>
+                    </td>
+                    <td>{formatoFechaCorta(a.fecha)}</td>
+                    <td>{a.aportante_nombre}</td>
+                    <td>
+                      {a.descripcion}
+                      {a.cantidad && <> · {Number(a.cantidad)} {a.unidad ?? 'pieza(s)'}</>}
+                      {a.destino && <> · {a.destino}</>}
+                    </td>
+                    <td class="num">
+                      {a.valor_estimado_centavos != null
+                        ? `≈ ${formatoMXN(a.valor_estimado_centavos)}`
+                        : 'Sin valuar'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )
+    }
+
+    <section class="tarjeta">
+      <h2>Movimientos del mes</h2>
+      <TablaMovimientos
+        movimientos={movimientos}
+        titulo={`${movimientos.length} movimiento(s)`}
+        conSigno
+        vacio="Sin movimientos en este mes."
+      />
+
+      {
+        soyVM && movimientos.length > 0 && (
+          <details style="margin-top: 1rem;">
+            <summary style="cursor: pointer;">Corregir un movimiento con un ajuste</summary>
+            <div style="margin-top: 0.75rem;">
+              <p class="apagado" style="font-size: 0.85rem;">
+                {cerrado
+                  ? 'El mes está cerrado, así que no se edita: se registra un movimiento de signo contrario en el mes abierto, ligado al original.'
+                  : 'El libro no borra movimientos, ni siquiera en un mes abierto: una captura equivocada se corrige con uno de signo contrario ligado al original. Si además era un pago de cápita, los meses que cubría se liberan solos.'}
+              </p>
+              {seccion === 'ajustar' && <ResumenErrores errores={errores} />}
+              <div class="tabla-envoltura">
+                <table class="tabla">
+                  <thead>
+                    <tr>
+                      <th scope="col">Movimiento</th>
+                      <th scope="col" class="num">Monto</th>
+                      <th scope="col">Ajuste</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movimientos.map((m, i) => (
+                      <tr>
+                        <td>
+                          {formatoFechaCorta(m.fecha)} · {m.concepto_nombre}
+                          <br />
+                          <span class="apagado" style="font-size: 0.8rem;">
+                            {m.descripcion}
+                          </span>
+                        </td>
+                        <td class="num">{formatoMXN(m.monto_centavos)}</td>
+                        <td>
+                          {m.es_ajuste ? (
+                            <span class="apagado">Es un ajuste</span>
+                          ) : (
+                          <Formulario
+                            csrf={sesion.csrfToken}
+                            nonce={noncesAjuste[i] ?? ''}
+                            accionInterna="ajustar"
+                          >
+                            <input type="hidden" name="movimiento_id" value={String(m.id)} />
+                            <Campo
+                              nombre="fecha"
+                              etiqueta="Fecha del ajuste"
+                              tipo="date"
+                              valor={hoyISO()}
+                              requerido
+                            />
+                            <Campo
+                              nombre="monto"
+                              etiqueta="Monto"
+                              valor={aPesosTexto(m.monto_centavos)}
+                              modoTeclado="decimal"
+                              monto
+                              requerido
+                            />
+                            <Campo nombre="motivo" etiqueta="Motivo" requerido />
+                            <div class="formulario__acciones">
+                              <button
+                                class="btn btn--ghost"
+                                type="submit"
+                                style="padding: 0.2rem 0.7rem; font-size: 0.75rem;"
+                              >
+                                Registrar ajuste
+                              </button>
+                            </div>
+                          </Formulario>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        )
+      }
+    </section>
+
+    {
+      !cerrado && !esFuturo && (
+        <section class="tarjeta">
+          <h2>Cerrar el mes</h2>
+          <p class="apagado" style="font-size: 0.9rem;">
+            Al cerrar, los {movimientos.length} movimiento(s) de {nombrePeriodo(periodo)}
+            quedan sellados y el mes deja de admitir capturas. El saldo final de
+            {' '}{formatoMXN(calculado.saldo_final_centavos)} pasa a ser el saldo inicial del
+            mes siguiente.
+          </p>
+
+          {arrastres.length > 0 && (
+            <div class="aviso aviso--error">
+              <p style="margin: 0;">
+                No se puede cerrar mientras haya dinero entregado y sin comprobar de meses
+                anteriores:
+              </p>
+              <ul>
+                {arrastres.map((a) => (
+                  <li>
+                    <a href={`/egresos/${a.id}`}>{a.folio}</a>, entregado el{' '}
+                    {formatoFechaCorta(a.fecha_entrega)}, faltan{' '}
+                    {formatoMXN(a.pendiente_centavos)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {seccion === 'cerrar' && <ResumenErrores errores={errores} />}
+
+          <div style="max-width: 30rem;">
+            <Formulario csrf={sesion.csrfToken} nonce={nonceCierre} accionInterna="cerrar">
+              <Campo
+                nombre="observaciones"
+                etiqueta="Observaciones del corte"
+                error={errores.observaciones}
+                ayuda="Opcional. Se imprime en la hoja del corte."
+                largo
+                filas={3}
+              />
+              <div class="formulario__acciones">
+                <button class="btn btn--primary" type="submit">
+                  Cerrar {nombrePeriodo(periodo)}
+                </button>
+              </div>
+            </Formulario>
+          </div>
+        </section>
+      )
+    }
+
+    {
+      cerrado && (
+        <section class="tarjeta">
+          <h2>Reapertura</h2>
+          {reaperturas.length > 0 && (
+            <ul style="font-size: 0.85rem;">
+              {reaperturas.map((r) => (
+                <li>
+                  {formatoMomento(r.reabierto_en)} · {r.reabierto_nombre}: {r.motivo}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {soyVM ? (
+            <details>
+              <summary style="cursor: pointer;">Reabrir este corte</summary>
+              <div style="margin-top: 0.75rem; max-width: 30rem;">
+                <p class="apagado" style="font-size: 0.85rem;">
+                  Es excepcional y queda registrado para siempre. Lo normal es corregir con
+                  un movimiento de ajuste en el mes abierto. Solo se puede reabrir el
+                  último mes cerrado.
+                </p>
+                {seccion === 'reabrir' && <ResumenErrores errores={errores} />}
+                <Formulario
+                  csrf={sesion.csrfToken}
+                  nonce={nonceReapertura}
+                  accionInterna="reabrir"
+                >
+                  <Campo
+                    nombre="motivo"
+                    etiqueta="Motivo de la reapertura"
+                    error={errores.motivo}
+                    requerido
+                  />
+                  <div class="formulario__acciones">
+                    <button class="btn btn--ghost" type="submit">Reabrir corte</button>
+                  </div>
+                </Formulario>
+              </div>
+            </details>
+          ) : (
+            <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+              La reapertura de un corte la autoriza el Venerable Maestro.
+            </p>
+          )}
+        </section>
+      )
+    }
+  </div>
+</LayoutAdmin>

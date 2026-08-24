@@ -1,67 +1,141 @@
-# Handoff — Sitio Masada No. 324
+# Handoff — R∴L∴S∴ Masada No. 324
 
-Documento para retomar el trabajo. Última actualización: **14 de junio de 2026**.
+Documento para retomar el trabajo. Última actualización: **21 de agosto de 2026**.
 
-> Lee primero el `README.md` para el panorama general (stack, estructura, cómo agregar
-> contenido y desplegar). Este documento cubre el **estado actual** y lo **pendiente**.
+> Lee primero el `README.md` de la raíz para el sitio público y
+> `tesoreria/README.md` para el sistema de tesorería. Este documento cubre el
+> **estado actual** y lo **pendiente**.
 
 ---
 
 ## Estado actual
 
-Sitio funcional y desplegable. Última sesión de trabajo en el commit
-`2df2824` (ya en `main` y en GitHub). Build verde (7 páginas + RSS + sitemap).
+El repositorio tiene dos proyectos:
 
-### Páginas en producción
-- **Home** (`/`) — hero, síntesis histórica de Masada, servicios, próximos eventos, últimas noticias.
-- **Cuadro logial** (`/cuadro-logial/`) — dignatarios, oficiales, columnas de miembros y past masters.
-- **Eventos** (`/eventos/` + detalle) — con RSVP por WhatsApp/correo.
-- **Noticias** (`/noticias/` + detalle + páginas por etiqueta).
-- **Ingreso** (`/ingreso/`) — requisitos y contacto.
+| Proyecto | Estado |
+|---|---|
+| Sitio público (raíz) | En producción, sin cambios de contenido desde el commit `2df2824` |
+| Tesorería (`tesoreria/`) | Construida y probada, **solo en local**, sin desplegar |
+
+### Sitio público
+
+Producción coincide con el repositorio. Las únicas diferencias que aparecen al
+comparar el build de hoy contra https://masada324.org son por la fecha: la tenida
+interlogial del 15 de junio ya pasó, así que el sitio publicado todavía la muestra
+como próxima y con el botón de confirmar asistencia. Un `bash deploy/publish.sh`
+lo corrige, no hay cambios de contenido pendientes.
+
+Páginas: home, cuadro logial, eventos (índice y detalle), noticias (índice, detalle
+y por etiqueta), ingreso.
+
+### Tesorería
+
+Sistema interno de tesorería, con registro desde el ejercicio 2026.
+
+- **Padrón**: hermanos con grado, cargos del cuadro, fechas, contacto, altas y
+  bajas, historial de grados.
+- **Cápitas**: las tres modalidades (mensual 500, promoción 5,000 que autoriza el
+  V∴M∴, y prorrateo por meses restantes), pagos que se aplican del mes más antiguo
+  hacia adelante, saldos a favor, exenciones autorizadas por el V∴M∴, matriz anual
+  y estado de cuenta por hermano.
+- **Ingresos**: cuotas de grado del candidato y donativos, con comprobante opcional.
+- **Egresos**: registrado, autorizado con dos firmas, entregado y comprobado.
+  El V∴M∴ puede suplir la firma del tesorero dejando constancia. Comprobante de
+  imagen obligatorio en los pagados. Gastos por comprobar con recibos y devolución.
+- **Gran Tesorería**: dominio propio. Membresías capturadas como llegan y ligadas
+  al padrón, tarifas GT sin retroactivo, obligaciones con lo que GT reporta (GT- y
+  REG-), pago que nace de la obligación, viaja en un egreso con dos firmas y se
+  materializa al entregar (GTP-), estado a plomo derivado y conciliación de los
+  tres padrones (interno, Gran Secretaría, Gran Tesorería), que informa y no
+  bloquea. Lo interno y lo de GT están desacoplados: nada se reserva solo.
+- **Aportaciones**: la monetaria es ingreso normal con recibo; la de especie deja
+  constancia imprimible (APO-) y jamás toca el libro de caja.
+- **Registros externos por hermano**: en la ficha, lo que la Gran Secretaría y la
+  Gran Tesorería saben de él, con su estatus y fechas.
+- **Informe mensual ampliado**: el corte y su hoja imprimible traen resumen por
+  clasificación, sección de Gran Tesorería y aportaciones en especie fuera de las
+  cifras.
+- **Dos bolsas**: cada movimiento indica banco o efectivo, hay traspasos entre
+  bolsas (depósitos y retiros, con ficha) y los cortes muestran el saldo por bolsa.
+- **Cortes mensuales**: saldos encadenados por bolsa, cierre en orden, bloqueo del
+  mes en la base de datos, movimientos de ajuste, reapertura excepcional del V∴M∴
+  con huella, y hoja imprimible.
+- **Exportación** del cuadro logial al sitio público, con solo nombre, grado y cargo.
+
+Verificado de punta a punta: 61 pruebas automatizadas en verde (`npm run prueba`)
+y un recorrido completo por HTTP en una base aparte (obligación → egreso con dos
+firmas → entrega → pago GT aplicado; aportaciones con recibo y constancia;
+conciliación). El respaldo se probó restaurándolo en una base aparte.
+
+### Decisiones que quedan a ratificación del V∴M∴
+
+Nada de esto bloquea el uso, son las convenciones que el sistema asumió y que
+conviene confirmar o corregir:
+
+1. **Nombre de la modalidad**: "Promoción" ahora se muestra como "Anual
+   preferencial, pago único". El valor interno no cambió, el histórico se conserva.
+2. **Doble firma**: se mantiene en todos los egresos, marcada como pendiente de
+   ratificación en el reglamento interno.
+3. **Prorrateo**: la capacidad sigue igual (500 por mes restante desde el ingreso
+   interno); su definición funcional fina quedó pendiente a propósito.
+4. **Medio de pago GT**: al entregar por banco se registra "transferencia", por
+   efectivo "efectivo". Si un pago fue con tarjeta u otro medio, se corrige a mano.
+5. **Conceptos gl_***: los conceptos viejos de Gran Logia quedaron desactivados;
+   el histórico los sigue mostrando.
+6. **Renglones de membresía**: se capturan tal como GT los reporta y no se editan;
+   lo único que cambia después es su liga con el padrón.
 
 ---
 
-## Hecho en la última sesión
+## Lo que falta para poder usarla
 
-1. **Limpieza de la biblioteca eliminada** — se quitó la colección `books`, el JSON de
-   catálogo y todas las menciones (config, home, nota de bienvenida).
-2. **Cuadro logial 2026** — correcciones de nombres (Luis Luna Avila sin acento;
-   tesorero ahora Mario Eduardo Userralde Gordillo).
-3. **Columnas de miembros** — Maestros / Compañeros / Aprendices. Maestros se derivan
-   automáticamente de dignatarios + oficiales. Cada columna tiene una descripción del
-   grado y su símbolo de trabajo, ocultos tras un ícono ⓘ (toggle por clic).
-4. **Sección Past Masters** — histórico 2022–2025 en `pastmasters/historico.json`.
-5. **Tags funcionales** — enlaces a `/noticias/tag/<slug>/`, con componente reutilizable
-   `NewsList.astro` y helper `slugifyTag` en `lib/format.ts`.
-6. **Nueva nota pública** — "El silencio como disciplina iniciática"
-   (`2026-06-14-silencio-disciplina-iniciatica.mdx`), a propósito de la tenida
-   interlogial del 15 de junio.
+Todo esto lo hace el tesorero, no requiere código:
+
+1. **Crear los dos usuarios**: `cd tesoreria && npm run sembrar`. Pide correo,
+   nombre, rol y contraseña de cada uno, sin mostrarla. Mínimo 14 caracteres.
+2. **Capturar el saldo de apertura de 2026** en Herramientas. De ahí se encadenan
+   todos los saldos de los cortes.
+3. **Completar el padrón**: los 12 hermanos ya están importados del cuadro
+   publicado, con nombre, grado y cargo. Falta la fecha real de ingreso de cada uno
+   (hoy quedaron como regularización al 31 de diciembre de 2025, que es lo correcto
+   para quien ya estaba, pero hay que confirmarlo) y las fechas de iniciación.
+4. **Asignar la modalidad de cápita** de cada hermano para 2026.
+5. **Capturar lo que va del año**: ingresos, egresos y pagos a la Gran Tesorería,
+   con sus comprobantes.
+6. **Cerrar los meses** ya terminados, en orden.
+
+### Datos que el sistema todavía no conoce
+
+- Saldo de apertura de 2026.
+- Montos de las cuotas de grado que el candidato paga a la logia (iniciación,
+  aumento de salario, exaltación). Se capturan al registrar cada ingreso.
+- Fechas de iniciación y afiliación de cada hermano.
 
 ---
 
-## Pendiente / próximos pasos
+## Pendientes de código
 
-- [ ] **Llenar el cuadro de miembros** — el usuario dará más nombres. Recordar:
-  - Maestros sin cargo → agregar al array `"maestros"` (los dignatarios/oficiales ya entran solos).
-  - Compañeros actuales: José Manuel de la Rosa Nava, Pedro Eduardo Velázquez Hernández.
-  - Aprendices actuales: Jonathan Israel Rodríguez Melo.
-- [ ] **Histórico completo de Past Masters** — hoy solo están 2022–2025. El usuario
-  pasará toda la historia de la logia para completar `pastmasters/historico.json`.
-- [ ] **Desplegar a producción** cuando se decida (`bash deploy/publish.sh`).
-- [ ] (Opcional) Limpiar el código inerte de la insignia "Vigente" en la sección Past
-  Masters de `cuadro-logial.astro` (campo `vigente` ya no se usa, un past master nunca
-  está vigente). Es inofensivo; quedó pendiente de confirmar si se quita.
+- [ ] **Desplegar la tesorería** cuando se decida. El camino está descrito al final
+      de `tesoreria/README.md`, pero no está probado: falta el usuario de sistema,
+      la unidad systemd, el vhost de Apache en un subdominio y el rol de PostgreSQL.
+- [ ] **Desplegar el sitio** para que la tenida de junio deje de aparecer como
+      próxima: `bash deploy/publish.sh`.
+- [ ] **Histórico completo de Past Masters**: hoy están 2022 a 2025 en
+      `past_master_historico`. El usuario pasará el resto de la historia de la logia.
+- [ ] (Opcional) Limpiar el código inerte de la insignia "Vigente" en la sección
+      Past Masters de `cuadro-logial.astro`: el campo `vigente` ya no se usa, un
+      past master nunca está vigente.
 
 ---
 
 ## Notas de contexto
 
-- **Preferencia de redacción:** sin guiones largos (—), usar comas.
-- **Dato del cuadro:** Mario Arturo Jiménez Terrón es el **V∴M∴ vigente 2026**; por eso
-  NO está en Past Masters.
-- **Imágenes:** flyers de eventos en `public/images/eventos/`, proporción 4:5.
-- **Audiencia de eventos:** el campo `audience` controla la etiqueta del detalle. La
-  tenida interlogial del 15-jun es `hermanos`; la nota del silencio es pública y NO
-  invita al público al evento, solo lo usa como contexto.
-- `node_modules` no se versiona: si el repo está recién clonado, correr `npm install`
-  antes de `npm run dev/build`.
+- **Preferencia de redacción:** sin guiones largos (—), usar comas. Aplica también a
+  los mensajes de error del sistema: los lee el tesorero.
+- **Dato del cuadro:** Mario Arturo Jiménez Terrón es el **V∴M∴ vigente 2026**; por
+  eso NO está en Past Masters.
+- **Imágenes del sitio:** flyers de eventos en `public/images/eventos/`, 4:5.
+- **Comprobantes de la tesorería:** viven en `tesoreria/comprobantes/`, fuera del
+  sitio, y no se versionan. Van en el mismo respaldo que la base.
+- `node_modules` no se versiona en ninguno de los dos proyectos: correr
+  `npm install` en la raíz y en `tesoreria/` tras clonar.

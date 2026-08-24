@@ -1,0 +1,871 @@
+---
+/*
+ * Ficha de un egreso: firmas, entrega, comprobación y documentos.
+ * Una sola página atiende todas las acciones, distinguidas por el campo _accion.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import {
+  agregarComprobacion,
+  agregarDocumento,
+  cancelarEgreso,
+  cerrarComprobacion,
+  firmarEgreso,
+  rechazarEgreso,
+  registrarDevolucion,
+  registrarEntrega,
+} from '@lib/casos/egresos';
+import { emitirNonce } from '@lib/csrf';
+import {
+  CLASE_ESTADO_EGRESO,
+  NOMBRE_DOCUMENTO,
+  NOMBRE_ESTADO_EGRESO,
+  NOMBRE_TIPO_PAGO_GT,
+  documentosDe,
+  firmasDe,
+  granTesoreriaDe,
+  obtenerEgreso,
+} from '@lib/datos/egresos';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import {
+  esquemaCierreComprobacion,
+  esquemaComprobacion,
+  esquemaDevolucion,
+  esquemaDocumento,
+  esquemaEntrega,
+  esquemaFirma,
+  esquemaMotivo,
+} from '@lib/esquemas/egreso';
+import { NOMBRE_TIPO_OBLIGACION, obligacionesDeEgreso } from '@lib/datos/gt';
+import { formatoFechaCorta, formatoMomento, hoyISO, nombrePeriodo } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { esVM, requerirSesion } from '@lib/sesion';
+import { NOMBRE_ROL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const soyVM = esVM(sesion);
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+    seccion = entrada.accion;
+
+    try {
+      switch (entrada.accion) {
+        case 'firmar': {
+          const r = await validar(entrada, {
+            esquema: esquemaFirma,
+            proposito: 'egreso_firma',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await firmarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+            return Astro.redirect(`/egresos/${id}?ok=firma`, 303);
+          }
+          break;
+        }
+
+        case 'entregar': {
+          const r = await validar(entrada, {
+            esquema: esquemaEntrega,
+            proposito: 'egreso_entrega',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await registrarEntrega(
+              { ...ctxBase, nonce: r.nonce },
+              id,
+              r.datos,
+              r.archivos.comprobante,
+            );
+            return Astro.redirect(`/egresos/${id}?ok=egreso`, 303);
+          }
+          break;
+        }
+
+        case 'comprobar': {
+          const r = await validar(entrada, {
+            esquema: esquemaComprobacion,
+            proposito: 'egreso_comprobacion',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await agregarComprobacion(
+              { ...ctxBase, nonce: r.nonce },
+              id,
+              r.datos,
+              r.archivos.archivo,
+            );
+            return Astro.redirect(`/egresos/${id}?ok=comprobacion`, 303);
+          }
+          break;
+        }
+
+        case 'devolver': {
+          const r = await validar(entrada, {
+            esquema: esquemaDevolucion,
+            proposito: 'egreso_devolucion',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await registrarDevolucion({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+            return Astro.redirect(`/egresos/${id}?ok=comprobacion`, 303);
+          }
+          break;
+        }
+
+        case 'cerrar': {
+          const r = await validar(entrada, {
+            esquema: esquemaCierreComprobacion,
+            proposito: 'egreso_cierre',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await cerrarComprobacion({ ...ctxBase, nonce: r.nonce }, id, r.datos.fecha);
+            return Astro.redirect(`/egresos/${id}?ok=comprobacion`, 303);
+          }
+          break;
+        }
+
+        case 'documento': {
+          const r = await validar(entrada, {
+            esquema: esquemaDocumento,
+            proposito: 'egreso_documento',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await agregarDocumento(
+              { ...ctxBase, nonce: r.nonce },
+              id,
+              r.datos,
+              r.archivos.archivo,
+            );
+            return Astro.redirect(`/egresos/${id}?ok=egreso`, 303);
+          }
+          break;
+        }
+
+        case 'rechazar':
+        case 'cancelar': {
+          const esRechazo = entrada.accion === 'rechazar';
+          const r = await validar(entrada, {
+            esquema: esquemaMotivo,
+            proposito: esRechazo ? 'egreso_rechazo' : 'egreso_cancelacion',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            if (esRechazo) await rechazarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos.motivo);
+            else await cancelarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos.motivo);
+            return Astro.redirect(`/egresos/${id}?ok=egreso`, 303);
+          }
+          break;
+        }
+
+        default:
+          errores = { _general: 'Acción no reconocida.' };
+          estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const egreso = await obtenerEgreso(id);
+if (!egreso) return new Response('No encontrado', { status: 404 });
+
+const [firmas, documentos, granTesoreria, obligacionesGT] = await Promise.all([
+  firmasDe(id),
+  documentosDe(id),
+  egreso.tipo_especial === 'gran_tesoreria' ? granTesoreriaDe(id) : Promise.resolve(null),
+  egreso.tipo_especial === 'gran_tesoreria' ? obligacionesDeEgreso(id) : Promise.resolve([]),
+]);
+
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const nonces = {
+  firma: await emitirNonce(sesion.idHash, 'egreso_firma'),
+  entrega: await emitirNonce(sesion.idHash, 'egreso_entrega'),
+  comprobacion: await emitirNonce(sesion.idHash, 'egreso_comprobacion'),
+  devolucion: await emitirNonce(sesion.idHash, 'egreso_devolucion'),
+  cierre: await emitirNonce(sesion.idHash, 'egreso_cierre'),
+  documento: await emitirNonce(sesion.idHash, 'egreso_documento'),
+  rechazo: await emitirNonce(sesion.idHash, 'egreso_rechazo'),
+  cancelacion: await emitirNonce(sesion.idHash, 'egreso_cancelacion'),
+};
+
+const firmaDe = (rol: 'tesorero' | 'venerable_maestro') =>
+  firmas.find((f) => f.rol_requerido === rol);
+
+const miRol = sesion.usuario.rol;
+const faltaMiFirma = egreso.estado === 'registrado' && !firmaDe(miRol);
+const faltaFirmaTesorero = egreso.estado === 'registrado' && !firmaDe('tesorero');
+
+const entregado = egreso.monto_entregado_centavos ?? 0;
+const pendienteComprobar =
+  entregado - egreso.monto_comprobado_centavos - egreso.monto_devuelto_centavos;
+
+const opcionesDocumento: Opcion[] = [
+  { valor: 'comprobante_pago', texto: NOMBRE_DOCUMENTO.comprobante_pago! },
+  { valor: 'calculo_gran_tesoreria', texto: NOMBRE_DOCUMENTO.calculo_gran_tesoreria! },
+  { valor: 'recibo_gt', texto: NOMBRE_DOCUMENTO.recibo_gt! },
+  { valor: 'otro', texto: NOMBRE_DOCUMENTO.otro! },
+];
+
+const opcionesTipoRecibo: Opcion[] = [
+  { valor: 'recibo', texto: 'Recibo' },
+  { valor: 'factura', texto: 'Factura' },
+];
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={`Egreso ${egreso.folio}`} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/egresos">← Egresos</a></span>
+    <span>Ejercicio {egreso.ejercicio_anio}</span>
+    <span>{egreso.concepto_nombre}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  {seccion === null && <ResumenErrores errores={errores} />}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <div>
+      <h1 style="margin-bottom: 0.2rem;">{egreso.folio}</h1>
+      <p class="apagado" style="margin: 0;">
+        <span class:list={['insignia', CLASE_ESTADO_EGRESO[egreso.estado]]}>
+          {NOMBRE_ESTADO_EGRESO[egreso.estado]}
+        </span>
+        {egreso.requiere_comprobacion && (
+          <>
+            {' '}
+            <span class="insignia">Por comprobar</span>
+          </>
+        )}
+      </p>
+    </div>
+  </div>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Datos</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <tbody>
+            <tr>
+              <th scope="row">Fecha</th>
+              <td>{formatoFechaCorta(egreso.fecha_solicitud)}</td>
+            </tr>
+            <tr>
+              <th scope="row">Concepto</th>
+              <td>{egreso.concepto_nombre}</td>
+            </tr>
+            <tr>
+              <th scope="row">Beneficiario</th>
+              <td>{egreso.beneficiario}</td>
+            </tr>
+            <tr>
+              <th scope="row">Descripción</th>
+              <td>{egreso.descripcion}</td>
+            </tr>
+            {egreso.hermano_id && (
+              <tr>
+                <th scope="row">Hermano</th>
+                <td>
+                  <a href={`/hermanos/${egreso.hermano_id}`}>{egreso.hermano_nombre}</a>
+                </td>
+              </tr>
+            )}
+            <tr>
+              <th scope="row">Solicitado</th>
+              <td class="num">{formatoMXN(egreso.monto_solicitado_centavos)}</td>
+            </tr>
+            {egreso.monto_autorizado_centavos !== null && (
+              <tr>
+                <th scope="row">Autorizado</th>
+                <td class="num">{formatoMXN(egreso.monto_autorizado_centavos)}</td>
+              </tr>
+            )}
+            {egreso.monto_entregado_centavos !== null && (
+              <tr>
+                <th scope="row">Entregado</th>
+                <td class="num">
+                  {formatoMXN(egreso.monto_entregado_centavos)}
+                  {egreso.fecha_entrega && (
+                    <span class="apagado"> · {formatoFechaCorta(egreso.fecha_entrega)}</span>
+                  )}
+                </td>
+              </tr>
+            )}
+            {egreso.estado === 'por_comprobar' && (
+              <>
+                <tr>
+                  <th scope="row">Comprobado</th>
+                  <td class="num">{formatoMXN(egreso.monto_comprobado_centavos)}</td>
+                </tr>
+                <tr>
+                  <th scope="row">Devuelto</th>
+                  <td class="num">{formatoMXN(egreso.monto_devuelto_centavos)}</td>
+                </tr>
+                <tr>
+                  <th scope="row">Falta comprobar</th>
+                  <td class="num">{formatoMXN(pendienteComprobar)}</td>
+                </tr>
+              </>
+            )}
+            {egreso.motivo_rechazo && (
+              <tr>
+                <th scope="row">Motivo del rechazo</th>
+                <td>{egreso.motivo_rechazo}</td>
+              </tr>
+            )}
+            {egreso.motivo_cancelacion && (
+              <tr>
+                <th scope="row">Motivo de la cancelación</th>
+                <td>{egreso.motivo_cancelacion}</td>
+              </tr>
+            )}
+            {egreso.notas && (
+              <tr>
+                <th scope="row">Notas</th>
+                <td style="white-space: pre-line;">{egreso.notas}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {
+        obligacionesGT.length > 0 && (
+          <div style="margin-top: 1rem;">
+            <h3>Obligaciones GT que paga este egreso</h3>
+            <p style="margin: 0; font-size: 0.9rem;">
+              Al registrar la entrega, el pago GT y sus aplicaciones se materializan solos.
+            </p>
+            <table class="tabla" style="margin-top: 0.5rem;">
+              <thead>
+                <tr>
+                  <th>Folio</th>
+                  <th>Tipo</th>
+                  <th class="num">Monto ligado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {obligacionesGT.map((o) => (
+                  <tr>
+                    <td>
+                      <a href={`/gran-tesoreria/obligaciones/${o.obligacion_id}`}>{o.folio}</a>
+                    </td>
+                    <td>{NOMBRE_TIPO_OBLIGACION[o.tipo as keyof typeof NOMBRE_TIPO_OBLIGACION] ?? o.tipo}</td>
+                    <td class="num">{formatoMXN(o.monto_centavos)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+
+      {
+        granTesoreria && (
+          <div style="margin-top: 1rem;">
+            <h3>Pago a la Gran Tesorería</h3>
+            <p style="margin: 0; font-size: 0.9rem;">
+              {NOMBRE_TIPO_PAGO_GT[granTesoreria.tipo_pago]} · ampara de{' '}
+              {nombrePeriodo(granTesoreria.periodo_desde.slice(0, 7))} a{' '}
+              {nombrePeriodo(granTesoreria.periodo_hasta.slice(0, 7))}
+              {granTesoreria.capitas !== null && <> · {granTesoreria.capitas} cápitas</>}
+            </p>
+          </div>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Firmas</h2>
+      <p class="apagado" style="font-size: 0.85rem;">
+        Todo egreso lleva la firma del tesorero y la del Venerable Maestro. El V∴M∴ puede
+        firmar por el tesorero cuando no está, dejando constancia del motivo.
+      </p>
+
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Firma requerida</th>
+              <th scope="col">Quién firmó</th>
+              <th scope="col">Cuándo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              (['tesorero', 'venerable_maestro'] as const).map((rol) => {
+                const f = firmaDe(rol);
+                return (
+                  <tr>
+                    <td>{NOMBRE_ROL[rol]}</td>
+                    <td>
+                      {f ? (
+                        <>
+                          {f.firmante_nombre}
+                          {f.es_suplencia && (
+                            <>
+                              {' '}
+                              <span class="insignia insignia--pendiente">
+                                Suplió al tesorero
+                              </span>
+                              <br />
+                              <span class="apagado" style="font-size: 0.8rem;">
+                                {f.motivo_suplencia}
+                              </span>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span class="apagado">Pendiente</span>
+                      )}
+                    </td>
+                    <td>{f ? formatoMomento(f.firmado_en) : '—'}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+
+      {
+        egreso.estado === 'registrado' && (
+          <div style="margin-top: 1rem;">
+            {seccion === 'firmar' && <ResumenErrores errores={errores} />}
+
+            {faltaMiFirma && (
+              <Formulario csrf={sesion.csrfToken} nonce={nonces.firma} accionInterna="firmar">
+                <input type="hidden" name="rol_requerido" value={miRol} />
+                <div class="formulario__acciones" style="margin-top: 0;">
+                  <button class="btn btn--primary" type="submit">
+                    Firmar como {NOMBRE_ROL[miRol]}
+                  </button>
+                </div>
+              </Formulario>
+            )}
+
+            {soyVM && faltaFirmaTesorero && (
+              <details style="margin-top: 0.75rem;">
+                <summary style="cursor: pointer;">Firmar por el tesorero (suplencia)</summary>
+                <div style="margin-top: 0.75rem; max-width: 26rem;">
+                  <Formulario
+                    csrf={sesion.csrfToken}
+                    nonce={nonces.firma}
+                    accionInterna="firmar"
+                  >
+                    <input type="hidden" name="rol_requerido" value="tesorero" />
+                    <Campo
+                      nombre="motivo_suplencia"
+                      etiqueta="Motivo de la suplencia"
+                      error={errores.motivo_suplencia}
+                      ayuda="Queda registrado que el V∴M∴ cubrió la firma del tesorero."
+                      requerido
+                    />
+                    <div class="formulario__acciones">
+                      <button class="btn btn--primary" type="submit">
+                        Firmar por el tesorero
+                      </button>
+                    </div>
+                  </Formulario>
+                </div>
+              </details>
+            )}
+
+            <details style="margin-top: 0.75rem;">
+              <summary style="cursor: pointer;">Rechazar este egreso</summary>
+              <div style="margin-top: 0.75rem; max-width: 26rem;">
+                {seccion === 'rechazar' && <ResumenErrores errores={errores} />}
+                <Formulario
+                  csrf={sesion.csrfToken}
+                  nonce={nonces.rechazo}
+                  accionInterna="rechazar"
+                >
+                  <Campo
+                    nombre="motivo"
+                    etiqueta="Motivo del rechazo"
+                    error={errores.motivo}
+                    requerido
+                  />
+                  <div class="formulario__acciones">
+                    <button class="btn btn--ghost" type="submit">Rechazar</button>
+                  </div>
+                </Formulario>
+              </div>
+            </details>
+          </div>
+        )
+      }
+    </section>
+
+    {
+      egreso.estado === 'autorizado' && (
+        <section class="tarjeta">
+          <h2>Registrar la entrega del dinero</h2>
+          <p class="apagado" style="font-size: 0.85rem;">
+            Esta es la operación que saca el dinero de la caja.
+            {egreso.requiere_comprobacion
+              ? ' Al ser por comprobar, después habrá que subir los recibos y registrar la devolución del sobrante.'
+              : ' La imagen del comprobante de pago es obligatoria.'}
+          </p>
+          {seccion === 'entregar' && <ResumenErrores errores={errores} />}
+
+          <div style="max-width: 28rem;">
+            <Formulario
+              csrf={sesion.csrfToken}
+              nonce={nonces.entrega}
+              accionInterna="entregar"
+              archivos
+            >
+              <Campo
+                nombre="fecha_entrega"
+                etiqueta="Fecha de entrega"
+                tipo="date"
+                valor={hoyISO()}
+                error={errores.fecha_entrega}
+                requerido
+              />
+              <Campo
+                nombre="monto_entregado"
+                etiqueta="Monto entregado"
+                valor={aPesosTexto(egreso.monto_autorizado_centavos ?? 0)}
+                error={errores.monto_entregado}
+                modoTeclado="decimal"
+                monto
+                requerido
+              />
+              <Selector
+                nombre="bolsa"
+                etiqueta="Bolsa"
+                opciones={[
+                  { valor: 'banco', texto: 'Banco' },
+                  { valor: 'efectivo', texto: 'Efectivo' },
+                ]}
+                valor="banco"
+                error={errores.bolsa}
+                requerido
+                ayuda="Banco si fue transferencia, efectivo si salió del sobre."
+              />
+              <Campo
+                nombre="comprobante"
+                etiqueta="Comprobante de pago"
+                tipo="file"
+                error={errores.comprobante}
+                aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                ayuda={
+                  egreso.requiere_comprobacion
+                    ? 'Opcional aquí: los recibos vienen después.'
+                    : 'Obligatorio: sin imagen no se puede registrar el pago.'
+                }
+              />
+              <Campo
+                nombre="descripcion_pago"
+                etiqueta="Descripción del pago"
+                error={errores.descripcion_pago}
+                ayuda="Por ejemplo: transferencia SPEI del 12 de agosto."
+              />
+              <div class="formulario__acciones">
+                <button class="btn btn--primary" type="submit">Registrar entrega</button>
+              </div>
+            </Formulario>
+
+            <details style="margin-top: 1rem;">
+              <summary style="cursor: pointer;">Cancelar este egreso</summary>
+              <div style="margin-top: 0.75rem;">
+                {seccion === 'cancelar' && <ResumenErrores errores={errores} />}
+                <Formulario
+                  csrf={sesion.csrfToken}
+                  nonce={nonces.cancelacion}
+                  accionInterna="cancelar"
+                >
+                  <Campo
+                    nombre="motivo"
+                    etiqueta="Motivo de la cancelación"
+                    error={errores.motivo}
+                    requerido
+                  />
+                  <div class="formulario__acciones">
+                    <button class="btn btn--ghost" type="submit">Cancelar egreso</button>
+                  </div>
+                </Formulario>
+              </div>
+            </details>
+          </div>
+        </section>
+      )
+    }
+
+    {
+      egreso.estado === 'por_comprobar' && (
+        <section class="tarjeta">
+          <h2>Comprobación</h2>
+          <p class="apagado" style="font-size: 0.85rem;">
+            Se entregaron {formatoMXN(entregado)}. Para cerrar, los recibos más lo devuelto
+            tienen que sumar esa cantidad. Faltan {formatoMXN(pendienteComprobar)}.
+          </p>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 1.5rem;">
+            <div style="flex: 1; min-width: 16rem;">
+              <h3>Agregar recibo</h3>
+              {seccion === 'comprobar' && <ResumenErrores errores={errores} />}
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonces.comprobacion}
+                accionInterna="comprobar"
+                archivos
+              >
+                <Selector
+                  nombre="tipo"
+                  etiqueta="Tipo"
+                  opciones={opcionesTipoRecibo}
+                  valor="recibo"
+                  error={errores.tipo}
+                  requerido
+                />
+                <Campo
+                  nombre="fecha"
+                  etiqueta="Fecha"
+                  tipo="date"
+                  valor={hoyISO()}
+                  error={errores.fecha}
+                  requerido
+                />
+                <Campo
+                  nombre="monto"
+                  etiqueta="Monto"
+                  error={errores.monto}
+                  modoTeclado="decimal"
+                  monto
+                  requerido
+                />
+                <Campo
+                  nombre="descripcion"
+                  etiqueta="Qué se compró"
+                  error={errores.descripcion}
+                />
+                <Campo
+                  nombre="archivo"
+                  etiqueta="Imagen del recibo"
+                  tipo="file"
+                  error={errores.archivo}
+                  aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                  ayuda="Obligatoria: sin imagen el recibo no comprueba nada."
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">Agregar recibo</button>
+                </div>
+              </Formulario>
+            </div>
+
+            <div style="flex: 1; min-width: 16rem;">
+              <h3>Devolver sobrante</h3>
+              {seccion === 'devolver' && <ResumenErrores errores={errores} />}
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonces.devolucion}
+                accionInterna="devolver"
+              >
+                <Campo
+                  nombre="fecha"
+                  etiqueta="Fecha"
+                  tipo="date"
+                  valor={hoyISO()}
+                  error={errores.fecha}
+                  requerido
+                />
+                <Campo
+                  nombre="monto"
+                  etiqueta="Monto devuelto"
+                  valor={pendienteComprobar > 0 ? aPesosTexto(pendienteComprobar) : ''}
+                  error={errores.monto}
+                  modoTeclado="decimal"
+                  monto
+                  requerido
+                />
+                <Selector
+                  nombre="bolsa"
+                  etiqueta="Bolsa a la que regresa"
+                  opciones={[
+                    { valor: 'efectivo', texto: 'Efectivo' },
+                    { valor: 'banco', texto: 'Banco' },
+                  ]}
+                  valor="efectivo"
+                  error={errores.bolsa}
+                  requerido
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">Registrar devolución</button>
+                </div>
+              </Formulario>
+
+              <h3 style="margin-top: 1.5rem;">Cerrar comprobación</h3>
+              {seccion === 'cerrar' && <ResumenErrores errores={errores} />}
+              {pendienteComprobar === 0 ? (
+                <Formulario
+                  csrf={sesion.csrfToken}
+                  nonce={nonces.cierre}
+                  accionInterna="cerrar"
+                >
+                  <Campo
+                    nombre="fecha"
+                    etiqueta="Fecha de cierre"
+                    tipo="date"
+                    valor={hoyISO()}
+                    error={errores.fecha}
+                    requerido
+                  />
+                  <div class="formulario__acciones">
+                    <button class="btn btn--primary" type="submit">Cerrar comprobación</button>
+                  </div>
+                </Formulario>
+              ) : (
+                <p class="apagado" style="font-size: 0.85rem;">
+                  Todavía faltan {formatoMXN(pendienteComprobar)} entre recibos y devolución.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )
+    }
+
+    <section class="tarjeta">
+      <h2>Documentos</h2>
+      {
+        documentos.length === 0 ? (
+          <p class="apagado">Sin documentos adjuntos.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Fecha</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Descripción</th>
+                  <th scope="col">Archivo</th>
+                  <th scope="col">Subió</th>
+                </tr>
+              </thead>
+              <tbody>
+                {documentos.map((d) => (
+                  <tr>
+                    <td>{NOMBRE_DOCUMENTO[d.tipo] ?? d.tipo}</td>
+                    <td>{formatoFechaCorta(d.fecha)}</td>
+                    <td class="num">
+                      {d.monto_centavos !== null ? formatoMXN(d.monto_centavos) : '—'}
+                    </td>
+                    <td>{d.descripcion ?? ''}</td>
+                    <td>
+                      {d.archivo_id ? (
+                        <a href={`/comprobantes/${d.archivo_id}`}>{d.archivo_nombre}</a>
+                      ) : (
+                        <span class="apagado">—</span>
+                      )}
+                    </td>
+                    <td class="apagado">{d.subido_nombre ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+
+      {
+        egreso.estado !== 'rechazado' && egreso.estado !== 'cancelado' && (
+          <details style="margin-top: 1rem;">
+            <summary style="cursor: pointer;">Adjuntar documento</summary>
+            <div style="margin-top: 0.75rem; max-width: 26rem;">
+              {seccion === 'documento' && <ResumenErrores errores={errores} />}
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonces.documento}
+                accionInterna="documento"
+                archivos
+              >
+                <Selector
+                  nombre="tipo"
+                  etiqueta="Tipo"
+                  opciones={opcionesDocumento}
+                  valor="comprobante_pago"
+                  error={errores.tipo}
+                  requerido
+                />
+                <Campo
+                  nombre="fecha"
+                  etiqueta="Fecha"
+                  tipo="date"
+                  valor={hoyISO()}
+                  error={errores.fecha}
+                  requerido
+                />
+                <Campo
+                  nombre="descripcion"
+                  etiqueta="Descripción"
+                  error={errores.descripcion}
+                />
+                <Campo
+                  nombre="archivo"
+                  etiqueta="Archivo"
+                  tipo="file"
+                  error={errores.archivo}
+                  aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                  requerido
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">Adjuntar</button>
+                </div>
+              </Formulario>
+            </div>
+          </details>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

@@ -1,0 +1,207 @@
+---
+/*
+ * Estado de cuenta de cápitas de un hermano, para imprimir y entregárselo.
+ */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import {
+  NOMBRE_MODALIDAD,
+  adeudosDeHermano,
+  condonacionesDeHermano,
+  estadoDeCuenta,
+  pagosDeHermano,
+  planVigente,
+  saldoAFavorDisponible,
+} from '@lib/datos/capitas';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { foliosDeRecibo } from '@lib/datos/movimientos';
+import { obtenerHermano } from '@lib/datos/hermanos';
+import { formatoCifra, formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, formatoFechaLarga, hoyISO, nombrePeriodo } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+void sesion;
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const hermano = await obtenerHermano(id);
+if (!hermano) return new Response('No encontrado', { status: 404 });
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const [cuenta, meses, pagos, condonaciones, plan, disponible] = await Promise.all([
+  estadoDeCuenta(id, anio),
+  adeudosDeHermano(id, anio),
+  pagosDeHermano(id, anio),
+  condonacionesDeHermano(id, anio),
+  planVigente(id, anio),
+  saldoAFavorDisponible(id),
+]);
+
+const folios = new Map(
+  (await foliosDeRecibo(pagos.map((p) => p.movimiento_id))).map((f) => [
+    f.movimiento_id,
+    f.folio,
+  ]),
+);
+
+const ETIQUETA_ESTADO: Record<string, string> = {
+  cubierto: 'Cubierto',
+  parcial: 'Pago parcial',
+  pendiente: 'Pendiente',
+  vencido: 'Vencido',
+  vencido_parcial: 'Vencido, pago parcial',
+};
+---
+
+<LayoutImpresion
+  titulo={`Estado de cuenta de ${hermano.nombre_completo}`}
+  periodo={`Estado de cuenta de cápitas · Ejercicio ${anio}`}
+  volverA={`/capitas/hermano/${id}`}
+  firmas={['El Tesorero']}
+>
+  <p style="margin: 0.25rem 0 0;">
+    <strong>{hermano.nombre_completo}</strong> · {NOMBRE_GRADO[hermano.grado]}
+    {plan && <> · Modalidad: {NOMBRE_MODALIDAD[plan.modalidad]}</>}
+  </p>
+  <p style="margin: 0.25rem 0 0; font-size: 9pt; color: #444444;">
+    Emitido el {formatoFechaLarga(hoyISO())}
+  </p>
+
+  {
+    cuenta && (
+      <>
+        <h2>Resumen</h2>
+        <table class="resumen">
+          <tbody>
+            <tr>
+              <td>Esperado del ejercicio</td>
+              <td class="num">{formatoMXN(cuenta.esperado_centavos)}</td>
+            </tr>
+            <tr>
+              <td>Pagado</td>
+              <td class="num">{formatoMXN(cuenta.pagado_centavos)}</td>
+            </tr>
+            {cuenta.condonado_centavos > 0 && (
+              <tr>
+                <td>Exento</td>
+                <td class="num">{formatoMXN(cuenta.condonado_centavos)}</td>
+              </tr>
+            )}
+            <tr>
+              <td>
+                <strong>Adeudo</strong>
+              </td>
+              <td class="num">
+                <strong>{formatoMXN(cuenta.adeudo_centavos)}</strong>
+              </td>
+            </tr>
+            {disponible > 0 && (
+              <tr>
+                <td>Saldo a favor</td>
+                <td class="num">{formatoMXN(disponible)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
+  <h2>Mes por mes</h2>
+  {
+    meses.length === 0 ? (
+      <p>Sin cargos de cápita en {anio}.</p>
+    ) : (
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Mes</th>
+            <th scope="col" class="num">Esperado</th>
+            <th scope="col" class="num">Pagado</th>
+            <th scope="col" class="num">Exento</th>
+            <th scope="col" class="num">Saldo</th>
+            <th scope="col">Situación</th>
+          </tr>
+        </thead>
+        <tbody>
+          {meses.map((m) => (
+            <tr>
+              <td>{nombrePeriodo(m.periodo.slice(0, 7))}</td>
+              <td class="num">{formatoCifra(m.monto_esperado_centavos)}</td>
+              <td class="num">{m.pagado_centavos > 0 ? formatoCifra(m.pagado_centavos) : '—'}</td>
+              <td class="num">
+                {m.condonado_centavos > 0 ? formatoCifra(m.condonado_centavos) : '—'}
+              </td>
+              <td class="num">{m.saldo_centavos > 0 ? formatoCifra(m.saldo_centavos) : '—'}</td>
+              <td>{ETIQUETA_ESTADO[m.estado_pago] ?? m.estado_pago}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
+  <h2>Pagos del ejercicio</h2>
+  {
+    pagos.length === 0 ? (
+      <p>Sin pagos registrados en {anio}.</p>
+    ) : (
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Recibo</th>
+            <th scope="col" class="num">Monto</th>
+            <th scope="col">Meses que cubrió</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pagos.map((p) => (
+            <tr>
+              <td>{formatoFechaCorta(p.fecha)}</td>
+              <td>{folios.get(p.movimiento_id) ?? '—'}</td>
+              <td class="num">{formatoCifra(p.monto_centavos)}</td>
+              <td>{p.meses ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
+  {
+    condonaciones.length > 0 && (
+      <>
+        <h2>Exenciones autorizadas</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Mes</th>
+              <th scope="col" class="num">Monto</th>
+              <th scope="col">Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {condonaciones.map((c) => (
+              <tr>
+                <td>{nombrePeriodo(c.periodo.slice(0, 7))}</td>
+                <td class="num">{formatoCifra(c.monto_centavos)}</td>
+                <td>{c.motivo}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
+  <p class="sello">
+    Estado de cuenta informativo, generado por el sistema de tesorería. Los montos en
+    firme son los del corte mensual leído en tenida.
+  </p>
+</LayoutImpresion>

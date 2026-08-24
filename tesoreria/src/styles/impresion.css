@@ -1,0 +1,209 @@
+/*
+ * Vista imprimible del corte mensual.
+ *
+ * Se imprime con Ctrl+P del navegador, sin generar PDF en el servidor: eso
+ * costaría un Chromium o una librería pesada en el VPS para resolver algo que el
+ * navegador ya hace bien.
+ *
+ * Tinta negra sobre blanco, no dorado sobre negro: un corte se archiva en papel.
+ */
+@import './heredado/tokens.css' layer(base);
+
+@layer app {
+  :root {
+    color-scheme: light;
+
+    --md-sys-color-background: #ffffff;
+    --md-sys-color-surface: #ffffff;
+    --md-sys-color-on-surface: #111111;
+    --md-sys-color-on-surface-variant: #444444;
+    --md-sys-color-outline: #666666;
+    --md-sys-color-outline-variant: #bbbbbb;
+    --md-sys-color-primary: #000000;
+  }
+
+  body {
+    background: #ffffff;
+    color: #111111;
+    font-family: var(--font-body);
+    font-size: 10.5pt;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .hoja {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+  }
+
+  .hoja__encabezado {
+    text-align: center;
+    border-bottom: 2px solid #111111;
+    padding-bottom: 0.6rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .hoja__logia {
+    font-family: var(--font-display);
+    font-size: 15pt;
+    margin: 0;
+  }
+
+  .hoja__subtitulo {
+    font-family: var(--font-label);
+    font-size: 8.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #444444;
+    margin: 0.25rem 0 0;
+  }
+
+  .hoja__periodo {
+    font-family: var(--font-display);
+    font-size: 13pt;
+    margin: 0.5rem 0 0;
+  }
+
+  .hoja h2 {
+    font-family: var(--font-label);
+    font-size: 9pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #111111;
+    padding-bottom: 0.2rem;
+    margin: 1.4rem 0 0.5rem;
+  }
+
+  .hoja table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+
+  .hoja th,
+  .hoja td {
+    border-bottom: 1px solid #dddddd;
+    padding: 0.28rem 0.4rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .hoja th {
+    font-family: var(--font-label);
+    font-size: 8pt;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 400;
+    color: #444444;
+    border-bottom: 1px solid #111111;
+  }
+
+  .hoja .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .hoja tfoot td {
+    font-weight: 700;
+    border-top: 1.5px solid #111111;
+    border-bottom: none;
+  }
+
+  .resumen {
+    width: 100%;
+    max-width: 20rem;
+    margin-left: auto;
+  }
+
+  .resumen td:first-child {
+    color: #444444;
+  }
+
+  /* Marca de agua para un corte que todavía no se cierra. */
+  .borrador {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .borrador span {
+    font-family: var(--font-label);
+    font-size: 4rem;
+    letter-spacing: 0.3em;
+    color: rgb(0 0 0 / 0.07);
+    transform: rotate(-24deg);
+    text-transform: uppercase;
+  }
+
+  .sello {
+    font-size: 8.5pt;
+    color: #444444;
+    margin-top: 0.6rem;
+  }
+
+  /* Líneas de firma del Tesorero y del Venerable Maestro. */
+  .firmas {
+    display: flex;
+    gap: 2.5rem;
+    margin-top: 3.5rem;
+    page-break-inside: avoid;
+  }
+
+  .firmas div {
+    flex: 1;
+    text-align: center;
+    border-top: 1px solid #111111;
+    padding-top: 0.35rem;
+    font-size: 9pt;
+  }
+
+  .firmas span {
+    display: block;
+    font-family: var(--font-label);
+    font-size: 7.5pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #444444;
+  }
+
+  .acciones-impresion {
+    max-width: 46rem;
+    margin: 1rem auto 0;
+    padding: 0 1.25rem;
+    display: flex;
+    gap: 0.75rem;
+  }
+}
+
+@page {
+  size: letter;
+  margin: 18mm;
+}
+
+@media print {
+  .no-imprimir {
+    display: none !important;
+  }
+
+  .hoja {
+    padding: 0;
+    max-width: none;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+}

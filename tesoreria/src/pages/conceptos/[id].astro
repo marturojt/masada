@@ -1,0 +1,164 @@
+---
+/* Edición de un concepto del catálogo. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { editarConcepto } from '@lib/casos/conceptos';
+import { emitirNonce } from '@lib/csrf';
+import { obtenerConcepto, usoDeConceptos } from '@lib/datos/conceptos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaConcepto } from '@lib/esquemas/movimiento';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+let concepto = await obtenerConcepto(id);
+if (!concepto) return new Response('No encontrado', { status: 404 });
+
+const ETIQUETAS: Record<string, string> = {
+  nombre: 'Nombre',
+  naturaleza: 'Naturaleza',
+  orden: 'Orden',
+  notas: 'Notas',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  nombre: concepto.nombre,
+  naturaleza: concepto.naturaleza,
+  orden: String(concepto.orden),
+  notas: concepto.notas ?? '',
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaConcepto,
+    proposito: 'concepto_editar',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await editarConcepto(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        id,
+        resultado.datos,
+      );
+      return Astro.redirect('/conceptos?ok=concepto', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+concepto = (await obtenerConcepto(id))!;
+const usos = (await usoDeConceptos()).find((u) => u.concepto_id === id)?.usos ?? 0;
+const nonce = await emitirNonce(sesion.idHash, 'concepto_editar');
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={`Concepto ${concepto.nombre}`} sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/conceptos">← Catálogo</a></span>
+    <span>Clave: {concepto.clave}</span>
+    <span>{usos} movimiento(s) lo usan</span>
+  </div>
+
+  <h1>Editar concepto</h1>
+  {
+    !concepto.seleccionable && (
+      <div class="aviso">
+        Este concepto lo usa el sistema por su cuenta. Puedes cambiarle el nombre y las
+        notas, pero su comportamiento está atado a la clave <code>{concepto.clave}</code>.
+      </div>
+    )
+  }
+
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+    <Campo
+      nombre="nombre"
+      etiqueta={ETIQUETAS.nombre!}
+      valor={valores.nombre}
+      error={errores.nombre}
+      requerido
+    />
+
+    <input type="hidden" name="naturaleza" value={concepto.naturaleza} />
+    <div class="campo">
+      <span class="campo__etiqueta">Naturaleza</span>
+      <p style="margin: 0;">
+        {concepto.naturaleza === 'ingreso' ? 'Ingreso' : 'Egreso'}
+        <span class="apagado"> · no se puede cambiar</span>
+      </p>
+      {errores.naturaleza && <span class="campo__error">{errores.naturaleza}</span>}
+    </div>
+
+    <div class="campo">
+      <span class="campo__etiqueta">Reglas</span>
+      <label style="display: block; font-size: 0.85rem;">
+        <input
+          type="checkbox"
+          name="requiere_hermano"
+          style="width: auto;"
+          checked={concepto.requiere_hermano}
+        />
+        {' '}Exige indicar el hermano
+      </label>
+      <label style="display: block; font-size: 0.85rem;">
+        <input
+          type="checkbox"
+          name="requiere_comprobante"
+          style="width: auto;"
+          checked={concepto.requiere_comprobante}
+        />
+        {' '}Exige imagen de comprobante
+      </label>
+      <label style="display: block; font-size: 0.85rem;">
+        <input
+          type="checkbox"
+          name="por_comprobar_por_defecto"
+          style="width: auto;"
+          checked={concepto.por_comprobar_por_defecto}
+        />
+        {' '}Normalmente se entrega por comprobar
+      </label>
+    </div>
+
+    <Campo
+      nombre="orden"
+      etiqueta={ETIQUETAS.orden!}
+      valor={valores.orden}
+      error={errores.orden}
+      modoTeclado="numeric"
+    />
+
+    <Campo
+      nombre="notas"
+      etiqueta={ETIQUETAS.notas!}
+      valor={valores.notas}
+      error={errores.notas}
+      largo
+      filas={2}
+    />
+
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Guardar concepto</button>
+      <a class="btn btn--ghost" href="/conceptos">Cancelar</a>
+    </div>
+  </Formulario>
+</LayoutAdmin>

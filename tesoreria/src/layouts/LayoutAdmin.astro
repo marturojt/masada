@@ -1,0 +1,34 @@
+---
+/* Shell del panel. Nunca indexable, sin OG, sin RSS, sin analítica. */
+import '@styles/admin.css';
+import NavAdmin from '@componentes/NavAdmin.astro';
+import type { Sesion } from '@lib/sesion';
+
+interface Props {
+  titulo: string;
+  sesion: Sesion;
+  /** Ancho angosto para formularios de captura. */
+  angosto?: boolean;
+}
+
+const { titulo, sesion, angosto = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{titulo} · Tesorería Masada 324</title>
+  </head>
+  <body>
+    <NavAdmin sesion={sesion}>
+      <slot name="contexto" slot="contexto" />
+    </NavAdmin>
+
+    <main class:list={['panel', angosto && 'panel--angosto']}>
+      <slot />
+    </main>
+  </body>
+</html>

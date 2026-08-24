@@ -1,0 +1,199 @@
+---
+/*
+ * Tarifas de la Gran Tesorería: lo que ella cobra por hermano (cápita, templo,
+ * locker). Sirven para el cálculo esperado; lo exigible sigue siendo lo que GT
+ * reporta. Solo aplican hacia adelante, nunca en retroactivo.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { capturarTarifaGT } from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import { NOMBRE_CONCEPTO_GT, historialTarifasGT, tarifasGTVigentes } from '@lib/datos/gt';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaTarifaGT } from '@lib/esquemas/gt';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import type { Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ETIQUETAS: Record<string, string> = {
+  concepto: 'Concepto',
+  descripcion: 'Descripción',
+  monto: 'Monto mensual por hermano',
+  vigente_desde: 'Vigente desde',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { vigente_desde: hoyISO() };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaTarifaGT,
+    proposito: 'gt_tarifa',
+    sesion,
+  });
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await capturarTarifaGT(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+      );
+      return Astro.redirect('/gran-tesoreria/tarifas?ok=tarifa', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const [vigentes, historial] = await Promise.all([tarifasGTVigentes(), historialTarifasGT()]);
+const nonce = await emitirNonce(sesion.idHash, 'gt_tarifa');
+
+const opcionesConcepto: Opcion[] = Object.entries(NOMBRE_CONCEPTO_GT).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Tarifas GT" sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Tarifas de la Gran Tesorería</h1>
+  <p class="apagado">
+    Con estas tarifas y la membresía vigente se arma el cálculo esperado. Una tarifa
+    nueva aplica de su fecha en adelante; las anteriores no se tocan, para que los
+    cálculos viejos sigan cuadrando.
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Vigentes hoy</h2>
+      {
+        vigentes.length === 0 ? (
+          <p class="apagado">Sin tarifas capturadas. El cálculo esperado quedará vacío hasta capturarlas.</p>
+        ) : (
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th class="num">Monto mensual</th>
+                <th>Vigente desde</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vigentes.map((t) => (
+                <tr>
+                  <td>
+                    {NOMBRE_CONCEPTO_GT[t.concepto]}
+                    {t.descripcion && <span class="apagado"> · {t.descripcion}</span>}
+                  </td>
+                  <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                  <td>{formatoFechaCorta(t.vigencia_desde)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Capturar tarifa</h2>
+      <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+        <Selector
+          nombre="concepto"
+          etiqueta={ETIQUETAS.concepto!}
+          opciones={opcionesConcepto}
+          valor={valores.concepto}
+          error={errores.concepto}
+          requerido
+        />
+        <Campo
+          nombre="descripcion"
+          etiqueta={ETIQUETAS.descripcion!}
+          valor={valores.descripcion}
+          error={errores.descripcion}
+          ayuda="Obligatoria solo si el concepto es Otro, para saber qué es."
+        />
+        <Campo
+          nombre="monto"
+          etiqueta={ETIQUETAS.monto!}
+          valor={valores.monto}
+          error={errores.monto}
+          modoTeclado="decimal"
+          monto
+          requerido
+        />
+        <Campo
+          nombre="vigente_desde"
+          etiqueta={ETIQUETAS.vigente_desde!}
+          tipo="date"
+          valor={valores.vigente_desde}
+          error={errores.vigente_desde}
+          min={hoyISO()}
+          requerido
+          ayuda="Hoy o una fecha futura. Las tarifas no aplican en retroactivo."
+        />
+        <button class="btn btn--primary" type="submit">Capturar tarifa</button>
+      </Formulario>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Historial</h2>
+      {
+        historial.length === 0 ? (
+          <p class="apagado">Vacío.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th class="num">Monto</th>
+                  <th>Desde</th>
+                  <th>Hasta</th>
+                  <th>Capturó</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historial.map((t) => (
+                  <tr>
+                    <td>
+                      {NOMBRE_CONCEPTO_GT[t.concepto]}
+                      {t.descripcion && <span class="apagado"> · {t.descripcion}</span>}
+                    </td>
+                    <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                    <td>{formatoFechaCorta(t.vigencia_desde)}</td>
+                    <td>{t.vigencia_hasta ? formatoFechaCorta(t.vigencia_hasta) : 'Vigente'}</td>
+                    <td>{t.creado_nombre ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

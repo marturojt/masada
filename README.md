@@ -6,6 +6,11 @@ M∴R∴G∴L∴ Valle de México. Construido con **Astro + MDX**, salida estát
 - **Producción:** https://masada324.org
 - **Contacto:** hola@masada324.org
 
+> Este repositorio tiene **dos proyectos**. En la raíz vive el sitio público, que es
+> lo que documenta este archivo. En `tesoreria/` vive el sistema interno de
+> tesorería, que es una aplicación aparte, con su propia base de datos y su propio
+> `README.md`. El sitio no depende de ella y `deploy/publish.sh` no cambió.
+
 ---
 
 ## Stack
@@ -83,6 +88,11 @@ Los `tags` son **funcionales**: cada uno enlaza a `/noticias/tag/<slug>/` (slug 
 acentos). Las tres notas más recientes aparecen en la home.
 
 ### Cuadro logial (por año)
+
+> Desde que existe `tesoreria/`, el padrón vive ahí y este archivo se **genera**:
+> `cd tesoreria && npm run exportar:cuadro -- --escribir`. Editarlo a mano sigue
+> funcionando, pero la siguiente exportación lo sobrescribe.
+
 Crea/edita `src/content/cuadro/<año>.json`:
 
 ```json
@@ -112,7 +122,24 @@ Notas importantes:
 ### Past Masters
 Edita `src/content/pastmasters/historico.json` (lista `items` con `anio` y `nombre`).
 Un Past Master es quien **concluyó** el cargo de V∴M∴; el venerable vigente NO va aquí
-(ya aparece en Dignatarios).
+(ya aparece en Dignatarios). También lo genera la exportación de `tesoreria/`.
+
+---
+
+## Tesorería (`tesoreria/`)
+
+Sistema interno, no público: padrón de hermanos, cápitas, ingresos y egresos con
+comprobantes, doble firma del tesorero y el Venerable Maestro, y cortes mensuales.
+Astro 7 con SSR, PostgreSQL y su propio `package.json`.
+
+```bash
+cd tesoreria
+npm install
+npm run dev        # http://127.0.0.1:4322
+```
+
+Detalles completos en `tesoreria/README.md`. Lo único que toca al sitio público es
+la exportación del cuadro logial, y solo cuando se pide con `--escribir`.
 
 ---
 

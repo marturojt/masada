@@ -1,0 +1,190 @@
+---
+/* Registro de un ingreso con comprobante opcional. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { registrarIngreso } from '@lib/casos/ingresos';
+import { emitirNonce } from '@lib/csrf';
+import { listarConceptos } from '@lib/datos/conceptos';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import { NOMBRE_TARIFA, tarifasVigentes } from '@lib/datos/tarifas';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaIngreso } from '@lib/esquemas/movimiento';
+import { procesarFormulario } from '@lib/formulario';
+import { hoyISO } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const ejercicio = await ejercicioVigente();
+
+const conceptos = await listarConceptos({
+  naturaleza: 'ingreso',
+  soloSeleccionables: true,
+});
+const hermanos = await hermanosActivos();
+const tarifas = await tarifasVigentes();
+
+const ETIQUETAS: Record<string, string> = {
+  fecha: 'Fecha',
+  concepto_id: 'Concepto',
+  monto: 'Monto',
+  bolsa: 'Bolsa',
+  hermano_id: 'Hermano',
+  descripcion: 'Descripción',
+  comprobante: 'Comprobante',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { fecha: hoyISO() };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaIngreso,
+    proposito: 'ingreso_nuevo',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await registrarIngreso(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+        resultado.archivos.comprobante,
+      );
+      return Astro.redirect('/ingresos?ok=ingreso', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const nonce = await emitirNonce(sesion.idHash, 'ingreso_nuevo');
+
+const opcionesConcepto: Opcion[] = conceptos.map((c) => ({
+  valor: String(c.id),
+  texto: c.requiere_hermano ? `${c.nombre} (pide hermano)` : c.nombre,
+}));
+
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Registrar ingreso" sesion={sesion} angosto>
+  <h1>Registrar ingreso</h1>
+  <p class="apagado">
+    Para cápitas usa <a href="/capitas">el módulo de cápitas</a>, ahí se aplican a los
+    meses que cubren.
+  </p>
+
+  {
+    tarifas.length > 0 && (
+      <div class="aviso">
+        Tarifas vigentes:{' '}
+        {tarifas
+          .map((t) => `${NOMBRE_TARIFA[t.tipo_evento]} ${formatoMXN(t.monto_centavos)}`)
+          .join(' · ')}
+        . <a href="/tarifas">Ver tarifas</a>
+      </div>
+    )
+  }
+
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+    <Campo
+      nombre="fecha"
+      etiqueta={ETIQUETAS.fecha!}
+      tipo="date"
+      valor={valores.fecha}
+      error={errores.fecha}
+      min={ejercicio.fecha_inicio}
+      max={ejercicio.fecha_fin}
+      requerido
+    />
+
+    <Selector
+      nombre="concepto_id"
+      etiqueta={ETIQUETAS.concepto_id!}
+      opciones={opcionesConcepto}
+      valor={valores.concepto_id}
+      error={errores.concepto_id}
+      vacio="Elige un concepto"
+      requerido
+    />
+
+    <Campo
+      nombre="monto"
+      etiqueta={ETIQUETAS.monto!}
+      valor={valores.monto}
+      error={errores.monto}
+      modoTeclado="decimal"
+      ayuda="En pesos, por ejemplo 1500 o 1,500.50"
+      monto
+      requerido
+    />
+
+    <Selector
+      nombre="hermano_id"
+      etiqueta={ETIQUETAS.hermano_id!}
+      opciones={opcionesHermano}
+      valor={valores.hermano_id}
+      error={errores.hermano_id}
+      vacio="No aplica"
+      ayuda="Obligatorio en las cuotas de grado."
+    />
+
+
+    <Selector
+      nombre="bolsa"
+      etiqueta="Bolsa"
+      opciones={[
+        { valor: 'efectivo', texto: 'Efectivo' },
+        { valor: 'banco', texto: 'Banco' },
+      ]}
+      valor={valores.bolsa ?? 'efectivo'}
+      error={errores.bolsa}
+      requerido
+      ayuda="Efectivo si se recibió en la tenida, banco si fue transferencia."
+    />
+
+    <Campo
+      nombre="descripcion"
+      etiqueta={ETIQUETAS.descripcion!}
+      valor={valores.descripcion}
+      error={errores.descripcion}
+      ayuda="Si la dejas vacía se arma con el concepto y el hermano."
+    />
+
+    <Campo
+      nombre="comprobante"
+      etiqueta={ETIQUETAS.comprobante!}
+      tipo="file"
+      error={errores.comprobante}
+      aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+      ayuda="Opcional en ingresos. JPEG, PNG, WEBP, HEIC o PDF, hasta 10 MB."
+    />
+
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Registrar ingreso</button>
+      <a class="btn btn--ghost" href="/ingresos">Cancelar</a>
+    </div>
+  </Formulario>
+</LayoutAdmin>

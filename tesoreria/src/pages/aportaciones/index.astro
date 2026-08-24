@@ -1,0 +1,369 @@
+---
+/*
+ * Aportaciones extraordinarias. Dos naturalezas que no se mezclan:
+ * la monetaria es un ingreso normal (mueve caja, movimiento y recibo);
+ * la de especie deja constancia con folio APO- y JAMÁS toca el libro de caja.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import {
+  listarAportaciones,
+  registrarAportacionEspecie,
+  registrarAportacionMonetaria,
+} from '@lib/casos/aportaciones';
+import { emitirNonce } from '@lib/csrf';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaAportacionEspecie, esquemaAportacionMonetaria } from '@lib/esquemas/gt';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_BOLSA, NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const ETIQUETAS: Record<string, string> = {
+  fecha: 'Fecha',
+  monto: 'Monto',
+  bolsa: 'Por dónde entró',
+  hermano_id: 'Hermano (si es de un hermano)',
+  aportante_nombre: 'Nombre del aportante',
+  descripcion: 'Descripción',
+  destino: 'Destino o evento',
+  cantidad: 'Cantidad',
+  unidad: 'Unidad',
+  valor_estimado: 'Valor estimado',
+  comprobante: 'Comprobante',
+  evidencia: 'Evidencia',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { fecha: hoyISO() };
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    seccion = entrada.accion;
+    try {
+      if (entrada.accion === 'monetaria') {
+        const r = await validar(entrada, {
+          esquema: esquemaAportacionMonetaria,
+          proposito: 'aportacion_monetaria',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = { ...valores, ...r.valores };
+          estado = r.estado;
+        } else {
+          const creado = await registrarAportacionMonetaria(
+            { ...ctxBase, nonce: r.nonce },
+            { ...r.datos, hermano_id: r.datos.hermano_id ?? null },
+            entrada.archivos.comprobante,
+          );
+          return Astro.redirect(`/recibos/${creado.movimientoId}`, 303);
+        }
+      } else if (entrada.accion === 'especie') {
+        const r = await validar(entrada, {
+          esquema: esquemaAportacionEspecie,
+          proposito: 'aportacion_especie',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = { ...valores, ...r.valores };
+          estado = r.estado;
+        } else {
+          const creado = await registrarAportacionEspecie(
+            { ...ctxBase, nonce: r.nonce },
+            { ...r.datos, hermano_id: r.datos.hermano_id ?? null },
+            entrada.archivos.evidencia,
+          );
+          return Astro.redirect(`/aportaciones/${creado.id}/constancia`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const [aportaciones, hermanos] = await Promise.all([listarAportaciones(anio), hermanosActivos()]);
+const nonceMonetaria = await emitirNonce(sesion.idHash, 'aportacion_monetaria');
+const nonceEspecie = await emitirNonce(sesion.idHash, 'aportacion_especie');
+
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+const opcionesBolsa: Opcion[] = Object.entries(NOMBRE_BOLSA).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Aportaciones" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Aportaciones extraordinarias</h1>
+  <p class="apagado">
+    La aportación monetaria es un ingreso: entra a una bolsa y genera recibo. La de
+    especie (sillas, comida, un cuadro) queda registrada con su constancia, pero no toca
+    el libro de caja: su valor estimado es informativo y no entra en ningún saldo.
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Registradas en {anio}</h2>
+      {
+        aportaciones.length === 0 ? (
+          <p class="apagado">Sin aportaciones registradas este ejercicio.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Aportante</th>
+                  <th>Descripción</th>
+                  <th class="num">Monto o valor</th>
+                  <th>Documento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {aportaciones.map((a) => (
+                  <tr>
+                    <td>{formatoFechaCorta(a.fecha)}</td>
+                    <td>
+                      {a.tipo === 'monetaria' ? (
+                        <span class="insignia insignia--ok">Monetaria</span>
+                      ) : (
+                        <span class="insignia insignia--pendiente">Especie</span>
+                      )}
+                    </td>
+                    <td>{a.aportante_nombre}</td>
+                    <td>
+                      {a.descripcion}
+                      {a.destino && <span class="apagado"> · {a.destino}</span>}
+                      {a.tipo === 'especie' && a.cantidad && (
+                        <span class="apagado">
+                          {' '}· {Number(a.cantidad)} {a.unidad ?? 'pieza(s)'}
+                        </span>
+                      )}
+                    </td>
+                    <td class="num">
+                      {a.tipo === 'monetaria' ? (
+                        ''
+                      ) : a.valor_estimado_centavos != null ? (
+                        <span class="apagado">≈ {formatoMXN(a.valor_estimado_centavos)}</span>
+                      ) : (
+                        <span class="apagado">Sin valuar</span>
+                      )}
+                    </td>
+                    <td>
+                      {a.tipo === 'monetaria' && a.movimiento_id ? (
+                        <a href={`/recibos/${a.movimiento_id}`}>Recibo</a>
+                      ) : (
+                        <a href={`/aportaciones/${a.id}/constancia`}>Constancia {a.folio}</a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+      <p class="apagado" style="font-size: 0.85rem;">
+        El monto de las monetarias vive en el libro de caja como cualquier ingreso;
+        se consulta en Ingresos. Aquí solo se distingue su origen.
+      </p>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.25rem;">
+      <section class="tarjeta">
+        <h2>Aportación monetaria</h2>
+        <details open={seccion === 'monetaria'}>
+          <summary>Registrar</summary>
+          <Formulario csrf={sesion.csrfToken} nonce={nonceMonetaria} archivos accionInterna="monetaria">
+            <Campo
+              nombre="fecha"
+              etiqueta={ETIQUETAS.fecha!}
+              tipo="date"
+              valor={valores.fecha}
+              error={seccion === 'monetaria' ? errores.fecha : undefined}
+              requerido
+            />
+            <Campo
+              nombre="monto"
+              etiqueta={ETIQUETAS.monto!}
+              valor={valores.monto}
+              error={seccion === 'monetaria' ? errores.monto : undefined}
+              modoTeclado="decimal"
+              monto
+              requerido
+            />
+            <Selector
+              nombre="bolsa"
+              etiqueta={ETIQUETAS.bolsa!}
+              opciones={opcionesBolsa}
+              valor={valores.bolsa}
+              error={seccion === 'monetaria' ? errores.bolsa : undefined}
+              requerido
+            />
+            <Selector
+              nombre="hermano_id"
+              etiqueta={ETIQUETAS.hermano_id!}
+              opciones={opcionesHermano}
+              valor={valores.hermano_id}
+              error={seccion === 'monetaria' ? errores.hermano_id : undefined}
+              vacio="No es de un hermano"
+            />
+            <Campo
+              nombre="aportante_nombre"
+              etiqueta={ETIQUETAS.aportante_nombre!}
+              valor={valores.aportante_nombre}
+              error={seccion === 'monetaria' ? errores.aportante_nombre : undefined}
+              requerido
+              ayuda="Como debe aparecer en el recibo."
+            />
+            <Campo
+              nombre="descripcion"
+              etiqueta={ETIQUETAS.descripcion!}
+              valor={valores.descripcion}
+              error={seccion === 'monetaria' ? errores.descripcion : undefined}
+              requerido
+            />
+            <Campo
+              nombre="destino"
+              etiqueta={ETIQUETAS.destino!}
+              valor={valores.destino}
+              error={seccion === 'monetaria' ? errores.destino : undefined}
+            />
+            <Campo
+              nombre="comprobante"
+              etiqueta={ETIQUETAS.comprobante!}
+              tipo="file"
+              error={seccion === 'monetaria' ? errores.comprobante : undefined}
+              aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+              ayuda="Opcional, como en cualquier ingreso."
+            />
+            <button class="btn btn--primary" type="submit">Registrar y generar recibo</button>
+          </Formulario>
+        </details>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Aportación en especie</h2>
+        <details open={seccion === 'especie'}>
+          <summary>Registrar</summary>
+          <Formulario csrf={sesion.csrfToken} nonce={nonceEspecie} archivos accionInterna="especie">
+            <Campo
+              nombre="fecha"
+              etiqueta={ETIQUETAS.fecha!}
+              tipo="date"
+              valor={valores.fecha}
+              error={seccion === 'especie' ? errores.fecha : undefined}
+              requerido
+            />
+            <Selector
+              nombre="hermano_id"
+              etiqueta={ETIQUETAS.hermano_id!}
+              opciones={opcionesHermano}
+              valor={valores.hermano_id}
+              error={seccion === 'especie' ? errores.hermano_id : undefined}
+              vacio="No es de un hermano"
+            />
+            <Campo
+              nombre="aportante_nombre"
+              etiqueta={ETIQUETAS.aportante_nombre!}
+              valor={valores.aportante_nombre}
+              error={seccion === 'especie' ? errores.aportante_nombre : undefined}
+              requerido
+            />
+            <Campo
+              nombre="descripcion"
+              etiqueta={ETIQUETAS.descripcion!}
+              valor={valores.descripcion}
+              error={seccion === 'especie' ? errores.descripcion : undefined}
+              requerido
+              ayuda="Qué se aportó: sillas, comida para el ágape, un cuadro."
+            />
+            <Campo
+              nombre="cantidad"
+              etiqueta={ETIQUETAS.cantidad!}
+              tipo="number"
+              valor={valores.cantidad}
+              error={seccion === 'especie' ? errores.cantidad : undefined}
+              min="0"
+              paso="any"
+              requerido
+            />
+            <Campo
+              nombre="unidad"
+              etiqueta={ETIQUETAS.unidad!}
+              valor={valores.unidad}
+              error={seccion === 'especie' ? errores.unidad : undefined}
+              ayuda="Piezas, kilos, cajas."
+            />
+            <Campo
+              nombre="valor_estimado"
+              etiqueta={ETIQUETAS.valor_estimado!}
+              valor={valores.valor_estimado}
+              error={seccion === 'especie' ? errores.valor_estimado : undefined}
+              modoTeclado="decimal"
+              monto
+              ayuda="Opcional e informativo. No entra en ningún saldo."
+            />
+            <Campo
+              nombre="destino"
+              etiqueta={ETIQUETAS.destino!}
+              valor={valores.destino}
+              error={seccion === 'especie' ? errores.destino : undefined}
+            />
+            <Campo
+              nombre="evidencia"
+              etiqueta={ETIQUETAS.evidencia!}
+              tipo="file"
+              error={seccion === 'especie' ? errores.evidencia : undefined}
+              aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+              ayuda="Foto o nota de lo aportado, si se tiene."
+            />
+            <button class="btn btn--primary" type="submit">Registrar y generar constancia</button>
+          </Formulario>
+        </details>
+      </section>
+    </div>
+  </div>
+</LayoutAdmin>

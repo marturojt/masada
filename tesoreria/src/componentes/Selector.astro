@@ -1,0 +1,82 @@
+---
+/* Lista de opciones. Sin JavaScript: es un <select> normal. */
+import type { Opcion } from '@lib/tipos';
+
+interface Props {
+  nombre: string;
+  etiqueta: string;
+  opciones: Opcion[];
+  valor?: string | number | null;
+  error?: string | undefined;
+  ayuda?: string;
+  requerido?: boolean;
+  /** Texto de la opción vacía. Si no se pasa, no hay opción vacía. */
+  vacio?: string;
+}
+
+const {
+  nombre,
+  etiqueta,
+  opciones,
+  valor,
+  error,
+  ayuda,
+  requerido = false,
+  vacio,
+} = Astro.props;
+
+const idCampo = `campo-${nombre}`;
+const idError = `${idCampo}-error`;
+const idAyuda = `${idCampo}-ayuda`;
+const descrito = [error ? idError : null, ayuda ? idAyuda : null]
+  .filter(Boolean)
+  .join(' ');
+const seleccionado = valor == null ? '' : String(valor);
+
+/* Se conserva el orden de llegada de los grupos. */
+const grupos: { nombre: string | null; opciones: Opcion[] }[] = [];
+for (const opcion of opciones) {
+  const clave = opcion.grupo ?? null;
+  const ultimo = grupos.at(-1);
+  if (ultimo && ultimo.nombre === clave) ultimo.opciones.push(opcion);
+  else grupos.push({ nombre: clave, opciones: [opcion] });
+}
+---
+
+<div class="campo">
+  <label class="campo__etiqueta" for={idCampo}>
+    {etiqueta}{requerido && <span aria-hidden="true"> *</span>}
+  </label>
+
+  <select
+    id={idCampo}
+    name={nombre}
+    required={requerido}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={descrito || undefined}
+  >
+    {vacio !== undefined && <option value="">{vacio}</option>}
+    {
+      grupos.map((grupo) =>
+        grupo.nombre === null ? (
+          grupo.opciones.map((o) => (
+            <option value={o.valor} selected={o.valor === seleccionado}>
+              {o.texto}
+            </option>
+          ))
+        ) : (
+          <optgroup label={grupo.nombre}>
+            {grupo.opciones.map((o) => (
+              <option value={o.valor} selected={o.valor === seleccionado}>
+                {o.texto}
+              </option>
+            ))}
+          </optgroup>
+        ),
+      )
+    }
+  </select>
+
+  {ayuda && <span class="campo__ayuda" id={idAyuda}>{ayuda}</span>}
+  {error && <span class="campo__error" id={idError}>{error}</span>}
+</div>

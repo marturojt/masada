@@ -1,0 +1,467 @@
+---
+/*
+ * Ficha de una obligación GT: el desglose que reporta la Gran Tesorería, los
+ * pagos aplicados y las acciones (detalle, generar egreso, cancelar).
+ * Una sola página atiende todas las acciones, distinguidas por _accion.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import {
+  agregarDetalleObligacion,
+  cancelarObligacion,
+  generarEgresoDePago,
+} from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import {
+  NOMBRE_ESTATUS_OBLIGACION,
+  NOMBRE_TIPO_OBLIGACION,
+  aplicacionesDeObligacion,
+  detalleDeObligacion,
+  estadoAplomo,
+  obtenerObligacion,
+} from '@lib/datos/gt';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { esquemaMotivo } from '@lib/esquemas/egreso';
+import { esquemaDetalleObligacion } from '@lib/esquemas/gt';
+import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const ETIQUETAS: Record<string, string> = {
+  concepto: 'Concepto',
+  cantidad: 'Cantidad',
+  tarifa: 'Tarifa unitaria',
+  subtotal: 'Subtotal',
+  hermano_id: 'Hermano',
+  periodo: 'Periodo',
+  descripcion: 'Descripción',
+  motivo: 'Motivo de cancelación',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    seccion = entrada.accion;
+    try {
+      if (entrada.accion === 'detalle') {
+        const r = await validar(entrada, {
+          esquema: esquemaDetalleObligacion,
+          proposito: 'gt_detalle',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = r.valores;
+          estado = r.estado;
+        } else {
+          await agregarDetalleObligacion({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+          return Astro.redirect(`/gran-tesoreria/obligaciones/${id}?ok=detalle`, 303);
+        }
+      } else if (entrada.accion === 'generar_egreso') {
+        const r = await validar(entrada, {
+          esquema: esquemaVacio,
+          proposito: 'gt_generar_egreso',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          const creado = await generarEgresoDePago({ ...ctxBase, nonce: r.nonce }, [id]);
+          return Astro.redirect(`/egresos/${creado.egresoId}?ok=egreso`, 303);
+        }
+      } else if (entrada.accion === 'cancelar') {
+        const r = await validar(entrada, {
+          esquema: esquemaMotivo,
+          proposito: 'gt_cancelar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = r.valores;
+          estado = r.estado;
+        } else {
+          await cancelarObligacion({ ...ctxBase, nonce: r.nonce }, id, r.datos.motivo);
+          return Astro.redirect(`/gran-tesoreria/obligaciones/${id}?ok=cancelada`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const obligacion = await obtenerObligacion(id);
+if (!obligacion) return new Response('No encontrado', { status: 404 });
+
+const [detalle, aplicaciones, aplomo, hermanos] = await Promise.all([
+  detalleDeObligacion(id),
+  aplicacionesDeObligacion(id),
+  estadoAplomo(),
+  hermanosActivos(),
+]);
+
+const [nonceDetalle, nonceGenerar, nonceCancelar] = await Promise.all([
+  emitirNonce(sesion.idHash, 'gt_detalle'),
+  emitirNonce(sesion.idHash, 'gt_generar_egreso'),
+  emitirNonce(sesion.idHash, 'gt_cancelar'),
+]);
+
+const viva = obligacion.estatus === 'pendiente_pago' || obligacion.estatus === 'parcialmente_pagada';
+const totalDetalle = detalle.reduce((s, d) => s + d.subtotal_centavos, 0);
+const diferencia =
+  obligacion.monto_esperado_centavos != null
+    ? obligacion.monto_reportado_centavos - obligacion.monto_esperado_centavos
+    : null;
+
+const NOMBRE_CONCEPTO_DETALLE: Record<string, string> = {
+  capita: 'Cápita',
+  templo: 'Templo',
+  locker: 'Locker',
+  tramite: 'Trámite de grado',
+  otro: 'Otro',
+};
+
+const opcionesConcepto: Opcion[] = Object.entries(NOMBRE_CONCEPTO_DETALLE).map(
+  ([valor, texto]) => ({ valor, texto }),
+);
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+
+const CLASE_ESTATUS: Record<string, string> = {
+  pendiente_pago: 'insignia--alerta',
+  parcialmente_pagada: 'insignia--pendiente',
+  pagada: 'insignia--ok',
+  cancelada: '',
+};
+
+const rangoPeriodos =
+  obligacion.periodo_desde === obligacion.periodo_hasta
+    ? nombrePeriodo(obligacion.periodo_desde.slice(0, 7))
+    : `${nombrePeriodo(obligacion.periodo_desde.slice(0, 7))} a ${nombrePeriodo(obligacion.periodo_hasta.slice(0, 7))}`;
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={obligacion.folio} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+    <span>{NOMBRE_TIPO_OBLIGACION[obligacion.tipo]}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+    <h1>{obligacion.folio}</h1>
+    <span class:list={['insignia', CLASE_ESTATUS[obligacion.estatus]]}>
+      {NOMBRE_ESTATUS_OBLIGACION[obligacion.estatus]}
+    </span>
+  </div>
+
+  {
+    obligacion.tipo === 'tramite' && !aplomo.ordinario_a_plomo && viva && (
+      <div class="aviso aviso--error">
+        Aviso: la logia no está a plomo en lo ordinario. Los trámites ante la Gran
+        Tesorería suelen requerir estar a plomo; el sistema lo avisa pero la palabra
+        final la tiene la Gran Tesorería.
+      </div>
+    )
+  }
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Datos del documento</h2>
+      <div class="tabla-envoltura">
+      <table class="tabla">
+        <tbody>
+          <tr><th>Tipo</th><td>{NOMBRE_TIPO_OBLIGACION[obligacion.tipo]}</td></tr>
+          <tr><th>Ampara</th><td>{rangoPeriodos}</td></tr>
+          <tr><th>Fecha del documento</th><td>{formatoFechaCorta(obligacion.fecha_documento)}</td></tr>
+          <tr>
+            <th>Monto reportado por GT</th>
+            <td class="num">{formatoMXN(obligacion.monto_reportado_centavos)}</td>
+          </tr>
+          {
+            obligacion.monto_esperado_centavos != null && (
+              <tr>
+                <th>Esperado interno</th>
+                <td class="num">
+                  {formatoMXN(obligacion.monto_esperado_centavos)}
+                  {diferencia !== null && diferencia !== 0 && (
+                    <span class="insignia insignia--pendiente" style="margin-left: 0.5rem;">
+                      {diferencia > 0 ? '+' : ''}{formatoMXN(diferencia)} vs esperado
+                    </span>
+                  )}
+                </td>
+              </tr>
+            )
+          }
+          <tr>
+            <th>Pagado</th>
+            <td class="num">{formatoMXN(obligacion.pagado_centavos)}</td>
+          </tr>
+          <tr>
+            <th>Saldo</th>
+            <td class="num"><strong>{formatoMXN(obligacion.saldo_centavos)}</strong></td>
+          </tr>
+          {
+            obligacion.hermano_nombre && (
+              <tr>
+                <th>Hermano</th>
+                <td>
+                  <a href={`/hermanos/${obligacion.hermano_id}`}>{obligacion.hermano_nombre}</a>
+                </td>
+              </tr>
+            )
+          }
+          {
+            obligacion.documento_calculo_id && (
+              <tr>
+                <th>Documento del cálculo</th>
+                <td>
+                  <a href={`/comprobantes/${obligacion.documento_calculo_id}`}>Ver documento</a>
+                </td>
+              </tr>
+            )
+          }
+          {
+            obligacion.observaciones && (
+              <tr><th>Observaciones</th><td>{obligacion.observaciones}</td></tr>
+            )
+          }
+          {
+            obligacion.motivo_cancelacion && (
+              <tr><th>Motivo de cancelación</th><td>{obligacion.motivo_cancelacion}</td></tr>
+            )
+          }
+        </tbody>
+      </table>
+      </div>
+
+      {
+        viva && obligacion.saldo_centavos > 0 && (
+          <Formulario
+            csrf={sesion.csrfToken}
+            nonce={nonceGenerar}
+            accionInterna="generar_egreso"
+          >
+            <button class="btn btn--primary" type="submit">
+              Generar egreso por {formatoMXN(obligacion.saldo_centavos)}
+            </button>
+          </Formulario>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Desglose reportado</h2>
+      <p class="apagado">
+        Los renglones del documento de la Gran Tesorería, para saber qué ampara el monto.
+        Son informativos: lo exigible es el total reportado.
+      </p>
+      {
+        detalle.length === 0 ? (
+          <p class="apagado">Sin desglose capturado.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th>Hermano</th>
+                  <th>Periodo</th>
+                  <th class="num" scope="col">Cantidad</th>
+                  <th class="num" scope="col">Tarifa</th>
+                  <th class="num" scope="col">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalle.map((d) => (
+                  <tr>
+                    <td>
+                      {NOMBRE_CONCEPTO_DETALLE[d.concepto] ?? d.concepto}
+                      {d.descripcion && <span class="apagado"> · {d.descripcion}</span>}
+                    </td>
+                    <td>{d.hermano_nombre ?? ''}</td>
+                    <td>{d.periodo ? nombrePeriodo(d.periodo.slice(0, 7)) : ''}</td>
+                    <td class="num">{d.cantidad}</td>
+                    <td class="num">{d.tarifa_centavos != null ? formatoMXN(d.tarifa_centavos) : ''}</td>
+                    <td class="num">{formatoMXN(d.subtotal_centavos)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="5">Suma del desglose</th>
+                  <th class="num">
+                    {formatoMXN(totalDetalle)}
+                    {totalDetalle !== obligacion.monto_reportado_centavos && (
+                      <span class="insignia insignia--pendiente" style="margin-left: 0.5rem;">
+                        difiere del reportado
+                      </span>
+                    )}
+                  </th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )
+      }
+
+      {
+        viva && (
+          <details open={seccion === 'detalle'}>
+            <summary>Agregar renglón de desglose</summary>
+            <Formulario csrf={sesion.csrfToken} nonce={nonceDetalle} accionInterna="detalle">
+              <Selector
+                nombre="concepto"
+                etiqueta={ETIQUETAS.concepto!}
+                opciones={opcionesConcepto}
+                valor={valores.concepto}
+                error={seccion === 'detalle' ? errores.concepto : undefined}
+                requerido
+              />
+              <Campo
+                nombre="cantidad"
+                etiqueta={ETIQUETAS.cantidad!}
+                tipo="number"
+                valor={valores.cantidad ?? '1'}
+                error={seccion === 'detalle' ? errores.cantidad : undefined}
+                min="1"
+                requerido
+              />
+              <Campo
+                nombre="tarifa"
+                etiqueta={ETIQUETAS.tarifa!}
+                valor={valores.tarifa}
+                error={seccion === 'detalle' ? errores.tarifa : undefined}
+                modoTeclado="decimal"
+                monto
+                ayuda="Opcional, la tarifa unitaria que aplicó la Gran Tesorería."
+              />
+              <Campo
+                nombre="subtotal"
+                etiqueta={ETIQUETAS.subtotal!}
+                valor={valores.subtotal}
+                error={seccion === 'detalle' ? errores.subtotal : undefined}
+                modoTeclado="decimal"
+                monto
+                requerido
+              />
+              <Selector
+                nombre="hermano_id"
+                etiqueta={ETIQUETAS.hermano_id!}
+                opciones={opcionesHermano}
+                valor={valores.hermano_id}
+                error={seccion === 'detalle' ? errores.hermano_id : undefined}
+                vacio="No aplica"
+              />
+              <Campo
+                nombre="periodo"
+                etiqueta={ETIQUETAS.periodo!}
+                tipo="month"
+                valor={valores.periodo}
+                error={seccion === 'detalle' ? errores.periodo : undefined}
+                ayuda="El mes que ampara este renglón, si aplica."
+              />
+              <Campo
+                nombre="descripcion"
+                etiqueta={ETIQUETAS.descripcion!}
+                valor={valores.descripcion}
+                error={seccion === 'detalle' ? errores.descripcion : undefined}
+              />
+              <button class="btn btn--ghost" type="submit">Agregar renglón</button>
+            </Formulario>
+          </details>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Pagos aplicados</h2>
+      {
+        aplicaciones.length === 0 ? (
+          <p class="apagado">Sin pagos todavía. El pago se materializa al entregar el egreso.</p>
+        ) : (
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Pago</th>
+                <th>Fecha</th>
+                <th class="num" scope="col">Aplicado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {aplicaciones.map((a) => (
+                <tr>
+                  <td>{a.pago_folio}</td>
+                  <td>{formatoFechaCorta(a.fecha_pago)}</td>
+                  <td class="num">{formatoMXN(a.monto_centavos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      }
+    </section>
+
+    {
+      viva && obligacion.pagado_centavos === 0 && (
+        <section class="tarjeta">
+          <h2>Cancelar</h2>
+          <p class="apagado">
+            Solo si la Gran Tesorería sustituyó o anuló este documento. Una obligación
+            con pagos ya no se cancela.
+          </p>
+          <details open={seccion === 'cancelar'}>
+            <summary>Cancelar la obligación</summary>
+            <Formulario csrf={sesion.csrfToken} nonce={nonceCancelar} accionInterna="cancelar">
+              <Campo
+                nombre="motivo"
+                etiqueta={ETIQUETAS.motivo!}
+                valor={valores.motivo}
+                error={seccion === 'cancelar' ? errores.motivo : undefined}
+                largo
+                filas={2}
+                requerido
+              />
+              <button class="btn btn--ghost" type="submit">Cancelar obligación</button>
+            </Formulario>
+          </details>
+        </section>
+      )
+    }
+  </div>
+</LayoutAdmin>

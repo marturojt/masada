@@ -1,0 +1,492 @@
+---
+/*
+ * Ficha del hermano: datos, historial de grados, baja y reactivación.
+ * Una sola página atiende varias acciones, distinguidas por el campo _accion.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import {
+  agregarEventoGrado,
+  darDeBaja,
+  reactivarHermano,
+} from '@lib/casos/hermanos';
+import { actualizarRegistroExterno } from '@lib/casos/gt';
+import { NOMBRE_ESTATUS_EXTERNO, registrosExternosDe } from '@lib/datos/gt';
+import { esquemaRegistroExterno } from '@lib/esquemas/gt';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { historialGrados, obtenerHermano } from '@lib/datos/hermanos';
+import { emitirNonce } from '@lib/csrf';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import {
+  NOMBRE_EVENTO_GRADO,
+  NOMBRE_MOTIVO_BAJA,
+  NOMBRE_MOTIVO_INGRESO,
+  esquemaBaja,
+  esquemaEventoGrado,
+} from '@lib/esquemas/hermano';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const ejercicio = await ejercicioVigente();
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let seccion: 'baja' | 'grado' | 'registro_gran_secretaria' | 'registro_gran_tesoreria' | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const contexto = {
+      sesion,
+      anio: ejercicio.anio,
+      idPeticion: Astro.locals.idPeticion,
+    };
+
+    try {
+      if (entrada.accion === 'baja') {
+        seccion = 'baja';
+        const r = await validar(entrada, {
+          esquema: esquemaBaja,
+          proposito: 'hermano_baja',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await darDeBaja({ ...contexto, nonce: r.nonce }, id, r.datos);
+          return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
+        }
+      } else if (entrada.accion === 'reactivar') {
+        const r = await validar(entrada, {
+          esquema: esquemaVacio,
+          proposito: 'hermano_reactivar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await reactivarHermano({ ...contexto, nonce: r.nonce }, id);
+          return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
+        }
+      } else if (entrada.accion === 'grado') {
+        seccion = 'grado';
+        const r = await validar(entrada, {
+          esquema: esquemaEventoGrado,
+          proposito: 'hermano_grado',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await agregarEventoGrado({ ...contexto, nonce: r.nonce }, id, r.datos);
+          return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
+        }
+      } else if (
+        entrada.accion === 'registro_gran_secretaria' ||
+        entrada.accion === 'registro_gran_tesoreria'
+      ) {
+        seccion = entrada.accion;
+        const organismo =
+          entrada.accion === 'registro_gran_secretaria' ? 'gran_secretaria' : 'gran_tesoreria';
+        const r = await validar(entrada, {
+          esquema: esquemaRegistroExterno,
+          proposito: `registro_${organismo}`,
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await actualizarRegistroExterno({ ...contexto, nonce: r.nonce }, id, organismo, r.datos);
+          return Astro.redirect(`/hermanos/${id}?ok=registro`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const hermano = await obtenerHermano(id);
+if (!hermano) return new Response('No encontrado', { status: 404 });
+
+const historial = await historialGrados(id);
+const registros = await registrosExternosDe(id);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const nonceBaja = await emitirNonce(sesion.idHash, 'hermano_baja');
+const nonceReactivar = await emitirNonce(sesion.idHash, 'hermano_reactivar');
+const nonceGrado = await emitirNonce(sesion.idHash, 'hermano_grado');
+const nonceRegistroGS = await emitirNonce(sesion.idHash, 'registro_gran_secretaria');
+const nonceRegistroGT = await emitirNonce(sesion.idHash, 'registro_gran_tesoreria');
+
+const opcionesEstatusExterno: Opcion[] = Object.entries(NOMBRE_ESTATUS_EXTERNO).map(
+  ([valor, texto]) => ({ valor, texto }),
+);
+
+const ORGANISMOS = [
+  {
+    accion: 'registro_gran_secretaria' as const,
+    titulo: 'Gran Secretaría',
+    nota: 'La formalización de la pertenencia: cuándo se registró y desde cuándo surte efecto.',
+    registro: registros.gran_secretaria,
+    nonce: nonceRegistroGS,
+  },
+  {
+    accion: 'registro_gran_tesoreria' as const,
+    titulo: 'Gran Tesorería',
+    nota: 'Determina el cobro. Al ligar al hermano en una membresía este estatus se actualiza solo.',
+    registro: registros.gran_tesoreria,
+    nonce: nonceRegistroGT,
+  },
+];
+
+const opcionesEvento: Opcion[] = Object.entries(NOMBRE_EVENTO_GRADO).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
+const opcionesGrado: Opcion[] = (['aprendiz', 'companero', 'maestro'] as const).map((g) => ({
+  valor: g,
+  texto: NOMBRE_GRADO[g],
+}));
+const opcionesMotivoBaja: Opcion[] = Object.entries(NOMBRE_MOTIVO_BAJA).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={hermano.nombre_completo} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {ejercicio.anio}</span>
+    <span><a href="/hermanos">← Padrón</a></span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  {seccion === null && <ResumenErrores errores={errores} />}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <div>
+      <h1 style="margin-bottom: 0.2rem;">{hermano.nombre_completo}</h1>
+      <p class="apagado" style="margin: 0;">
+        {NOMBRE_GRADO[hermano.grado]}
+        {hermano.cargo_nombre && <> · {hermano.cargo_nombre}</>}
+        {hermano.estatus === 'baja' && (
+          <>
+            {' '}
+            <span class="insignia insignia--alerta">
+              Baja{hermano.motivo_baja ? `: ${NOMBRE_MOTIVO_BAJA[hermano.motivo_baja]}` : ''}
+            </span>
+          </>
+        )}
+      </p>
+    </div>
+    <div style="display: flex; gap: 0.6rem;">
+      <a class="btn btn--ghost" href={`/hermanos/${id}/editar`}>Editar</a>
+      <a class="btn btn--ghost" href={`/capitas/hermano/${id}`}>Estado de cápitas</a>
+    </div>
+  </div>
+
+  <div class="pila" style="margin-top: 1.5rem;">
+    <section class="tarjeta">
+      <h2>Datos</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <tbody>
+            <tr>
+              <th scope="row">Ingreso a la logia</th>
+              <td>
+                {formatoFechaCorta(hermano.fecha_ingreso)} ·{' '}
+                {NOMBRE_MOTIVO_INGRESO[hermano.motivo_ingreso] ?? hermano.motivo_ingreso}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Iniciación</th>
+              <td>
+                {hermano.fecha_iniciacion ? (
+                  formatoFechaCorta(hermano.fecha_iniciacion)
+                ) : (
+                  <span class="apagado">Sin dato</span>
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Afiliación</th>
+              <td>
+                {hermano.fecha_afiliacion ? (
+                  formatoFechaCorta(hermano.fecha_afiliacion)
+                ) : (
+                  <span class="apagado">Sin dato</span>
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Correo</th>
+              <td>{hermano.correo ?? <span class="apagado">Sin dato</span>}</td>
+            </tr>
+            <tr>
+              <th scope="row">Teléfono</th>
+              <td>{hermano.telefono ?? <span class="apagado">Sin dato</span>}</td>
+            </tr>
+            {
+              hermano.estatus === 'baja' && (
+                <tr>
+                  <th scope="row">Baja</th>
+                  <td>
+                    {hermano.fecha_baja && formatoFechaCorta(hermano.fecha_baja)} ·{' '}
+                    {hermano.motivo_baja ? NOMBRE_MOTIVO_BAJA[hermano.motivo_baja] : ''}
+                  </td>
+                </tr>
+              )
+            }
+            {
+              hermano.notas && (
+                <tr>
+                  <th scope="row">Notas</th>
+                  <td style="white-space: pre-line;">{hermano.notas}</td>
+                </tr>
+              )
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Registros externos</h2>
+      <p class="apagado">
+        Lo que cada organismo sabe de este hermano. Son realidades separadas del padrón
+        interno: se registran, no se deducen, y las diferencias se ven en la
+        <a href="/gran-tesoreria/conciliacion"> conciliación</a>.
+      </p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.25rem;">
+        {
+          ORGANISMOS.map((org) => (
+            <div>
+              <h3>{org.titulo}</h3>
+              <p class="apagado" style="font-size: 0.85rem;">{org.nota}</p>
+              <p style="margin: 0 0 0.5rem;">
+                <span
+                  class:list={[
+                    'insignia',
+                    org.registro?.estatus === 'activo' && 'insignia--ok',
+                    (org.registro?.estatus === 'pendiente' || !org.registro) && 'insignia--pendiente',
+                    org.registro?.estatus === 'baja' && 'insignia--alerta',
+                  ]}
+                >
+                  {org.registro ? NOMBRE_ESTATUS_EXTERNO[org.registro.estatus] : 'Sin registro'}
+                </span>
+                {org.registro?.fecha_registro && (
+                  <span class="apagado"> · registrado el {formatoFechaCorta(org.registro.fecha_registro)}</span>
+                )}
+                {org.registro?.fecha_baja && (
+                  <span class="apagado"> · baja el {formatoFechaCorta(org.registro.fecha_baja)}</span>
+                )}
+              </p>
+              {org.registro?.observaciones && (
+                <p class="apagado" style="font-size: 0.85rem;">{org.registro.observaciones}</p>
+              )}
+              <details open={seccion === org.accion}>
+                <summary>Actualizar</summary>
+                <Formulario csrf={sesion.csrfToken} nonce={org.nonce} accionInterna={org.accion}>
+                  <Selector
+                    nombre="estatus"
+                    etiqueta="Estatus"
+                    opciones={opcionesEstatusExterno}
+                    valor={org.registro?.estatus ?? 'pendiente'}
+                    error={seccion === org.accion ? errores.estatus : undefined}
+                    requerido
+                  />
+                  <Campo
+                    nombre="fecha_registro"
+                    etiqueta="Fecha de registro"
+                    tipo="date"
+                    valor={org.registro?.fecha_registro}
+                    error={seccion === org.accion ? errores.fecha_registro : undefined}
+                  />
+                  <Campo
+                    nombre="fecha_efectiva"
+                    etiqueta="Fecha efectiva"
+                    tipo="date"
+                    valor={org.registro?.fecha_efectiva}
+                    error={seccion === org.accion ? errores.fecha_efectiva : undefined}
+                  />
+                  <Campo
+                    nombre="fecha_baja"
+                    etiqueta="Fecha de baja"
+                    tipo="date"
+                    valor={org.registro?.fecha_baja}
+                    error={seccion === org.accion ? errores.fecha_baja : undefined}
+                  />
+                  <Campo
+                    nombre="observaciones"
+                    etiqueta="Observaciones"
+                    valor={org.registro?.observaciones}
+                    error={seccion === org.accion ? errores.observaciones : undefined}
+                    largo
+                    filas={2}
+                  />
+                  <button class="btn btn--ghost" type="submit">Guardar</button>
+                </Formulario>
+              </details>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Historial de grados</h2>
+      {
+        historial.length === 0 ? (
+          <p class="apagado">Sin eventos registrados.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Evento</th>
+                  <th scope="col">Grado</th>
+                  <th scope="col">Notas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historial.map((e) => (
+                  <tr>
+                    <td>{formatoFechaCorta(e.fecha)}</td>
+                    <td>{NOMBRE_EVENTO_GRADO[e.tipo_evento] ?? e.tipo_evento}</td>
+                    <td>{NOMBRE_GRADO[e.grado]}</td>
+                    <td>{e.notas ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+
+      <details style="margin-top: 1rem;">
+        <summary style="cursor: pointer;">Registrar aumento de salario o exaltación</summary>
+        <div style="margin-top: 1rem;">
+          {seccion === 'grado' && <ResumenErrores errores={errores} />}
+          <Formulario csrf={sesion.csrfToken} nonce={nonceGrado} accionInterna="grado">
+            <Selector
+              nombre="tipo_evento"
+              etiqueta="Evento"
+              opciones={opcionesEvento}
+              valor="aumento_salario"
+              error={errores.tipo_evento}
+              requerido
+            />
+            <Selector
+              nombre="grado"
+              etiqueta="Grado que alcanza"
+              opciones={opcionesGrado}
+              valor={hermano.grado === 'aprendiz' ? 'companero' : 'maestro'}
+              error={errores.grado}
+              requerido
+            />
+            <Campo
+              nombre="fecha"
+              etiqueta="Fecha"
+              tipo="date"
+              valor={hoyISO()}
+              error={errores.fecha}
+              requerido
+            />
+            <Campo
+              nombre="notas_evento"
+              etiqueta="Notas"
+              error={errores.notas_evento}
+              largo
+              filas={2}
+            />
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">Registrar evento</button>
+            </div>
+          </Formulario>
+        </div>
+      </details>
+    </section>
+
+    <section class="tarjeta">
+      <h2>{hermano.estatus === 'activo' ? 'Baja del padrón' : 'Reactivación'}</h2>
+      {
+        hermano.estatus === 'activo' ? (
+          <details>
+            <summary style="cursor: pointer;">Dar de baja a este hermano</summary>
+            <div style="margin-top: 1rem;">
+              <p class="apagado" style="font-size: 0.85rem;">
+                La baja conserva los adeudos anteriores y libera su cargo del cuadro. Los
+                meses posteriores a la baja dejan de cobrarse.
+              </p>
+              {seccion === 'baja' && <ResumenErrores errores={errores} />}
+              <Formulario csrf={sesion.csrfToken} nonce={nonceBaja} accionInterna="baja">
+                <Campo
+                  nombre="fecha_baja"
+                  etiqueta="Fecha de baja"
+                  tipo="date"
+                  valor={hoyISO()}
+                  error={errores.fecha_baja}
+                  requerido
+                />
+                <Selector
+                  nombre="motivo_baja"
+                  etiqueta="Motivo"
+                  opciones={opcionesMotivoBaja}
+                  error={errores.motivo_baja}
+                  requerido
+                />
+                <Campo
+                  nombre="notas_baja"
+                  etiqueta="Notas"
+                  error={errores.notas_baja}
+                  largo
+                  filas={2}
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">Dar de baja</button>
+                </div>
+              </Formulario>
+            </div>
+          </details>
+        ) : (
+          <Formulario csrf={sesion.csrfToken} nonce={nonceReactivar} accionInterna="reactivar">
+            <p class="apagado" style="font-size: 0.85rem;">
+              Reactivar lo devuelve al padrón activo. Su cápita del ejercicio se revisa
+              aparte, en el módulo de cápitas.
+            </p>
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">Reactivar</button>
+            </div>
+          </Formulario>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

@@ -1,0 +1,151 @@
+---
+/*
+ * Acceso. Es la única ruta pública del panel, junto con /salir.
+ *
+ * No hay token CSRF de sesión aquí porque todavía no hay sesión de la cual
+ * colgarlo. Lo que sí hay: comprobación de origen, límite de intentos
+ * persistido, retardo constante y mensaje genérico, para no revelar qué correos
+ * existen.
+ */
+import { z } from 'zod';
+import LayoutAcceso from '@layouts/LayoutAcceso.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { verificarContrasena } from '@lib/auth';
+import { consulta, unaFila } from '@lib/db';
+import { correo as esquemaCorreo } from '@lib/esquemas/comunes';
+import { procesarFormulario } from '@lib/formulario';
+import { esperaConstante, registrarIntento, revisarLimite } from '@lib/limitador';
+import { ipDelCliente } from '@lib/red';
+import { crearSesion, limpiarVencidos } from '@lib/sesion';
+import { registrar } from '@lib/bitacora';
+import type { Rol } from '@lib/tipos';
+
+const esquema = z.object({
+  correo: esquemaCorreo,
+  contrasena: z.string().min(1, 'La contraseña es obligatoria.'),
+});
+
+/** Solo se vuelve a rutas propias, nunca a lo que venga en la query. */
+function destinoSeguro(valor: string | null): string {
+  if (!valor || !valor.startsWith('/') || valor.startsWith('//')) return '/';
+  if (valor.startsWith('/entrar')) return '/';
+  return valor;
+}
+
+const volver = destinoSeguro(Astro.url.searchParams.get('volver'));
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { correo: '' };
+let estado = 200;
+
+/* Si ya hay sesión, no tiene sentido pedir acceso otra vez. */
+if (Astro.locals.sesion && Astro.request.method === 'GET') {
+  return Astro.redirect(volver, 303);
+}
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema,
+    proposito: 'entrar',
+    sesion: null,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = resultado.valores;
+    estado = resultado.estado;
+  } else {
+    const ip = ipDelCliente(Astro.request, Astro.clientAddress);
+    const limite = await revisarLimite(resultado.datos.correo, ip);
+
+    if (limite.bloqueado) {
+      const minutos = Math.ceil(limite.esperaSegundos / 60);
+      errores = {
+        _general:
+          `Demasiados intentos fallidos. Espera ${minutos} minuto(s) antes de volver a intentar.`,
+      };
+      valores = { correo: resultado.datos.correo };
+      estado = 429;
+    } else {
+      const fila = await unaFila<{
+        id: number;
+        nombre: string;
+        rol: Rol;
+        hash_contrasena: string;
+        activo: boolean;
+      }>(
+        'select id, nombre, rol, hash_contrasena, activo from usuario where correo = $1',
+        [resultado.datos.correo],
+      );
+
+      const correcta =
+        fila !== null &&
+        fila.activo &&
+        (await verificarContrasena(resultado.datos.contrasena, fila.hash_contrasena));
+
+      /* Retardo igual en éxito y en fallo, para no filtrar por tiempos. */
+      await esperaConstante();
+      await registrarIntento(resultado.datos.correo, ip, correcta);
+
+      if (!correcta || fila === null) {
+        errores = { _general: 'Correo o contraseña incorrectos.' };
+        valores = { correo: resultado.datos.correo };
+        estado = 401;
+      } else {
+        await limpiarVencidos();
+        await crearSesion(
+          Astro,
+          fila.id,
+          ip,
+          Astro.request.headers.get('user-agent'),
+        );
+        await consulta('update usuario set ultimo_acceso = now() where id = $1', [fila.id]);
+        await registrar({
+          usuarioId: fila.id,
+          idPeticion: Astro.locals.idPeticion,
+          accion: 'acceso',
+          entidad: 'usuario',
+          entidadId: fila.id,
+          ip,
+        });
+        return Astro.redirect(volver, 303);
+      }
+    }
+  }
+}
+
+Astro.response.status = estado;
+---
+
+<LayoutAcceso titulo="Acceso, Tesorería Masada No. 324">
+  <ResumenErrores
+    errores={errores}
+    etiquetas={{ correo: 'Correo', contrasena: 'Contraseña' }}
+  />
+
+  <Formulario>
+    <Campo
+      nombre="correo"
+      etiqueta="Correo"
+      tipo="email"
+      valor={valores.correo}
+      error={errores.correo}
+      autocompletar="username"
+      requerido
+      autoenfoque
+    />
+    <Campo
+      nombre="contrasena"
+      etiqueta="Contraseña"
+      tipo="password"
+      error={errores.contrasena}
+      autocompletar="current-password"
+      requerido
+    />
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Entrar</button>
+    </div>
+  </Formulario>
+</LayoutAcceso>

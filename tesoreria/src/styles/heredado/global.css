@@ -1,0 +1,391 @@
+/*
+ * ARCHIVO GENERADO. No editar aquí.
+ * Copia de src/styles/<archivo> del sitio público.
+ * Para actualizarlo: npm run estilos
+ */
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--md-sys-color-on-surface);
+  background-color: var(--md-sys-color-surface);
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+main {
+  flex: 1 0 auto;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.5em;
+  line-height: 1.15;
+  color: var(--md-sys-color-on-surface);
+}
+
+h1 {
+  font-size: clamp(2.4rem, 5vw + 1rem, 4.5rem);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+h2 {
+  font-size: clamp(1.8rem, 3vw + 1rem, 3rem);
+  font-weight: 500;
+}
+h3 {
+  font-size: clamp(1.3rem, 1.5vw + 0.8rem, 1.9rem);
+  font-weight: 500;
+}
+
+p {
+  margin: 0 0 1em;
+}
+
+a {
+  color: var(--gold);
+  text-decoration: none;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+[data-theme="light"] a {
+  color: var(--gold-dark);
+}
+
+a:hover {
+  color: var(--gold-light);
+  text-decoration: none;
+  opacity: 1;
+}
+
+[data-theme="light"] a:hover {
+  color: var(--gold);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+blockquote {
+  margin: 2.5em 0;
+  padding: 1.75em 2em;
+  border-left: 2px solid var(--gold);
+  background: var(--gold-muted);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(1.05rem, 1vw + 0.9rem, 1.2rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.75;
+  text-align: justify;
+  position: relative;
+  color: var(--md-sys-color-on-surface);
+}
+
+blockquote p {
+  margin-bottom: 0.75em;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+blockquote footer {
+  margin-top: 1em;
+  font-style: normal;
+  font-size: 0.85em;
+  color: var(--gold);
+  font-family: var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+[data-theme="light"] blockquote footer {
+  color: var(--gold-dark);
+}
+
+blockquote::before {
+  content: '"';
+  position: absolute;
+  top: -0.15em;
+  left: 0.5em;
+  font-style: italic;
+  font-family: var(--font-display);
+  font-size: 4em;
+  line-height: 1;
+  color: var(--gold);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-sm);
+}
+
+code {
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+}
+
+pre {
+  padding: 1em;
+  overflow-x: auto;
+}
+
+/* ── Layout ── */
+.container {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+.container--narrow {
+  max-width: var(--content-narrow);
+}
+
+.section {
+  padding-block: clamp(2.5rem, 5vw, 5rem);
+}
+
+.text-justify {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* ── Separador ornamental ── */
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-block: 1.5rem;
+  color: var(--gold);
+  opacity: 0.5;
+}
+
+.ornament::before,
+.ornament::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+}
+
+/* ── Encabezado de sección con acento dorado ── */
+.section-heading {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 0.4em;
+}
+
+.section-heading::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 2.5rem;
+  height: 2px;
+  background: var(--gold);
+}
+
+.section-heading--center::after {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ── Fuente label (Cinzel) ── */
+.font-label {
+  font-family: var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Scroll reveal ── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.reveal.is-visible {
+  animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* ── Botones ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-label);
+  font-weight: 400;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn--primary {
+  background: var(--gold);
+  color: var(--obsidian);
+  border-color: var(--gold);
+}
+
+.btn--primary:hover {
+  background: var(--gold-light);
+  border-color: var(--gold-light);
+  color: var(--obsidian);
+  box-shadow: var(--shadow-gold);
+  transform: translateY(-1px);
+  text-decoration: none;
+  opacity: 1;
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--gold);
+  border-color: var(--gold-border);
+}
+
+.btn--ghost:hover {
+  background: var(--gold-muted);
+  border-color: var(--gold);
+  color: var(--gold-light);
+  text-decoration: none;
+  opacity: 1;
+}
+
+[data-theme="light"] .btn--ghost {
+  color: var(--gold-dark);
+  border-color: var(--gold-dark);
+}
+
+[data-theme="light"] .btn--ghost:hover {
+  color: var(--gold-dark);
+  background: rgba(139 105 20 / 0.1);
+  border-color: var(--gold-dark);
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  border: 1px solid var(--gold-border);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease;
+  pointer-events: none;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md), var(--shadow-gold);
+  border-color: rgba(201 168 76 / 0.6);
+}
+
+/* ── Grid ── */
+.grid-3 {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+}
+
+/* ── Filtro de imagen parallax ── */
+.img-filter {
+  filter: var(--img-filter);
+}
+
+/* ── Accesibilidad ── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ── Símbolo masónico ── */
+.therefore {
+  white-space: nowrap;
+}
+
+/* ── Texto con acento dorado ── */
+.text-gold {
+  color: var(--gold);
+}
+
+[data-theme="light"] .text-gold {
+  color: var(--gold-dark);
+}
+
+/* ── Línea divisoria dorada ── */
+hr {
+  border: none;
+  height: 1px;
+  background: var(--gold-border);
+  margin-block: 2rem;
+}

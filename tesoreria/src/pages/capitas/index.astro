@@ -1,0 +1,191 @@
+---
+/* Panel de cápitas del ejercicio: quién está al corriente y quién debe. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import MatrizCapitas from '@componentes/MatrizCapitas.astro';
+import {
+  NOMBRE_MODALIDAD,
+  adeudosDelAnio,
+  estadosDeCuenta,
+  resumenCapitas,
+  sinPlan,
+} from '@lib/datos/capitas';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta } from '@lib/fechas';
+import { avisoDe } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const [adeudos, estados, resumen, faltantes] = await Promise.all([
+  adeudosDelAnio(anio),
+  estadosDeCuenta(anio),
+  resumenCapitas(anio),
+  sinPlan(anio),
+]);
+
+const conAdeudo = estados.filter((e) => e.adeudo_centavos > 0);
+const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
+---
+
+<LayoutAdmin titulo="Cápitas" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Esperado: {formatoMXN(resumen?.esperado ?? 0)}</span>
+    <span>Cobrado: {formatoMXN(resumen?.pagado ?? 0)}</span>
+    <span>Por cobrar: {formatoMXN(resumen?.adeudo ?? 0)}</span>
+    <span>{resumen?.al_corriente ?? 0} al corriente, {resumen?.con_adeudo ?? 0} con adeudo</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+    <h1>Cápitas {anio}</h1>
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+      <a class="btn btn--primary" href="/capitas/pagos/nuevo">Registrar pago</a>
+      <a class="btn btn--ghost" href="/capitas/asignar">Asignar modalidad</a>
+    </div>
+  </div>
+
+  {
+    faltantes.length > 0 && (
+      <div class="aviso aviso--error">
+        <p style="margin: 0;">
+          {faltantes.length} hermano(s) activos sin modalidad de cápita asignada para {anio}.
+          Mientras no la tengan, no se les puede registrar un pago.
+        </p>
+        <ul>
+          {faltantes.map((h) => (
+            <li>
+              {h.nombre_completo}
+              <span class="apagado"> · ingresó el {formatoFechaCorta(h.fecha_ingreso)}</span>{' '}
+              <a href={`/capitas/asignar?hermano=${h.id}`}>asignar</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  {
+    estados.length === 0 ? (
+      <div class="tarjeta">
+        <p style="margin: 0;">
+          Todavía no hay cápitas asignadas en {anio}. Empieza por
+          <a href="/capitas/asignar"> asignar la modalidad</a> de cada hermano.
+        </p>
+      </div>
+    ) : (
+      <>
+        <MatrizCapitas anio={anio} adeudos={adeudos} estados={estados} />
+
+        <section class="tarjeta" style="margin-top: 1.5rem;">
+          <h2>Estado por hermano</h2>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Hermano</th>
+                  <th scope="col">Modalidad</th>
+                  <th scope="col" class="num">Esperado</th>
+                  <th scope="col" class="num">Pagado</th>
+                  <th scope="col" class="num">Exento</th>
+                  <th scope="col" class="num">Adeudo</th>
+                  <th scope="col">Situación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {estados.map((e) => (
+                  <tr>
+                    <td>
+                      <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>
+                    </td>
+                    <td>
+                      {e.modalidad ? (
+                        NOMBRE_MODALIDAD[e.modalidad]
+                      ) : (
+                        <span class="apagado">Sin asignar</span>
+                      )}
+                    </td>
+                    <td class="num">{formatoMXN(e.esperado_centavos)}</td>
+                    <td class="num">{formatoMXN(e.pagado_centavos)}</td>
+                    <td class="num">
+                      {e.condonado_centavos > 0 ? formatoMXN(e.condonado_centavos) : '—'}
+                    </td>
+                    <td class="num">
+                      {e.adeudo_centavos > 0 ? formatoMXN(e.adeudo_centavos) : '—'}
+                    </td>
+                    <td>
+                      {e.al_corriente ? (
+                        <span class="insignia insignia--ok">Al corriente</span>
+                      ) : (
+                        <span class="insignia insignia--alerta">
+                          Debe {e.meses_vencidos} mes(es)
+                        </span>
+                      )}
+                      {e.saldo_a_favor_centavos > 0 && (
+                        <>
+                          {' '}
+                          <span class="insignia insignia--pendiente">
+                            A favor {formatoMXN(e.saldo_a_favor_centavos)}
+                          </span>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2">Totales</td>
+                  <td class="num">{formatoMXN(resumen?.esperado ?? 0)}</td>
+                  <td class="num">{formatoMXN(resumen?.pagado ?? 0)}</td>
+                  <td class="num">{formatoMXN(resumen?.condonado ?? 0)}</td>
+                  <td class="num">{formatoMXN(resumen?.adeudo ?? 0)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+
+        {conAdeudo.length > 0 && (
+          <section class="tarjeta" style="margin-top: 1.25rem;">
+            <h2>Cartera de adeudos</h2>
+            <ul>
+              {conAdeudo.map((e) => (
+                <li>
+                  <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>:{' '}
+                  {formatoMXN(e.adeudo_centavos)}
+                  {e.meses_vencidos > 0 && <> · {e.meses_vencidos} mes(es) vencido(s)</>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {aFavor.length > 0 && (
+          <section class="tarjeta" style="margin-top: 1.25rem;">
+            <h2>Saldos a favor</h2>
+            <p class="apagado" style="font-size: 0.85rem;">
+              Dinero recibido que todavía no cubre ningún mes. Se aplica solo cuando se
+              genere el cargo correspondiente.
+            </p>
+            <ul>
+              {aFavor.map((e) => (
+                <li>
+                  {e.nombre_completo}: {formatoMXN(e.saldo_a_favor_centavos)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </>
+    )
+  }
+</LayoutAdmin>

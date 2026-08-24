@@ -1,0 +1,79 @@
+---
+/*
+ * Hoja imprimible. Sin navegación y sin nada que estorbe en papel.
+ * Se imprime con Ctrl+P, el servidor no genera PDF.
+ */
+import '@styles/impresion.css';
+
+interface Props {
+  titulo: string;
+  /** Periodo o subtítulo que va bajo el nombre de la logia. */
+  periodo: string;
+  /** true mientras el corte no esté cerrado: marca de agua BORRADOR. */
+  borrador?: boolean;
+  /** Ruta a la que regresa el enlace de volver, no se imprime. */
+  volverA?: string;
+  /** Líneas de firma al pie. Por omisión, Tesorero y Venerable Maestro. */
+  firmas?: string[];
+}
+
+const {
+  titulo,
+  periodo,
+  borrador = false,
+  volverA,
+  firmas = ['Tesorero', 'Venerable Maestro'],
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{titulo}</title>
+  </head>
+  <body>
+    {
+      borrador && (
+        <div class="borrador" aria-hidden="true">
+          <span>Borrador</span>
+        </div>
+      )
+    }
+
+    {
+      volverA && (
+        <div class="acciones-impresion no-imprimir">
+          <a class="btn btn--ghost" href={volverA}>← Volver</a>
+          <span class="apagado" style="font-size: 0.85rem; align-self: center;">
+            Imprime con Ctrl+P, o Cmd+P en Mac.
+          </span>
+        </div>
+      )
+    }
+
+    <div class="hoja">
+      <header class="hoja__encabezado">
+        <p class="hoja__logia">R∴L∴S∴ Masada No. 324</p>
+        <p class="hoja__subtitulo">Tesorería</p>
+        <p class="hoja__periodo">{periodo}</p>
+      </header>
+
+      <slot />
+
+      {
+        firmas.length > 0 && (
+          <div class="firmas">
+            {firmas.map((firma) => (
+              <div>
+                <span>{firma}</span>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  </body>
+</html>

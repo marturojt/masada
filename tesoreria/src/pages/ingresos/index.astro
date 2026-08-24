@@ -1,0 +1,91 @@
+---
+/*
+ * Ingresos que no son cápita: cuotas de grado del candidato, donativos y otros.
+ * Las cápitas viven en su propio módulo porque hay que aplicarlas a los meses
+ * que cubren.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import TablaMovimientos from '@componentes/TablaMovimientos.astro';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { foliosDeRecibo, listarMovimientos } from '@lib/datos/movimientos';
+import { formatoMXN } from '@lib/dinero';
+import { avisoDe } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+/* Todo ingreso menos las cápitas, que tienen su propia pantalla. */
+const movimientos = await listarMovimientos({
+  anio,
+  tipo: 'ingreso',
+  tiposEspeciales: ['cuota_grado', 'donativo', 'devolucion_por_comprobar', 'otro'],
+});
+
+const folios = new Map(
+  (await foliosDeRecibo(movimientos.map((m) => m.id))).map((f) => [f.movimiento_id, f.folio]),
+);
+
+const porTipo = new Map<string, number>();
+for (const m of movimientos) {
+  porTipo.set(m.concepto_nombre, (porTipo.get(m.concepto_nombre) ?? 0) + m.monto_centavos);
+}
+const total = movimientos.reduce((s, m) => s + m.monto_centavos, 0);
+---
+
+<LayoutAdmin titulo="Ingresos" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Ingresos distintos de cápita: {formatoMXN(total)}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <h1>Ingresos</h1>
+    <a class="btn btn--primary" href="/ingresos/nuevo">Registrar ingreso</a>
+  </div>
+
+  <p class="apagado" style="font-size: 0.9rem;">
+    Aquí van las cuotas de grado que paga el candidato, los donativos y las
+    devoluciones de gastos por comprobar. Las cápitas se registran en
+    <a href="/capitas">Cápitas</a>.
+  </p>
+
+  {
+    porTipo.size > 0 && (
+      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+        <h2>Por concepto</h2>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <tbody>
+              {[...porTipo.entries()].map(([nombre, monto]) => (
+                <tr>
+                  <th scope="row">{nombre}</th>
+                  <td class="num">{formatoMXN(monto)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td class="num">{formatoMXN(total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+    )
+  }
+
+  <TablaMovimientos
+    movimientos={movimientos}
+    titulo={`${movimientos.length} movimiento(s) de ingreso en ${anio}`}
+    folios={folios}
+    vacio="Todavía no hay ingresos distintos de cápita en este ejercicio."
+  />
+</LayoutAdmin>

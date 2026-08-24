@@ -1,0 +1,59 @@
+---
+/* Navegación del panel. Salir es POST, nunca un enlace. */
+import { NOMBRE_ROL } from '@lib/tipos';
+import type { Sesion } from '@lib/sesion';
+import Formulario from './Formulario.astro';
+
+interface Props {
+  sesion: Sesion;
+}
+
+const { sesion } = Astro.props;
+
+const enlaces = [
+  { href: '/', texto: 'Tablero' },
+  { href: '/hermanos', texto: 'Hermanos' },
+  { href: '/capitas', texto: 'Cápitas' },
+  { href: '/ingresos', texto: 'Ingresos' },
+  { href: '/aportaciones', texto: 'Aportaciones' },
+  { href: '/egresos', texto: 'Egresos' },
+  { href: '/gran-tesoreria', texto: 'Gran Tesorería' },
+  { href: '/traspasos', texto: 'Traspasos' },
+  { href: '/cortes', texto: 'Cortes' },
+  { href: '/conceptos', texto: 'Conceptos' },
+  { href: '/tarifas', texto: 'Tarifas' },
+  { href: '/herramientas', texto: 'Herramientas' },
+];
+
+const ruta = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const activo = (href: string): boolean =>
+  href === '/' ? ruta === '/' : ruta === href || ruta.startsWith(`${href}/`);
+---
+
+<header class="barra">
+  <div class="barra__fila">
+    <a class="barra__marca" href="/">Masada 324 · Tesorería</a>
+
+    <nav class="barra__nav" aria-label="Secciones">
+      {
+        enlaces.map((e) => (
+          <a href={e.href} aria-current={activo(e.href) ? 'page' : undefined}>
+            {e.texto}
+          </a>
+        ))
+      }
+    </nav>
+
+    <span class="barra__usuario">
+      {sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}
+    </span>
+
+    <Formulario accion="/salir" csrf={sesion.csrfToken}>
+      <button class="btn btn--ghost" type="submit" style="padding: 0.25rem 0.7rem; font-size: 0.75rem;">
+        Salir
+      </button>
+    </Formulario>
+  </div>
+
+  <slot name="contexto" />
+</header>

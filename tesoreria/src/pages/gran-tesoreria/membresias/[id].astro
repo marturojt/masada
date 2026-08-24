@@ -1,0 +1,255 @@
+---
+/*
+ * Ficha de una membresía: los hermanos tal como los reporta la Gran Tesorería
+ * y su liga con el padrón interno. Ligar es conciliar, no editar el reporte.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { agregarRenglonMembresia, ligarRenglonMembresia } from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import { obtenerMembresia, renglonesDeMembresia } from '@lib/datos/gt';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaLigarRenglon, esquemaRenglonMembresia } from '@lib/esquemas/gt';
+import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const ETIQUETAS: Record<string, string> = {
+  nombre_reportado: 'Nombre tal como lo reporta GT',
+  clave_mason: 'Clave masónica',
+  grado_reportado: 'Grado reportado',
+  estatus_reportado: 'Estatus reportado',
+  genera_capita: 'Genera cápita',
+  hermano_id: 'Hermano del padrón',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    seccion = entrada.accion;
+    try {
+      if (entrada.accion === 'renglon') {
+        const r = await validar(entrada, {
+          esquema: esquemaRenglonMembresia,
+          proposito: 'gt_renglon',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = r.valores;
+          estado = r.estado;
+        } else {
+          await agregarRenglonMembresia({ ...ctxBase, nonce: r.nonce }, id, {
+            ...r.datos,
+            hermano_id: r.datos.hermano_id ?? null,
+          });
+          return Astro.redirect(`/gran-tesoreria/membresias/${id}?ok=renglon`, 303);
+        }
+      } else if (entrada.accion === 'ligar') {
+        const r = await validar(entrada, {
+          esquema: esquemaLigarRenglon,
+          proposito: 'gt_ligar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await ligarRenglonMembresia(
+            { ...ctxBase, nonce: r.nonce },
+            r.datos.renglon_id,
+            r.datos.hermano_id ?? null,
+          );
+          return Astro.redirect(`/gran-tesoreria/membresias/${id}?ok=ligado`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const membresia = await obtenerMembresia(id);
+if (!membresia) return new Response('No encontrado', { status: 404 });
+
+const [renglones, hermanos] = await Promise.all([renglonesDeMembresia(id), hermanosActivos()]);
+const nonceRenglon = await emitirNonce(sesion.idHash, 'gt_renglon');
+
+/* Cada renglón sin ligar lleva su propio formulario, con su propio nonce. */
+const noncesLigar = new Map<number, string>();
+for (const r of renglones.filter((x) => !x.conciliado)) {
+  noncesLigar.set(r.id, await emitirNonce(sesion.idHash, 'gt_ligar'));
+}
+
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={`Membresía ${nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}`} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria/membresias">← Membresías</a></span>
+    <span>Documento del {formatoFechaCorta(membresia.fecha_documento)}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Membresía de {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</h1>
+  <p class="apagado">
+    {membresia.renglones} hermano(s) reportados, {membresia.con_capita} generan cápita,
+    {membresia.sin_ligar} sin conciliar con el padrón.
+    {membresia.archivo_id && (
+      <a href={`/comprobantes/${membresia.archivo_id}`}>Ver documento</a>
+    )}
+  </p>
+  {membresia.observaciones && <p class="apagado">{membresia.observaciones}</p>}
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Hermanos reportados</h2>
+      {
+        renglones.length === 0 ? (
+          <p class="apagado">Sin renglones capturados todavía.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Nombre reportado</th>
+                  <th>Clave</th>
+                  <th>Grado</th>
+                  <th>Estatus</th>
+                  <th>Cápita</th>
+                  <th>Padrón interno</th>
+                </tr>
+              </thead>
+              <tbody>
+                {renglones.map((r) => (
+                  <tr>
+                    <td>{r.nombre_reportado}</td>
+                    <td>{r.clave_mason_reportada ?? ''}</td>
+                    <td>{r.grado_reportado ?? ''}</td>
+                    <td>{r.estatus_reportado ?? ''}</td>
+                    <td>{r.genera_capita ? 'Sí' : 'No'}</td>
+                    <td>
+                      {r.conciliado && r.hermano_id ? (
+                        <a href={`/hermanos/${r.hermano_id}`}>{r.hermano_nombre}</a>
+                      ) : (
+                        <Formulario
+                          csrf={sesion.csrfToken}
+                          nonce={noncesLigar.get(r.id) ?? ''}
+                          accionInterna="ligar"
+                        >
+                          <input type="hidden" name="renglon_id" value={String(r.id)} />
+                          <div style="display: flex; gap: 0.4rem; align-items: end; flex-wrap: wrap;">
+                            <Selector
+                              nombre="hermano_id"
+                              etiqueta="Ligar con"
+                              opciones={opcionesHermano}
+                              vacio="Elegir hermano"
+                            />
+                            <button class="btn btn--ghost" type="submit">Ligar</button>
+                          </div>
+                        </Formulario>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Agregar hermano reportado</h2>
+      <p class="apagado">
+        Captura el renglón tal como viene en el documento de la Gran Tesorería, aunque
+        el nombre no coincida con el padrón. La liga se hace después.
+      </p>
+      <details open={seccion === 'renglon'}>
+        <summary>Capturar renglón</summary>
+        <Formulario csrf={sesion.csrfToken} nonce={nonceRenglon} accionInterna="renglon">
+          <Campo
+            nombre="nombre_reportado"
+            etiqueta={ETIQUETAS.nombre_reportado!}
+            valor={valores.nombre_reportado}
+            error={seccion === 'renglon' ? errores.nombre_reportado : undefined}
+            requerido
+          />
+          <Campo
+            nombre="clave_mason"
+            etiqueta={ETIQUETAS.clave_mason!}
+            valor={valores.clave_mason}
+            error={seccion === 'renglon' ? errores.clave_mason : undefined}
+          />
+          <Campo
+            nombre="grado_reportado"
+            etiqueta={ETIQUETAS.grado_reportado!}
+            valor={valores.grado_reportado}
+            error={seccion === 'renglon' ? errores.grado_reportado : undefined}
+          />
+          <Campo
+            nombre="estatus_reportado"
+            etiqueta={ETIQUETAS.estatus_reportado!}
+            valor={valores.estatus_reportado}
+            error={seccion === 'renglon' ? errores.estatus_reportado : undefined}
+          />
+          <div class="campo">
+            <label class="campo__etiqueta" for="campo-genera_capita">
+              <input
+                type="checkbox"
+                id="campo-genera_capita"
+                name="genera_capita"
+                checked
+              />
+              {ETIQUETAS.genera_capita}
+            </label>
+            <span class="campo__ayuda">Desmárcalo si GT lo reporta pero no cobra por él.</span>
+          </div>
+          <Selector
+            nombre="hermano_id"
+            etiqueta={ETIQUETAS.hermano_id!}
+            opciones={opcionesHermano}
+            valor={valores.hermano_id}
+            error={seccion === 'renglon' ? errores.hermano_id : undefined}
+            vacio="Ligar después"
+          />
+          <button class="btn btn--primary" type="submit">Agregar renglón</button>
+        </Formulario>
+      </details>
+    </section>
+  </div>
+</LayoutAdmin>

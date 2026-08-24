@@ -1,0 +1,178 @@
+---
+/*
+ * Membresías: los documentos con los que la Gran Tesorería reporta a quién
+ * reconoce. Son fotografías administrativas, no el padrón interno.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { crearMembresia } from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import { listarMembresias } from '@lib/datos/gt';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaMembresia } from '@lib/esquemas/gt';
+import { formatoFechaCorta, hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ETIQUETAS: Record<string, string> = {
+  fecha_documento: 'Fecha del documento',
+  fecha_recepcion: 'Fecha en que se recibió',
+  periodo_referencia: 'Periodo de referencia',
+  documento: 'Documento',
+  observaciones: 'Observaciones',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  fecha_documento: hoyISO(),
+  periodo_referencia: periodoActual(),
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaMembresia,
+    proposito: 'gt_membresia',
+    sesion,
+  });
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      const id = await crearMembresia(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+        resultado.archivos.documento,
+      );
+      return Astro.redirect(`/gran-tesoreria/membresias/${id}?ok=membresia`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const membresias = await listarMembresias();
+const nonce = await emitirNonce(sesion.idHash, 'gt_membresia');
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Membresías GT" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Membresías</h1>
+  <p class="apagado">
+    Cada membresía es el documento con el que la Gran Tesorería dice a quién reconoce
+    y por quién cobra. La vigente es la más reciente. No modifica el padrón interno:
+    las diferencias se ven en la conciliación.
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Historial</h2>
+      {
+        membresias.length === 0 ? (
+          <p class="apagado">Sin membresías capturadas todavía.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Periodo de referencia</th>
+                  <th>Fecha del documento</th>
+                  <th class="num">Hermanos reportados</th>
+                  <th class="num">Generan cápita</th>
+                  <th class="num">Sin conciliar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {membresias.map((m, i) => (
+                  <tr>
+                    <td>
+                      <a href={`/gran-tesoreria/membresias/${m.id}`}>
+                        {nombrePeriodo(m.periodo_referencia.slice(0, 7))}
+                      </a>
+                      {i === 0 && <span class="insignia insignia--ok" style="margin-left: 0.5rem;">Vigente</span>}
+                    </td>
+                    <td>{formatoFechaCorta(m.fecha_documento)}</td>
+                    <td class="num">{m.renglones}</td>
+                    <td class="num">{m.con_capita}</td>
+                    <td class="num">
+                      {m.sin_ligar > 0 ? (
+                        <span class="insignia insignia--pendiente">{m.sin_ligar}</span>
+                      ) : (
+                        '0'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Registrar membresía</h2>
+      <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+        <Campo
+          nombre="periodo_referencia"
+          etiqueta={ETIQUETAS.periodo_referencia!}
+          tipo="month"
+          valor={valores.periodo_referencia}
+          error={errores.periodo_referencia}
+          requerido
+          ayuda="El mes al que corresponde el reporte de la Gran Tesorería."
+        />
+        <Campo
+          nombre="fecha_documento"
+          etiqueta={ETIQUETAS.fecha_documento!}
+          tipo="date"
+          valor={valores.fecha_documento}
+          error={errores.fecha_documento}
+          requerido
+        />
+        <Campo
+          nombre="fecha_recepcion"
+          etiqueta={ETIQUETAS.fecha_recepcion!}
+          tipo="date"
+          valor={valores.fecha_recepcion}
+          error={errores.fecha_recepcion}
+        />
+        <Campo
+          nombre="documento"
+          etiqueta={ETIQUETAS.documento!}
+          tipo="file"
+          error={errores.documento}
+          aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+          ayuda="El oficio o listado que envió la Gran Tesorería, si se tiene."
+        />
+        <Campo
+          nombre="observaciones"
+          etiqueta={ETIQUETAS.observaciones!}
+          valor={valores.observaciones}
+          error={errores.observaciones}
+          largo
+          filas={2}
+        />
+        <button class="btn btn--primary" type="submit">Registrar membresía</button>
+      </Formulario>
+    </section>
+  </div>
+</LayoutAdmin>

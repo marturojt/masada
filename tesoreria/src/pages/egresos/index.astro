@@ -1,0 +1,194 @@
+---
+/* Egresos del ejercicio, con lo pendiente de firmar y de comprobar arriba. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import {
+  CLASE_ESTADO_EGRESO,
+  NOMBRE_ESTADO_EGRESO,
+  listarEgresos,
+  pendientesDeComprobar,
+  resumenEgresos,
+  type EstadoEgreso,
+} from '@lib/datos/egresos';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta } from '@lib/fechas';
+import { avisoDe } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const ESTADOS: EstadoEgreso[] = [
+  'registrado',
+  'autorizado',
+  'por_comprobar',
+  'pagado',
+  'comprobado',
+  'rechazado',
+  'cancelado',
+];
+
+const estadoCrudo = Astro.url.searchParams.get('estado');
+const estado = ESTADOS.includes(estadoCrudo as EstadoEgreso)
+  ? (estadoCrudo as EstadoEgreso)
+  : undefined;
+
+const [egresos, resumen, porComprobar] = await Promise.all([
+  listarEgresos(estado ? { anio, estado } : { anio }),
+  resumenEgresos(anio),
+  pendientesDeComprobar(),
+]);
+
+const salido = resumen
+  .filter((r) => ['pagado', 'por_comprobar', 'comprobado'].includes(r.estado))
+  .reduce((s, r) => s + r.monto_centavos, 0);
+
+const enEspera = resumen
+  .filter((r) => ['registrado', 'autorizado'].includes(r.estado))
+  .reduce((s, r) => s + r.monto_centavos, 0);
+
+const conFiltro = (valor?: string): string => {
+  const params = new URLSearchParams(Astro.url.searchParams);
+  if (valor === undefined) params.delete('estado');
+  else params.set('estado', valor);
+  const cadena = params.toString();
+  return cadena ? `/egresos?${cadena}` : '/egresos';
+};
+---
+
+<LayoutAdmin titulo="Egresos" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Salido de caja: {formatoMXN(salido)}</span>
+    <span>En trámite: {formatoMXN(enEspera)}</span>
+    {porComprobar.length > 0 && <span>{porComprobar.length} por comprobar</span>}
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+    <h1>Egresos</h1>
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+      <a class="btn btn--primary" href="/egresos/nuevo">Nuevo egreso</a>
+      <a class="btn btn--ghost" href="/gran-tesoreria">Gran Tesorería</a>
+    </div>
+  </div>
+
+  {
+    porComprobar.length > 0 && (
+      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+        <h2>Pendientes de comprobar</h2>
+        <p class="apagado" style="font-size: 0.85rem;">
+          Dinero entregado que todavía no tiene recibos ni devolución. Un corte mensual no
+          cierra si quedan pendientes de meses anteriores.
+        </p>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Folio</th>
+                <th scope="col">Entregado el</th>
+                <th scope="col">Beneficiario</th>
+                <th scope="col" class="num">Entregado</th>
+                <th scope="col" class="num">Comprobado</th>
+                <th scope="col" class="num">Falta</th>
+                <th scope="col" class="num">Días</th>
+              </tr>
+            </thead>
+            <tbody>
+              {porComprobar.map((p) => (
+                <tr>
+                  <td>
+                    <a href={`/egresos/${p.id}`}>{p.folio}</a>
+                  </td>
+                  <td>{formatoFechaCorta(p.fecha_entrega)}</td>
+                  <td>{p.beneficiario}</td>
+                  <td class="num">{formatoMXN(p.monto_entregado_centavos)}</td>
+                  <td class="num">{formatoMXN(p.monto_comprobado_centavos)}</td>
+                  <td class="num">{formatoMXN(p.pendiente_centavos)}</td>
+                  <td class="num">{p.dias_sin_comprobar}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+
+  <p class="apagado" style="font-size: 0.85rem;">
+    Filtrar:{' '}
+    <a href={conFiltro()} style={!estado ? 'color: var(--gold); font-weight: 600;' : undefined}>
+      Todos
+    </a>
+    {
+      ESTADOS.map((e) => (
+        <>
+          {' · '}
+          <a
+            href={conFiltro(e)}
+            style={estado === e ? 'color: var(--gold); font-weight: 600;' : undefined}
+          >
+            {NOMBRE_ESTADO_EGRESO[e].split(',')[0]}
+          </a>
+        </>
+      ))
+    }
+  </p>
+
+  {
+    egresos.length === 0 ? (
+      <div class="tarjeta">
+        <p style="margin: 0;">
+          Sin egresos con ese filtro. Empieza con <a href="/egresos/nuevo">un nuevo egreso</a>.
+        </p>
+      </div>
+    ) : (
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <caption>{egresos.length} egreso(s)</caption>
+          <thead>
+            <tr>
+              <th scope="col">Folio</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Concepto</th>
+              <th scope="col">Beneficiario</th>
+              <th scope="col" class="num">Monto</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Firmas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {egresos.map((e) => (
+              <tr>
+                <td>
+                  <a href={`/egresos/${e.id}`}>{e.folio}</a>
+                </td>
+                <td>{formatoFechaCorta(e.fecha_solicitud)}</td>
+                <td>{e.concepto_nombre}</td>
+                <td>{e.beneficiario}</td>
+                <td class="num">
+                  {formatoMXN(
+                    e.monto_entregado_centavos ??
+                      e.monto_autorizado_centavos ??
+                      e.monto_solicitado_centavos,
+                  )}
+                </td>
+                <td>
+                  <span class:list={['insignia', CLASE_ESTADO_EGRESO[e.estado]]}>
+                    {NOMBRE_ESTADO_EGRESO[e.estado]}
+                  </span>
+                </td>
+                <td>{e.firmas} de 2</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</LayoutAdmin>

@@ -1,0 +1,150 @@
+---
+/* Campos del alta y de la edición de un hermano. Los dos formularios son iguales. */
+import Campo from './Campo.astro';
+import Formulario from './Formulario.astro';
+import ResumenErrores from './ResumenErrores.astro';
+import Selector from './Selector.astro';
+import type { Cargo } from '@lib/datos/cargos';
+import { NOMBRE_MOTIVO_INGRESO } from '@lib/esquemas/hermano';
+import { NOMBRE_GRADO, type Opcion } from '@lib/tipos';
+
+interface Props {
+  csrf: string;
+  nonce: string;
+  valores: Record<string, string>;
+  errores: Record<string, string>;
+  cargos: Cargo[];
+  anio: number;
+  textoBoton: string;
+  cancelarA: string;
+}
+
+const { csrf, nonce, valores, errores, cargos, anio, textoBoton, cancelarA } = Astro.props;
+
+const ETIQUETAS: Record<string, string> = {
+  nombre_completo: 'Nombre completo',
+  grado: 'Grado',
+  fecha_ingreso: 'Fecha de ingreso',
+  motivo_ingreso: 'Motivo de ingreso',
+  fecha_iniciacion: 'Fecha de iniciación',
+  fecha_afiliacion: 'Fecha de afiliación',
+  correo: 'Correo',
+  telefono: 'Teléfono',
+  cargo_id: 'Cargo',
+  notas: 'Notas',
+};
+
+const opcionesGrado: Opcion[] = (['aprendiz', 'companero', 'maestro'] as const).map((g) => ({
+  valor: g,
+  texto: NOMBRE_GRADO[g],
+}));
+
+const opcionesMotivo: Opcion[] = Object.entries(NOMBRE_MOTIVO_INGRESO).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
+
+const opcionesCargo: Opcion[] = cargos.map((c) => ({
+  valor: String(c.id),
+  texto: c.nombre,
+  grupo: c.es_dignatario ? 'Dignatarios' : 'Oficiales',
+}));
+---
+
+<ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+<Formulario csrf={csrf} nonce={nonce}>
+  <Campo
+    nombre="nombre_completo"
+    etiqueta={ETIQUETAS.nombre_completo!}
+    valor={valores.nombre_completo}
+    error={errores.nombre_completo}
+    ayuda="Tal como debe aparecer en el cuadro logial del sitio."
+    requerido
+    autoenfoque
+  />
+
+  <Selector
+    nombre="grado"
+    etiqueta={ETIQUETAS.grado!}
+    opciones={opcionesGrado}
+    valor={valores.grado}
+    error={errores.grado}
+    requerido
+  />
+
+  <Campo
+    nombre="fecha_ingreso"
+    etiqueta={ETIQUETAS.fecha_ingreso!}
+    tipo="date"
+    valor={valores.fecha_ingreso}
+    error={errores.fecha_ingreso}
+    ayuda={`Con esta fecha se calcula su cápita. Si ya estaba en la logia antes de ${anio}, usa una fecha anterior al 1 de enero.`}
+    requerido
+  />
+
+  <Selector
+    nombre="motivo_ingreso"
+    etiqueta={ETIQUETAS.motivo_ingreso!}
+    opciones={opcionesMotivo}
+    valor={valores.motivo_ingreso}
+    error={errores.motivo_ingreso}
+    requerido
+  />
+
+  <Selector
+    nombre="cargo_id"
+    etiqueta={`${ETIQUETAS.cargo_id} ${anio}`}
+    opciones={opcionesCargo}
+    valor={valores.cargo_id}
+    error={errores.cargo_id}
+    vacio="Sin cargo"
+    ayuda="Si el cargo ya lo tenía otro hermano, se le traspasa."
+  />
+
+  <Campo
+    nombre="fecha_iniciacion"
+    etiqueta={ETIQUETAS.fecha_iniciacion!}
+    tipo="date"
+    valor={valores.fecha_iniciacion}
+    error={errores.fecha_iniciacion}
+  />
+
+  <Campo
+    nombre="fecha_afiliacion"
+    etiqueta={ETIQUETAS.fecha_afiliacion!}
+    tipo="date"
+    valor={valores.fecha_afiliacion}
+    error={errores.fecha_afiliacion}
+  />
+
+  <Campo
+    nombre="correo"
+    etiqueta={ETIQUETAS.correo!}
+    tipo="email"
+    valor={valores.correo}
+    error={errores.correo}
+    ayuda="No se publica en el sitio, es solo para la tesorería."
+  />
+
+  <Campo
+    nombre="telefono"
+    etiqueta={ETIQUETAS.telefono!}
+    tipo="tel"
+    valor={valores.telefono}
+    error={errores.telefono}
+  />
+
+  <Campo
+    nombre="notas"
+    etiqueta={ETIQUETAS.notas!}
+    valor={valores.notas}
+    error={errores.notas}
+    largo
+  />
+
+  <div class="formulario__acciones">
+    <button class="btn btn--primary" type="submit">{textoBoton}</button>
+    <a class="btn btn--ghost" href={cancelarA}>Cancelar</a>
+  </div>
+</Formulario>

@@ -1,0 +1,37 @@
+---
+/*
+ * Resumen de errores arriba del formulario, con enlaces a cada campo.
+ * role="alert" para que un lector de pantalla lo anuncie sin JavaScript.
+ */
+interface Props {
+  errores: Record<string, string>;
+  /** Etiqueta legible por nombre de campo, para el texto del enlace. */
+  etiquetas?: Record<string, string>;
+}
+
+const { errores, etiquetas = {} } = Astro.props;
+
+const general = errores._general;
+const porCampo = Object.entries(errores).filter(([campo]) => campo !== '_general');
+const hayAlgo = Boolean(general) || porCampo.length > 0;
+---
+
+{
+  hayAlgo && (
+    <div class="aviso aviso--error" role="alert">
+      {general && <p style="margin: 0;">{general}</p>}
+      {porCampo.length > 0 && (
+        <>
+          {!general && <p style="margin: 0;">Revisa lo siguiente:</p>}
+          <ul>
+            {porCampo.map(([campo, mensaje]) => (
+              <li>
+                <a href={`#campo-${campo}`}>{etiquetas[campo] ?? campo}</a>: {mensaje}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}

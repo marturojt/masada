@@ -1,0 +1,120 @@
+---
+/*
+ * Recibo formal de un ingreso, para imprimir y entregar a quien pagó.
+ * Folio estable por ejercicio, monto en letra y línea de firma del tesorero.
+ */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import { reciboDe } from '@lib/datos/movimientos';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaLarga } from '@lib/fechas';
+import { montoEnLetras } from '@lib/letras';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+void sesion;
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const recibo = await reciboDe(id);
+if (!recibo) {
+  return new Response(
+    'Ese movimiento no genera recibo: solo los ingresos recibidos de alguien lo llevan.',
+    { status: 404 },
+  );
+}
+
+const CONCEPTO_LARGO: Record<string, string> = {
+  capita: 'cápitas',
+  cuota_grado: 'cuota de grado',
+  donativo: 'donativo',
+};
+
+const recibimosDe = recibo.hermano_nombre ?? recibo.descripcion;
+---
+
+<LayoutImpresion
+  titulo={`Recibo ${recibo.folio}`}
+  periodo={`Recibo de pago ${recibo.folio}`}
+  volverA="/ingresos"
+  firmas={['Recibí conforme · El Tesorero']}
+>
+  <table class="recibo">
+    <tbody>
+      <tr>
+        <th scope="row">Folio</th>
+        <td><strong>{recibo.folio}</strong></td>
+        <th scope="row" style="text-align: right;">Fecha</th>
+        <td>{formatoFechaLarga(recibo.fecha)}</td>
+      </tr>
+      <tr>
+        <th scope="row">Recibimos de</th>
+        <td colspan="3">{recibimosDe}</td>
+      </tr>
+      <tr>
+        <th scope="row">La cantidad de</th>
+        <td colspan="3">
+          <strong>{formatoMXN(recibo.monto_centavos)}</strong>
+          <br />
+          <span class="letra">({montoEnLetras(recibo.monto_centavos)})</span>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Por concepto de</th>
+        <td colspan="3">
+          {recibo.concepto_nombre}
+          {recibo.meses && <>, correspondiente a {recibo.meses}</>}
+          {!recibo.meses && recibo.descripcion !== recibimosDe && <>. {recibo.descripcion}</>}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="leyenda">
+    Este recibo ampara únicamente la cantidad arriba señalada, recibida por la
+    Tesorería de la R∴L∴S∴ Masada No. 324 por concepto de
+    {' '}{CONCEPTO_LARGO[recibo.tipo_especial] ?? 'ingreso'}. Registrado en el sistema de
+    tesorería{recibo.capturado_por && <> por {recibo.capturado_por}</>} con el número de
+    movimiento {recibo.movimiento_id}.
+  </p>
+</LayoutImpresion>
+
+<style>
+  .recibo {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.75rem;
+  }
+
+  .recibo th,
+  .recibo td {
+    border: 1px solid #999999;
+    padding: 0.55rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+    font-size: 10.5pt;
+  }
+
+  .recibo th {
+    width: 9.5rem;
+    font-family: var(--font-label);
+    font-size: 8pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #444444;
+    font-weight: 400;
+    background: #f2f2f2;
+  }
+
+  .letra {
+    font-size: 9pt;
+    letter-spacing: 0.02em;
+  }
+
+  .leyenda {
+    font-size: 8.5pt;
+    color: #444444;
+    margin-top: 1.2rem;
+    text-align: justify;
+  }
+</style>

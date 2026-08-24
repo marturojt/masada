@@ -1,0 +1,39 @@
+{
+  "name": "masada-tesoreria",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de tesorería de la R∴L∴S∴ Masada No. 324",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "prebuild": "node scripts/sincronizar-estilos.mjs --verificar",
+    "build": "astro build",
+    "preview": "node dist/server/entry.mjs",
+    "check": "astro check && node scripts/verificar-guardias.mjs",
+    "prueba": "node scripts/preparar-pruebas.mjs && node --test pruebas/*.test.mjs",
+    "prueba:preparar": "node scripts/preparar-pruebas.mjs",
+    "migrar": "node scripts/migrar.mjs",
+    "sembrar": "node scripts/sembrar.mjs",
+    "contrasena": "node scripts/contrasena.mjs",
+    "estilos": "node scripts/sincronizar-estilos.mjs",
+    "guardias": "node scripts/verificar-guardias.mjs",
+    "limpiar": "node scripts/limpiar-huerfanos.mjs",
+    "exportar:cuadro": "node scripts/exportar-cuadro.mjs",
+    "respaldo": "bash scripts/respaldo.sh"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.2",
+    "astro": "^7.2.2",
+    "pg": "^8.23.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.9.3"
+  }
+}

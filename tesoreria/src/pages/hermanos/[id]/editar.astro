@@ -1,0 +1,96 @@
+---
+/* Edición de los datos de un hermano. La baja y los eventos de grado van en la ficha. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import FormularioHermano from '@componentes/FormularioHermano.astro';
+import { editarHermano } from '@lib/casos/hermanos';
+import { cargoDeHermano, listarCargos } from '@lib/datos/cargos';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { obtenerHermano } from '@lib/datos/hermanos';
+import { emitirNonce } from '@lib/csrf';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaHermano } from '@lib/esquemas/hermano';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const hermano = await obtenerHermano(id);
+if (!hermano) return new Response('No encontrado', { status: 404 });
+
+const ejercicio = await ejercicioVigente();
+const cargos = await listarCargos();
+const asignacion = await cargoDeHermano(ejercicio.anio, id);
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  nombre_completo: hermano.nombre_completo,
+  grado: hermano.grado,
+  fecha_ingreso: hermano.fecha_ingreso,
+  motivo_ingreso: hermano.motivo_ingreso,
+  fecha_iniciacion: hermano.fecha_iniciacion ?? '',
+  fecha_afiliacion: hermano.fecha_afiliacion ?? '',
+  correo: hermano.correo ?? '',
+  telefono: hermano.telefono ?? '',
+  notas: hermano.notas ?? '',
+  cargo_id: asignacion ? String(asignacion.cargo_id) : '',
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaHermano,
+    proposito: 'hermano_editar',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await editarHermano(
+        {
+          sesion,
+          nonce: resultado.nonce,
+          anio: ejercicio.anio,
+          idPeticion: Astro.locals.idPeticion,
+        },
+        id,
+        resultado.datos,
+      );
+      return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const nonce = await emitirNonce(sesion.idHash, 'hermano_editar');
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={`Editar ${hermano.nombre_completo}`} sesion={sesion} angosto>
+  <h1>Editar hermano</h1>
+  <p class="apagado">
+    Cambiar el grado aquí corrige el dato, no registra un evento. Para un aumento de
+    salario o una exaltación usa <a href={`/hermanos/${id}`}>la ficha del hermano</a>.
+  </p>
+
+  <FormularioHermano
+    csrf={sesion.csrfToken}
+    nonce={nonce}
+    valores={valores}
+    errores={errores}
+    cargos={cargos}
+    anio={ejercicio.anio}
+    textoBoton="Guardar cambios"
+    cancelarA={`/hermanos/${id}`}
+  />
+</LayoutAdmin>

@@ -1,0 +1,43 @@
+---
+/*
+ * Todo formulario de mutación pasa por aquí: inyecta el token CSRF y el nonce de
+ * un solo uso. Escribir un <form method="post"> a mano se salta las dos cosas,
+ * y por eso scripts/verificar-guardias.mjs falla si aparece uno en src/pages.
+ */
+import { CAMPO_CSRF, CAMPO_NONCE } from '@lib/csrf';
+
+interface Props {
+  /** Token CSRF de la sesión. Vacío solo en la pantalla de acceso. */
+  csrf?: string;
+  /** Nonce emitido para este formulario. Vacío solo en la pantalla de acceso. */
+  nonce?: string;
+  /** Destino. Por omisión la propia página, que es lo habitual. */
+  accion?: string;
+  /** true si el formulario sube archivos. */
+  archivos?: boolean;
+  /** Valor del campo oculto _accion, cuando una página atiende varias. */
+  accionInterna?: string;
+  clase?: string;
+}
+
+const {
+  csrf = '',
+  nonce = '',
+  accion,
+  archivos = false,
+  accionInterna,
+  clase,
+} = Astro.props;
+---
+
+<form
+  method="post"
+  action={accion}
+  enctype={archivos ? 'multipart/form-data' : undefined}
+  class={clase}
+>
+  {csrf && <input type="hidden" name={CAMPO_CSRF} value={csrf} />}
+  {nonce && <input type="hidden" name={CAMPO_NONCE} value={nonce} />}
+  {accionInterna && <input type="hidden" name="_accion" value={accionInterna} />}
+  <slot />
+</form>

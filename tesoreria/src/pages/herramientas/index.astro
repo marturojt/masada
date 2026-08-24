@@ -1,0 +1,363 @@
+---
+/*
+ * Herramientas: saldo de apertura del ejercicio y cambio de contraseña.
+ * La exportación del cuadro al sitio público vive en su propia página.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { z } from 'zod';
+import {
+  abrirEjercicio,
+  actualizarApertura,
+  cambiarMiContrasena,
+  cerrarEjercicio,
+} from '@lib/casos/herramientas';
+import { emitirNonce } from '@lib/csrf';
+import {
+  anioDeUrl,
+  cortesCerradosPorAnio,
+  ejercicioVigente,
+  listarEjercicios,
+} from '@lib/datos/ejercicios';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaAbrirEjercicio, esquemaApertura } from '@lib/esquemas/corte';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_ROL } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const esquemaContrasena = z.object({
+  actual: z.string().min(1, 'Escribe tu contraseña actual.'),
+  nueva: z.string().min(1, 'Escribe la nueva contraseña.'),
+  nueva_repetida: z.string().min(1, 'Repite la nueva contraseña.'),
+});
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const anioSiguiente = Math.max(...ejercicios.map((e) => e.anio)) + 1;
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+    seccion = entrada.accion;
+
+    try {
+      if (entrada.accion === 'apertura') {
+        const r = await validar(entrada, {
+          esquema: esquemaApertura,
+          proposito: 'ejercicio_apertura',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await actualizarApertura(
+            { ...ctxBase, nonce: r.nonce },
+            anio,
+            r.datos.apertura_banco,
+            r.datos.apertura_efectivo,
+            r.datos.notas,
+          );
+          return Astro.redirect('/herramientas?ok=ejercicio', 303);
+        }
+      } else if (entrada.accion === 'abrir_ejercicio') {
+        const r = await validar(entrada, {
+          esquema: esquemaAbrirEjercicio,
+          proposito: 'ejercicio_abrir',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await abrirEjercicio(
+            { ...ctxBase, nonce: r.nonce },
+            anioSiguiente,
+            r.datos.capita_mensual,
+            r.datos.capita_promocion,
+          );
+          return Astro.redirect('/herramientas?ok=ejercicio', 303);
+        }
+      } else if (entrada.accion === 'cerrar_ejercicio') {
+        const r = await validar(entrada, {
+          esquema: esquemaVacio,
+          proposito: 'ejercicio_cerrar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await cerrarEjercicio({ ...ctxBase, nonce: r.nonce }, anio);
+          return Astro.redirect('/herramientas?ok=ejercicio', 303);
+        }
+      } else if (entrada.accion === 'contrasena') {
+        const r = await validar(entrada, {
+          esquema: esquemaContrasena,
+          proposito: 'contrasena_cambio',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await cambiarMiContrasena(
+            { ...ctxBase, nonce: r.nonce },
+            r.datos.actual,
+            r.datos.nueva,
+            r.datos.nueva_repetida,
+          );
+          /* La sesión quedó revocada a propósito: hay que entrar de nuevo. */
+          return Astro.redirect('/entrar?ok=contrasena', 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const ejercicio = (await listarEjercicios()).find((e) => e.anio === anio) ?? vigente;
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const nonceApertura = await emitirNonce(sesion.idHash, 'ejercicio_apertura');
+const nonceAbrir = await emitirNonce(sesion.idHash, 'ejercicio_abrir');
+const nonceCerrarEj = await emitirNonce(sesion.idHash, 'ejercicio_cerrar');
+const cortesPorAnio = new Map(
+  (await cortesCerradosPorAnio()).map((c) => [c.anio, c.cerrados]),
+);
+const nonceContrasena = await emitirNonce(sesion.idHash, 'contrasena_cambio');
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Herramientas" sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>{sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  {seccion === null && <ResumenErrores errores={errores} />}
+
+  <h1>Herramientas</h1>
+
+  <div class="pila">
+    <section class="tarjeta">
+      <h2>Saldo de apertura de {anio}</h2>
+      <p class="apagado" style="font-size: 0.9rem;">
+        Es el dinero con el que arrancó el ejercicio, separado por bolsa: lo que había en
+        la cuenta del banco y lo que traía el tesorero en efectivo. De estas cifras se
+        encadenan todos los saldos de los cortes. Hoy: banco
+        {' '}{formatoMXN(ejercicio.apertura_banco_centavos)}, efectivo
+        {' '}{formatoMXN(ejercicio.apertura_efectivo_centavos)}, total
+        {' '}{formatoMXN(ejercicio.saldo_apertura_centavos)}.
+      </p>
+
+      {seccion === 'apertura' && <ResumenErrores errores={errores} />}
+
+      <Formulario csrf={sesion.csrfToken} nonce={nonceApertura} accionInterna="apertura">
+        <Campo
+          nombre="apertura_banco"
+          etiqueta="Saldo en banco"
+          valor={aPesosTexto(ejercicio.apertura_banco_centavos)}
+          error={errores.apertura_banco}
+          modoTeclado="decimal"
+          monto
+          requerido
+        />
+        <Campo
+          nombre="apertura_efectivo"
+          etiqueta="Saldo en efectivo"
+          valor={aPesosTexto(ejercicio.apertura_efectivo_centavos)}
+          error={errores.apertura_efectivo}
+          modoTeclado="decimal"
+          monto
+          requerido
+        />
+        <Campo
+          nombre="notas"
+          etiqueta="Nota"
+          valor={ejercicio.notas ?? ''}
+          error={errores.notas}
+          ayuda="Por ejemplo, de dónde salió esa cifra."
+          largo
+          filas={2}
+        />
+        <div class="formulario__acciones">
+          <button class="btn btn--primary" type="submit">Guardar saldo de apertura</button>
+        </div>
+      </Formulario>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Ejercicios</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Año</th>
+              <th scope="col">Estado</th>
+              <th scope="col" class="num">Cortes cerrados</th>
+              <th scope="col" class="num">Cápita mensual</th>
+              <th scope="col" class="num">Anual preferencial</th>
+              <th scope="col" class="num">Apertura</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              ejercicios.map((e) => (
+                <tr>
+                  <td>{e.anio}</td>
+                  <td>
+                    {e.estado === 'cerrado' ? (
+                      <span class="insignia">Cerrado</span>
+                    ) : (
+                      <span class="insignia insignia--ok">Abierto</span>
+                    )}
+                  </td>
+                  <td class="num">{cortesPorAnio.get(e.anio) ?? 0} de 12</td>
+                  <td class="num">{formatoMXN(e.capita_mensual_centavos)}</td>
+                  <td class="num">{formatoMXN(e.capita_promocion_centavos)}</td>
+                  <td class="num">{formatoMXN(e.saldo_apertura_centavos)}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <details style="margin-top: 1rem;">
+        <summary style="cursor: pointer;">Abrir el ejercicio {anioSiguiente}</summary>
+        <div style="margin-top: 0.75rem;">
+          <p class="apagado" style="font-size: 0.85rem;">
+            El saldo de apertura se arrastra del corte de diciembre de {anioSiguiente - 1}:
+            si ese corte aún no cierra, se completa solo cuando cierre. Las tarifas vacías
+            heredan las de {anioSiguiente - 1}.
+          </p>
+          {seccion === 'abrir_ejercicio' && <ResumenErrores errores={errores} />}
+          <Formulario csrf={sesion.csrfToken} nonce={nonceAbrir} accionInterna="abrir_ejercicio">
+            <Campo
+              nombre="capita_mensual"
+              etiqueta={`Cápita mensual ${anioSiguiente}`}
+              error={errores.capita_mensual}
+              modoTeclado="decimal"
+              monto
+              ayuda={`Vacía hereda ${formatoMXN(vigente.capita_mensual_centavos)}.`}
+            />
+            <Campo
+              nombre="capita_promocion"
+              etiqueta={`Anual preferencial ${anioSiguiente}`}
+              error={errores.capita_promocion}
+              modoTeclado="decimal"
+              monto
+              ayuda={`Vacía hereda ${formatoMXN(vigente.capita_promocion_centavos)}.`}
+            />
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">
+                Abrir el ejercicio {anioSiguiente}
+              </button>
+            </div>
+          </Formulario>
+        </div>
+      </details>
+
+      {
+        (cortesPorAnio.get(anio) ?? 0) === 12 &&
+          ejercicios.find((e) => e.anio === anio)?.estado === 'abierto' && (
+            <details style="margin-top: 1rem;">
+              <summary style="cursor: pointer;">Cerrar el ejercicio {anio}</summary>
+              <div style="margin-top: 0.75rem;">
+                <p class="apagado" style="font-size: 0.85rem;">
+                  Los doce cortes de {anio} ya están cerrados. Cerrar el ejercicio lo deja
+                  como consulta: sus tarifas y cargos ya no se tocan.
+                </p>
+                {seccion === 'cerrar_ejercicio' && <ResumenErrores errores={errores} />}
+                <Formulario
+                  csrf={sesion.csrfToken}
+                  nonce={nonceCerrarEj}
+                  accionInterna="cerrar_ejercicio"
+                >
+                  <div class="formulario__acciones">
+                    <button class="btn btn--ghost" type="submit">Cerrar el ejercicio {anio}</button>
+                  </div>
+                </Formulario>
+              </div>
+            </details>
+          )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Cuadro logial del sitio público</h2>
+      <p class="apagado" style="font-size: 0.9rem;">
+        El padrón de este sistema es la fuente de verdad. Desde aquí se genera el JSON que
+        publica el sitio, con solo nombre, grado y cargo: ni correos, ni teléfonos, ni
+        montos.
+      </p>
+      <a class="btn btn--ghost" href="/herramientas/cuadro">Ver y exportar el cuadro</a>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Cambiar mi contraseña</h2>
+      <p class="apagado" style="font-size: 0.9rem;">
+        Al cambiarla se cierran todas las sesiones, incluida esta, y habrá que entrar de
+        nuevo.
+      </p>
+
+      {seccion === 'contrasena' && <ResumenErrores errores={errores} />}
+
+      <Formulario csrf={sesion.csrfToken} nonce={nonceContrasena} accionInterna="contrasena">
+        <Campo
+          nombre="actual"
+          etiqueta="Contraseña actual"
+          tipo="password"
+          error={errores.actual}
+          autocompletar="current-password"
+          requerido
+        />
+        <Campo
+          nombre="nueva"
+          etiqueta="Contraseña nueva"
+          tipo="password"
+          error={errores.nueva}
+          autocompletar="new-password"
+          ayuda="Al menos 14 caracteres. Una frase con espacios sirve y se recuerda mejor."
+          requerido
+        />
+        <Campo
+          nombre="nueva_repetida"
+          etiqueta="Repite la nueva"
+          tipo="password"
+          error={errores.nueva_repetida}
+          autocompletar="new-password"
+          requerido
+        />
+        <div class="formulario__acciones">
+          <button class="btn btn--primary" type="submit">Cambiar contraseña</button>
+        </div>
+      </Formulario>
+    </section>
+  </div>
+</LayoutAdmin>

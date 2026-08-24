@@ -1,0 +1,129 @@
+---
+/* Cortes del ejercicio, mes por mes, con los saldos encadenados. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { cortesDelAnio } from '@lib/datos/cortes';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoMXN } from '@lib/dinero';
+import { formatoMomento, nombrePeriodo, periodoActual } from '@lib/fechas';
+import { avisoDe } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
+
+const cortes = await cortesDelAnio(anio);
+const hoy = periodoActual();
+
+const cerrados = cortes.filter((c) => c.estado_corte === 'cerrado');
+const ultimoCerrado = cerrados.at(-1);
+const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_final_centavos;
+---
+
+<LayoutAdmin titulo="Cortes mensuales" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Saldo de apertura: {formatoMXN(ejercicio.saldo_apertura_centavos)}</span>
+    {saldoActual !== undefined && <span>Saldo a hoy: {formatoMXN(saldoActual)}</span>}
+    <span>{cerrados.length} de 12 meses cerrados</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <h1>Cortes mensuales {anio}</h1>
+  <p class="apagado">
+    Cada mes se cierra en orden. Al cerrarlo, sus movimientos quedan sellados y el mes
+    ya no admite capturas: una corrección posterior se hace con un movimiento de ajuste
+    en el mes abierto.
+  </p>
+
+  {
+    ejercicio.saldo_apertura_centavos === 0 && (
+      <div class="aviso aviso--error">
+        El saldo de apertura de {anio} está en cero. Si la logia traía dinero de antes,
+        captúralo en <a href="/herramientas">Herramientas</a> antes de cerrar el primer
+        mes, porque de ahí se encadenan todos los saldos.
+      </div>
+    )
+  }
+
+  <div class="tabla-envoltura">
+    <table class="tabla">
+      <caption>Saldos encadenados</caption>
+      <thead>
+        <tr>
+          <th scope="col">Mes</th>
+          <th scope="col" class="num">Saldo inicial</th>
+          <th scope="col" class="num">Ingresos</th>
+          <th scope="col" class="num">Egresos</th>
+          <th scope="col" class="num">Saldo final</th>
+          <th scope="col" class="num">Banco</th>
+          <th scope="col" class="num">Efectivo</th>
+          <th scope="col">Estado</th>
+          <th scope="col" />
+        </tr>
+      </thead>
+      <tbody>
+        {
+          cortes.map((c) => {
+            const periodo = c.periodo.slice(0, 7);
+            const futuro = periodo > hoy;
+            return (
+              <tr style={futuro ? 'opacity: 0.55;' : undefined}>
+                <td>
+                  <a href={`/cortes/${periodo}`}>{nombrePeriodo(periodo)}</a>
+                </td>
+                <td class="num">{formatoMXN(c.saldo_inicial_centavos)}</td>
+                <td class="num">{formatoMXN(c.total_ingresos_centavos)}</td>
+                <td class="num">{formatoMXN(c.total_egresos_centavos)}</td>
+                <td class="num">{formatoMXN(c.saldo_final_centavos)}</td>
+                <td class="num">{formatoMXN(c.banco_final_centavos)}</td>
+                <td class="num">{formatoMXN(c.efectivo_final_centavos)}</td>
+                <td>
+                  {c.estado_corte === 'cerrado' ? (
+                    <>
+                      <span class="insignia insignia--ok">Cerrado</span>
+                      {(c.reaperturas ?? 0) > 0 && (
+                        <>
+                          {' '}
+                          <span class="insignia insignia--alerta">
+                            Reabierto {c.reaperturas}
+                          </span>
+                        </>
+                      )}
+                    </>
+                  ) : futuro ? (
+                    <span class="apagado">Por venir</span>
+                  ) : (
+                    <span class="insignia insignia--pendiente">Abierto</span>
+                  )}
+                </td>
+                <td>
+                  <a href={`/cortes/${periodo}`}>
+                    {c.estado_corte === 'cerrado' ? 'Ver' : 'Revisar y cerrar'}
+                  </a>
+                  {' · '}
+                  <a href={`/cortes/${periodo}/imprimir`}>Imprimir</a>
+                </td>
+              </tr>
+            );
+          })
+        }
+      </tbody>
+    </table>
+  </div>
+
+  {
+    ultimoCerrado && (
+      <p class="apagado" style="font-size: 0.85rem;">
+        Último mes cerrado: {nombrePeriodo(ultimoCerrado.periodo.slice(0, 7))}
+        {ultimoCerrado.cerrado_nombre && <> por {ultimoCerrado.cerrado_nombre}</>}
+        {ultimoCerrado.cerrado_en && <> el {formatoMomento(ultimoCerrado.cerrado_en)}</>}.
+      </p>
+    )
+  }
+</LayoutAdmin>

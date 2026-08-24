@@ -1,0 +1,153 @@
+---
+/* Padrón de hermanos, con filtros por estatus y grado en la barra de direcciones. */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { avisoDe } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { listarHermanos, resumenPadron } from '@lib/datos/hermanos';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoFechaCorta } from '@lib/fechas';
+import { NOMBRE_GRADO, NOMBRE_GRADO_PLURAL, type Grado } from '@lib/tipos';
+import { NOMBRE_MOTIVO_BAJA } from '@lib/esquemas/hermano';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const estatusCrudo = Astro.url.searchParams.get('estatus') ?? 'activo';
+const estatus = (['activo', 'baja', 'todos'] as const).includes(estatusCrudo as 'activo')
+  ? (estatusCrudo as 'activo' | 'baja' | 'todos')
+  : 'activo';
+
+const gradoCrudo = Astro.url.searchParams.get('grado');
+const grado = (['aprendiz', 'companero', 'maestro'] as const).includes(gradoCrudo as Grado)
+  ? (gradoCrudo as Grado)
+  : undefined;
+
+const hermanos = await listarHermanos({ anio, estatus, grado });
+const resumen = await resumenPadron();
+const totalActivos = resumen.reduce((suma, r) => suma + r.activos, 0);
+
+const conFiltro = (cambios: Record<string, string | undefined>): string => {
+  const params = new URLSearchParams(Astro.url.searchParams);
+  for (const [clave, valor] of Object.entries(cambios)) {
+    if (valor === undefined) params.delete(clave);
+    else params.set(clave, valor);
+  }
+  const cadena = params.toString();
+  return cadena ? `/hermanos?${cadena}` : '/hermanos';
+};
+---
+
+<LayoutAdmin titulo="Hermanos" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>{totalActivos} hermanos activos</span>
+    {
+      resumen.map((r) => (
+        <span>
+          {NOMBRE_GRADO_PLURAL[r.grado]}: {r.activos}
+        </span>
+      ))
+    }
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <h1>Padrón</h1>
+    <a class="btn btn--primary" href="/hermanos/nuevo">Alta de hermano</a>
+  </div>
+
+  <p class="apagado" style="font-size: 0.85rem;">
+    Filtrar:
+    {
+      (
+        [
+          ['activo', 'Activos'],
+          ['baja', 'Bajas'],
+          ['todos', 'Todos'],
+        ] as const
+      ).map(([valor, texto]) => (
+        <>
+          {' '}
+          <a
+            href={conFiltro({ estatus: valor })}
+            style={estatus === valor ? 'color: var(--gold); font-weight: 600;' : undefined}
+          >
+            {texto}
+          </a>
+        </>
+      ))
+    }
+    {' · '}
+    <a href={conFiltro({ grado: undefined })} style={!grado ? 'color: var(--gold); font-weight: 600;' : undefined}>
+      Todos los grados
+    </a>
+    {
+      (['maestro', 'companero', 'aprendiz'] as const).map((g) => (
+        <>
+          {' '}
+          <a
+            href={conFiltro({ grado: g })}
+            style={grado === g ? 'color: var(--gold); font-weight: 600;' : undefined}
+          >
+            {NOMBRE_GRADO_PLURAL[g]}
+          </a>
+        </>
+      ))
+    }
+  </p>
+
+  {
+    hermanos.length === 0 ? (
+      <div class="tarjeta">
+        <p style="margin: 0;">
+          No hay hermanos con ese filtro. Empieza con
+          <a href="/hermanos/nuevo">el alta de un hermano</a>, o importa el cuadro del sitio
+          con <code>npm run sembrar -- --desde-sitio</code>.
+        </p>
+      </div>
+    ) : (
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <caption>
+            {hermanos.length} hermano(s)
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Nombre</th>
+              <th scope="col">Grado</th>
+              <th scope="col">Cargo {anio}</th>
+              <th scope="col">Ingreso</th>
+              <th scope="col">Estatus</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hermanos.map((h) => (
+              <tr>
+                <td>
+                  <a href={`/hermanos/${h.id}`}>{h.nombre_completo}</a>
+                </td>
+                <td>{NOMBRE_GRADO[h.grado]}</td>
+                <td>{h.cargo_nombre ?? <span class="apagado">—</span>}</td>
+                <td>{formatoFechaCorta(h.fecha_ingreso)}</td>
+                <td>
+                  {h.estatus === 'activo' ? (
+                    <span class="insignia insignia--ok">Activo</span>
+                  ) : (
+                    <span class="insignia insignia--alerta">
+                      {h.motivo_baja ? NOMBRE_MOTIVO_BAJA[h.motivo_baja] : 'Baja'}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</LayoutAdmin>

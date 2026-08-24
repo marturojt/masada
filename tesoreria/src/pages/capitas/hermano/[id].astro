@@ -1,0 +1,557 @@
+---
+/*
+ * Estado de cuenta de cápitas de un hermano, mes por mes, con sus pagos y sus
+ * exenciones. Desde aquí el Venerable Maestro puede exentar un mes.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import {
+  aplicarSaldoAFavor,
+  devolverSaldoAFavor,
+  exentarMes,
+  quitarExencion,
+} from '@lib/casos/capitas';
+import { emitirNonce, emitirNonces } from '@lib/csrf';
+import {
+  NOMBRE_MODALIDAD,
+  adeudosDeHermano,
+  condonacionesDeHermano,
+  estadoDeCuenta,
+  pagosDeHermano,
+  planVigente,
+  saldoAFavorDisponible,
+} from '@lib/datos/capitas';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { obtenerHermano } from '@lib/datos/hermanos';
+import { foliosDeRecibo } from '@lib/datos/movimientos';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaExencion } from '@lib/esquemas/capita';
+import { esquemaVacio, idPositivo, montoEnCentavos } from '@lib/esquemas/comunes';
+import { z } from 'zod';
+import { formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { esVM, requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const puedeExentar = esVM(sesion);
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else if (entrada.accion === 'saldo_aplicar') {
+    const r = await validar(entrada, {
+      esquema: esquemaVacio,
+      proposito: 'capita_saldo_aplicar',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+    } else {
+      try {
+        await aplicarSaldoAFavor(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          id,
+        );
+        return Astro.redirect(`/capitas/hermano/${id}?ok=pago`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
+        seccion = 'saldo';
+      }
+    }
+  } else if (entrada.accion === 'saldo_devolver') {
+    const r = await validar(entrada, {
+      esquema: z.object({ monto: montoEnCentavos('El monto a devolver') }),
+      proposito: 'capita_saldo_devolver',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+      seccion = 'saldo';
+    } else {
+      try {
+        const creado = await devolverSaldoAFavor(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          id,
+          r.datos.monto,
+        );
+        return Astro.redirect(`/egresos/${creado.egresoId}?ok=egreso`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
+        seccion = 'saldo';
+      }
+    }
+  } else if (entrada.accion === 'quitar_exencion') {
+    const r = await validar(entrada, {
+      esquema: z.object({ capita_cargo_id: idPositivo('El mes') }),
+      proposito: 'capita_exencion_quitar',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+    } else {
+      try {
+        await quitarExencion(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          r.datos.capita_cargo_id,
+        );
+        return Astro.redirect(`/capitas/hermano/${id}?ok=modalidad`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
+      }
+    }
+  } else if (entrada.accion === 'exentar') {
+    const r = await validar(entrada, {
+      esquema: esquemaExencion,
+      proposito: 'capita_exencion',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+    } else {
+      try {
+        await exentarMes(
+          { sesion, nonce: r.nonce, anio, idPeticion: Astro.locals.idPeticion },
+          r.datos,
+        );
+        return Astro.redirect(`/capitas/hermano/${id}?ok=modalidad`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
+      }
+    }
+  } else {
+    errores = { _general: 'Acción no reconocida.' };
+    estado = 400;
+  }
+}
+
+const hermano = await obtenerHermano(id);
+if (!hermano) return new Response('No encontrado', { status: 404 });
+
+const [cuenta, meses, pagos, condonaciones, plan] = await Promise.all([
+  estadoDeCuenta(id, anio),
+  adeudosDeHermano(id, anio),
+  pagosDeHermano(id, anio),
+  condonacionesDeHermano(id, anio),
+  planVigente(id, anio),
+]);
+
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const disponible = await saldoAFavorDisponible(id);
+const folios = new Map(
+  (await foliosDeRecibo(pagos.map((p) => p.movimiento_id))).map((f) => [
+    f.movimiento_id,
+    f.folio,
+  ]),
+);
+const noncesExentar = await emitirNonces(sesion.idHash, 'capita_exencion', meses.length);
+const noncesQuitarEx = await emitirNonces(
+  sesion.idHash,
+  'capita_exencion_quitar',
+  puedeExentar ? condonaciones.length : 0,
+);
+const nonceSaldoAplicar = await emitirNonce(sesion.idHash, 'capita_saldo_aplicar');
+const nonceSaldoDevolver = await emitirNonce(sesion.idHash, 'capita_saldo_devolver');
+
+const ETIQUETA_ESTADO: Record<string, { texto: string; clase: string }> = {
+  cubierto: { texto: 'Cubierto', clase: 'insignia--ok' },
+  parcial: { texto: 'Parcial', clase: 'insignia--pendiente' },
+  pendiente: { texto: 'Pendiente', clase: '' },
+  vencido: { texto: 'Vencido', clase: 'insignia--alerta' },
+  vencido_parcial: { texto: 'Vencido, parcial', clase: 'insignia--alerta' },
+};
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={`Cápitas de ${hermano.nombre_completo}`} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span><a href="/capitas">← Cápitas</a></span>
+    <span><a href={`/hermanos/${id}`}>Ficha del hermano</a></span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={{ monto: 'Monto', motivo: 'Motivo' }} />
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <div>
+      <h1 style="margin-bottom: 0.2rem;">{hermano.nombre_completo}</h1>
+      <p class="apagado" style="margin: 0;">
+        {NOMBRE_GRADO[hermano.grado]}
+        {plan && <> · {NOMBRE_MODALIDAD[plan.modalidad]}</>}
+        {!plan && <> · sin modalidad asignada</>}
+      </p>
+    </div>
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+      <a class="btn btn--primary" href={`/capitas/pagos/nuevo?hermano=${id}`}>
+        Registrar pago
+      </a>
+      <a class="btn btn--ghost" href={`/capitas/asignar?hermano=${id}`}>Cambiar modalidad</a>
+      <a class="btn btn--ghost" href={`/capitas/hermano/${id}/imprimir?anio=${anio}`}>
+        Imprimir estado de cuenta
+      </a>
+    </div>
+  </div>
+
+  {
+    cuenta && (
+      <section class="tarjeta" style="margin-top: 1.25rem;">
+        <h2>Resumen del ejercicio</h2>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <tbody>
+              <tr>
+                <th scope="row">Esperado</th>
+                <td class="num">{formatoMXN(cuenta.esperado_centavos)}</td>
+              </tr>
+              <tr>
+                <th scope="row">Pagado</th>
+                <td class="num">{formatoMXN(cuenta.pagado_centavos)}</td>
+              </tr>
+              {cuenta.condonado_centavos > 0 && (
+                <tr>
+                  <th scope="row">Exento</th>
+                  <td class="num">{formatoMXN(cuenta.condonado_centavos)}</td>
+                </tr>
+              )}
+              <tr>
+                <th scope="row">Adeudo</th>
+                <td class="num">{formatoMXN(cuenta.adeudo_centavos)}</td>
+              </tr>
+              {cuenta.saldo_a_favor_centavos > 0 && (
+                <tr>
+                  <th scope="row">Saldo a favor</th>
+                  <td class="num">{formatoMXN(cuenta.saldo_a_favor_centavos)}</td>
+                </tr>
+              )}
+              <tr>
+                <th scope="row">Situación</th>
+                <td>
+                  {cuenta.al_corriente ? (
+                    <span class="insignia insignia--ok">Al corriente</span>
+                  ) : (
+                    <span class="insignia insignia--alerta">
+                      Debe {cuenta.meses_vencidos} mes(es)
+                    </span>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {plan?.modalidad === 'promocion' && plan.autorizado_nombre && (
+          <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+            Anual preferencial autorizada por {plan.autorizado_nombre}
+            {plan.autorizado_en && <> el {formatoMomento(plan.autorizado_en)}</>}
+            {plan.motivo && <>. {plan.motivo}</>}
+          </p>
+        )}
+      </section>
+    )
+  }
+
+  {
+    disponible > 0 && (
+      <section class="tarjeta" style="margin-top: 1.25rem;">
+        <h2>Saldo a favor: {formatoMXN(disponible)}</h2>
+        <p class="apagado" style="font-size: 0.85rem;">
+          Dinero recibido que no cubre ningún mes todavía. Se puede aplicar a los meses
+          pendientes (incluidos los del ejercicio siguiente, si ya está abierto) o
+          devolvérselo al hermano como un egreso con sus dos firmas.
+        </p>
+        {seccion === 'saldo' && <ResumenErrores errores={errores} />}
+        <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
+          <Formulario
+            csrf={sesion.csrfToken}
+            nonce={nonceSaldoAplicar}
+            accionInterna="saldo_aplicar"
+          >
+            <div class="formulario__acciones" style="margin-top: 0;">
+              <button class="btn btn--primary" type="submit">
+                Aplicar a meses pendientes
+              </button>
+            </div>
+          </Formulario>
+          <details>
+            <summary style="cursor: pointer;">Devolver al hermano</summary>
+            <div style="margin-top: 0.75rem; max-width: 18rem;">
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonceSaldoDevolver}
+                accionInterna="saldo_devolver"
+              >
+                <Campo
+                  nombre="monto"
+                  etiqueta="Monto a devolver"
+                  valor={aPesosTexto(disponible)}
+                  error={errores.monto}
+                  modoTeclado="decimal"
+                  monto
+                  requerido
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--ghost" type="submit">
+                    Crear el egreso de devolución
+                  </button>
+                </div>
+              </Formulario>
+            </div>
+          </details>
+        </div>
+      </section>
+    )
+  }
+
+  <section class="tarjeta" style="margin-top: 1.25rem;">
+    <h2>Mes por mes</h2>
+    {
+      meses.length === 0 ? (
+        <p class="apagado">
+          Sin cargos de cápita en {anio}.{' '}
+          <a href={`/capitas/asignar?hermano=${id}`}>Asigna la modalidad</a> para generarlos.
+        </p>
+      ) : (
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Mes</th>
+                <th scope="col" class="num">Esperado</th>
+                <th scope="col" class="num">Pagado</th>
+                <th scope="col" class="num">Exento</th>
+                <th scope="col" class="num">Saldo</th>
+                <th scope="col">Estado</th>
+                {puedeExentar && <th scope="col">Exentar</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {meses.map((m, i) => (
+                <tr>
+                  <td>
+                    {nombrePeriodo(m.periodo.slice(0, 7))}
+                    {m.clase === 'promocion' && (
+                      <>
+                        {' '}
+                        <span class="insignia insignia--pendiente">Anual preferencial</span>
+                      </>
+                    )}
+                  </td>
+                  <td class="num">{formatoMXN(m.monto_esperado_centavos)}</td>
+                  <td class="num">
+                    {m.pagado_centavos > 0 ? formatoMXN(m.pagado_centavos) : '—'}
+                  </td>
+                  <td class="num">
+                    {m.condonado_centavos > 0 ? formatoMXN(m.condonado_centavos) : '—'}
+                  </td>
+                  <td class="num">
+                    {m.saldo_centavos > 0 ? formatoMXN(m.saldo_centavos) : '—'}
+                  </td>
+                  <td>
+                    <span class:list={['insignia', ETIQUETA_ESTADO[m.estado_pago]?.clase]}>
+                      {ETIQUETA_ESTADO[m.estado_pago]?.texto ?? m.estado_pago}
+                    </span>
+                  </td>
+                  {puedeExentar && (
+                    <td>
+                      {m.saldo_centavos > 0 ? (
+                        <details>
+                          <summary style="cursor: pointer; font-size: 0.8rem;">Exentar</summary>
+                          <div style="min-width: 14rem; padding-top: 0.5rem;">
+                            <Formulario
+                              csrf={sesion.csrfToken}
+                              nonce={noncesExentar[i] ?? ''}
+                              accionInterna="exentar"
+                            >
+                              <input
+                                type="hidden"
+                                name="capita_cargo_id"
+                                value={String(m.capita_cargo_id)}
+                              />
+                              <Campo
+                                nombre={`monto`}
+                                etiqueta="Monto a exentar"
+                                valor={aPesosTexto(m.saldo_centavos)}
+                                modoTeclado="decimal"
+                                monto
+                                requerido
+                              />
+                              <Campo nombre="motivo" etiqueta="Motivo" requerido />
+                              <div class="formulario__acciones">
+                                <button
+                                  class="btn btn--primary"
+                                  type="submit"
+                                  style="padding: 0.2rem 0.7rem; font-size: 0.75rem;"
+                                >
+                                  Exentar mes
+                                </button>
+                              </div>
+                            </Formulario>
+                          </div>
+                        </details>
+                      ) : (
+                        <span class="apagado">—</span>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    {
+      !puedeExentar && (
+        <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+          Las exenciones las autoriza el Venerable Maestro.
+        </p>
+      )
+    }
+  </section>
+
+  <section class="tarjeta" style="margin-top: 1.25rem;">
+    <h2>Pagos registrados</h2>
+    {
+      pagos.length === 0 ? (
+        <p class="apagado">Sin pagos de cápita en {anio}.</p>
+      ) : (
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col" class="num">Monto</th>
+                <th scope="col" class="num">Aplicado</th>
+                <th scope="col">Meses que cubrió</th>
+                <th scope="col">Descripción</th>
+                <th scope="col">Comprobante</th>
+                <th scope="col">Recibo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagos.map((p) => (
+                <tr>
+                  <td>{formatoFechaCorta(p.fecha)}</td>
+                  <td class="num">{formatoMXN(p.monto_centavos)}</td>
+                  <td class="num">
+                    {formatoMXN(p.aplicado_centavos)}
+                    {p.aplicado_centavos < p.monto_centavos && (
+                      <>
+                        {' '}
+                        <span class="insignia insignia--pendiente">A favor</span>
+                      </>
+                    )}
+                  </td>
+                  <td>{p.meses ?? <span class="apagado">—</span>}</td>
+                  <td>{p.descripcion}</td>
+                  <td>
+                    {p.archivo_id ? (
+                      <a href={`/comprobantes/${p.archivo_id}`}>Ver</a>
+                    ) : (
+                      <span class="apagado">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {folios.get(p.movimiento_id) ? (
+                      <a href={`/recibos/${p.movimiento_id}`}>
+                        {folios.get(p.movimiento_id)}
+                      </a>
+                    ) : (
+                      <span class="apagado">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    condonaciones.length > 0 && (
+      <section class="tarjeta" style="margin-top: 1.25rem;">
+        <h2>Exenciones</h2>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Mes</th>
+                <th scope="col" class="num">Monto</th>
+                <th scope="col">Motivo</th>
+                <th scope="col">Autorizó</th>
+                {puedeExentar && <th scope="col" />}
+              </tr>
+            </thead>
+            <tbody>
+              {condonaciones.map((c, i) => (
+                <tr>
+                  <td>{nombrePeriodo(c.periodo.slice(0, 7))}</td>
+                  <td class="num">{formatoMXN(c.monto_centavos)}</td>
+                  <td>{c.motivo}</td>
+                  <td>
+                    {c.autorizado_nombre}
+                    <span class="apagado"> · {formatoMomento(c.autorizado_en)}</span>
+                  </td>
+                  {puedeExentar && (
+                    <td>
+                      <Formulario
+                        csrf={sesion.csrfToken}
+                        nonce={noncesQuitarEx[i] ?? ''}
+                        accionInterna="quitar_exencion"
+                      >
+                        <input
+                          type="hidden"
+                          name="capita_cargo_id"
+                          value={String(c.capita_cargo_id)}
+                        />
+                        <button
+                          class="btn btn--ghost"
+                          type="submit"
+                          style="padding: 0.15rem 0.6rem; font-size: 0.72rem;"
+                        >
+                          Quitar
+                        </button>
+                      </Formulario>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+</LayoutAdmin>

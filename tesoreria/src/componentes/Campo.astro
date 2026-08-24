@@ -1,0 +1,100 @@
+---
+/*
+ * Campo de formulario con etiqueta, ayuda y error accesibles.
+ * Los atributos HTML (required, inputmode, min) son comodidad para quien
+ * captura, nunca validación: la validación real vive en el esquema de zod.
+ */
+interface Props {
+  nombre: string;
+  etiqueta: string;
+  tipo?: 'text' | 'password' | 'email' | 'date' | 'month' | 'number' | 'file' | 'tel';
+  valor?: string | number | null;
+  error?: string | undefined;
+  ayuda?: string;
+  requerido?: boolean;
+  autocompletar?: string;
+  modoTeclado?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel';
+  aceptar?: string;
+  min?: string;
+  max?: string;
+  paso?: string;
+  soloLectura?: boolean;
+  /** Textarea en vez de input. */
+  largo?: boolean;
+  filas?: number;
+  /** Estilo de monto: alineado a la derecha y con cifras tabulares. */
+  monto?: boolean;
+  autoenfoque?: boolean;
+}
+
+const {
+  nombre,
+  etiqueta,
+  tipo = 'text',
+  valor,
+  error,
+  ayuda,
+  requerido = false,
+  autocompletar,
+  modoTeclado,
+  aceptar,
+  min,
+  max,
+  paso,
+  soloLectura = false,
+  largo = false,
+  filas = 4,
+  monto = false,
+  autoenfoque = false,
+} = Astro.props;
+
+const idCampo = `campo-${nombre}`;
+const idError = `${idCampo}-error`;
+const idAyuda = `${idCampo}-ayuda`;
+const descrito = [error ? idError : null, ayuda ? idAyuda : null]
+  .filter(Boolean)
+  .join(' ');
+const valorTexto = valor == null ? '' : String(valor);
+---
+
+<div class:list={['campo', monto && 'campo--monto']}>
+  <label class="campo__etiqueta" for={idCampo}>
+    {etiqueta}{requerido && <span aria-hidden="true"> *</span>}
+  </label>
+
+  {
+    largo ? (
+      <textarea
+        id={idCampo}
+        name={nombre}
+        rows={filas}
+        required={requerido}
+        readonly={soloLectura}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={descrito || undefined}
+        set:text={valorTexto}
+      />
+    ) : (
+      <input
+        id={idCampo}
+        name={nombre}
+        type={tipo}
+        value={tipo === 'file' ? undefined : valorTexto}
+        required={requerido}
+        readonly={soloLectura}
+        autocomplete={autocompletar}
+        inputmode={modoTeclado}
+        accept={aceptar}
+        min={min}
+        max={max}
+        step={paso}
+        autofocus={autoenfoque}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={descrito || undefined}
+      />
+    )
+  }
+
+  {ayuda && <span class="campo__ayuda" id={idAyuda}>{ayuda}</span>}
+  {error && <span class="campo__error" id={idError}>{error}</span>}
+</div>

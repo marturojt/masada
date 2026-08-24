@@ -1,0 +1,116 @@
+---
+/* Tabla de movimientos del libro de caja, con total al pie. */
+import type { MovimientoFila } from '@lib/datos/movimientos';
+import { formatoCifra } from '@lib/dinero';
+import { NOMBRE_BOLSA } from '@lib/tipos';
+import { formatoFechaCorta } from '@lib/fechas';
+
+interface Props {
+  movimientos: MovimientoFila[];
+  titulo: string;
+  /** Folios de recibo por movimiento: agrega la columna Recibo. */
+  folios?: Map<number, string>;
+  /** Muestra la columna de hermano. */
+  conHermano?: boolean;
+  /** Muestra el signo del efecto en caja en vez del monto a secas. */
+  conSigno?: boolean;
+  vacio?: string;
+}
+
+const {
+  movimientos,
+  titulo,
+  folios,
+  conHermano = true,
+  conSigno = false,
+  vacio = 'Sin movimientos.',
+} = Astro.props;
+
+const total = movimientos.reduce(
+  (suma, m) => suma + (conSigno ? m.efecto_centavos : m.monto_centavos),
+  0,
+);
+---
+
+{
+  movimientos.length === 0 ? (
+    <p class="apagado">{vacio}</p>
+  ) : (
+    <div class="tabla-envoltura">
+      <table class="tabla">
+        <caption>{titulo}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Concepto</th>
+            {conHermano && <th scope="col">Hermano</th>}
+            <th scope="col">Bolsa</th>
+            <th scope="col">Descripción</th>
+            <th scope="col" class="num">
+              Monto
+            </th>
+            <th scope="col">Comprobante</th>
+            {folios && <th scope="col">Recibo</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {movimientos.map((m) => (
+            <tr>
+              <td>{formatoFechaCorta(m.fecha)}</td>
+              <td>
+                {m.concepto_nombre}
+                {m.es_ajuste && (
+                  <>
+                    {' '}
+                    <span class="insignia">Ajuste</span>
+                  </>
+                )}
+              </td>
+              {conHermano && (
+                <td>
+                  {m.hermano_id ? (
+                    <a href={`/hermanos/${m.hermano_id}`}>{m.hermano_nombre}</a>
+                  ) : (
+                    <span class="apagado">—</span>
+                  )}
+                </td>
+              )}
+              <td>{NOMBRE_BOLSA[m.bolsa]}</td>
+              <td>{m.descripcion}</td>
+              <td class="num">
+                {conSigno && m.tipo === 'egreso' ? '−' : ''}
+                {formatoCifra(m.monto_centavos)}
+              </td>
+              <td>
+                {m.archivo_id ? (
+                  <a href={`/comprobantes/${m.archivo_id}`} rel="noopener">
+                    Ver
+                  </a>
+                ) : (
+                  <span class="apagado">—</span>
+                )}
+              </td>
+              {folios && (
+                <td>
+                  {folios.get(m.id) ? (
+                    <a href={`/recibos/${m.id}`}>{folios.get(m.id)}</a>
+                  ) : (
+                    <span class="apagado">—</span>
+                  )}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan={conHermano ? 5 : 4}>Total</td>
+            <td class="num">{formatoCifra(total)}</td>
+            <td />
+            {folios && <td />}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}

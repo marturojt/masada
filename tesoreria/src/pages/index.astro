@@ -1,0 +1,198 @@
+---
+/*
+ * Tablero: lo que un tesorero quiere ver al entrar. Saldo de caja, qué mes toca
+ * cerrar, cómo van las cápitas y qué egresos esperan firma o comprobación.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { resumenCapitas, sinPlan } from '@lib/datos/capitas';
+import { cortesDelAnio, primerMesAbierto } from '@lib/datos/cortes';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { listarEgresos, pendientesDeComprobar } from '@lib/datos/egresos';
+import { saldoDeCaja } from '@lib/datos/movimientos';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, formatoFechaLarga, hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
+import { avisoDe } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_ESTADO_EGRESO, CLASE_ESTADO_EGRESO } from '@lib/datos/egresos';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ejercicio = await ejercicioVigente();
+const anio = ejercicio.anio;
+
+const [caja, capitas, faltantes, pendientes, porComprobar, cortes, mesAbierto] =
+  await Promise.all([
+    saldoDeCaja(anio),
+    resumenCapitas(anio),
+    sinPlan(anio),
+    listarEgresos({ anio, pendientes: true }),
+    pendientesDeComprobar(),
+    cortesDelAnio(anio),
+    primerMesAbierto(anio),
+  ]);
+
+const porFirmar = pendientes.filter((e) => e.estado === 'registrado');
+const porEntregar = pendientes.filter((e) => e.estado === 'autorizado');
+
+const cerrados = cortes.filter((c) => c.estado_corte === 'cerrado').length;
+const mesEnCurso = periodoActual();
+/* El mes que toca cerrar es el abierto más antiguo, si ya terminó. */
+const mesAtrasado = mesAbierto !== null && mesAbierto < mesEnCurso ? mesAbierto : null;
+
+const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos === 0;
+---
+
+<LayoutAdmin titulo="Tablero" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Hoy es {formatoFechaLarga(hoyISO())}</span>
+    <span>Ejercicio {anio}</span>
+    <span>Banco: {formatoMXN(caja.banco)}</span>
+    <span>Efectivo: {formatoMXN(caja.efectivo)}</span>
+    <span>Total: {formatoMXN(caja.saldo)}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <h1>Tesorería</h1>
+
+  {
+    sinApertura && (
+      <div class="aviso aviso--error">
+        Falta capturar el <strong>saldo de apertura</strong> de {anio} en{' '}
+        <a href="/herramientas">Herramientas</a>. De esa cifra se encadenan todos los
+        saldos de los cortes.
+      </div>
+    )
+  }
+
+  {
+    faltantes.length > 0 && (
+      <div class="aviso aviso--error">
+        {faltantes.length} hermano(s) sin modalidad de cápita para {anio}:{' '}
+        {faltantes
+          .slice(0, 4)
+          .map((h) => h.nombre_completo)
+          .join(', ')}
+        {faltantes.length > 4 && ` y ${faltantes.length - 4} más`}.{' '}
+        <a href="/capitas/asignar">Asignar</a>
+      </div>
+    )
+  }
+
+  {
+    mesAtrasado && (
+      <div class="aviso">
+        El corte de <strong>{nombrePeriodo(mesAtrasado)}</strong> sigue abierto.{' '}
+        <a href={`/cortes/${mesAtrasado}`}>Revisar y cerrar</a>
+      </div>
+    )
+  }
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1.25rem;">
+      <section class="tarjeta">
+        <h2>Caja</h2>
+        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
+          {formatoMXN(caja.saldo)}
+        </p>
+        <p style="margin: 0.4rem 0 0; font-size: 0.9rem;">
+          Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}
+        </p>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
+          Apertura {formatoMXN(caja.apertura)} + ingresos {formatoMXN(caja.ingresos)} −
+          egresos {formatoMXN(caja.egresos)}
+        </p>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Cápitas {anio}</h2>
+        <p style="margin: 0;">
+          <span class="insignia insignia--ok">{capitas?.al_corriente ?? 0} al corriente</span>
+          {' '}
+          {(capitas?.con_adeudo ?? 0) > 0 && (
+            <span class="insignia insignia--alerta">{capitas?.con_adeudo} con adeudo</span>
+          )}
+        </p>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.5rem 0 0;">
+          Cobrado {formatoMXN(capitas?.pagado ?? 0)} de {formatoMXN(capitas?.esperado ?? 0)}
+          {(capitas?.adeudo ?? 0) > 0 && <> · por cobrar {formatoMXN(capitas?.adeudo ?? 0)}</>}
+        </p>
+        <p style="margin: 0.6rem 0 0;">
+          <a href="/capitas">Ver cápitas</a>
+        </p>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Cortes</h2>
+        <p style="margin: 0;" class="cifra">{cerrados} de 12 meses cerrados</p>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.4rem 0 0;">
+          {mesAbierto ? `Sigue ${nombrePeriodo(mesAbierto)}` : 'Ejercicio completo'}
+        </p>
+        <p style="margin: 0.6rem 0 0;">
+          <a href="/cortes">Ver cortes</a>
+        </p>
+      </section>
+    </div>
+
+    {
+      (porFirmar.length > 0 || porEntregar.length > 0 || porComprobar.length > 0) && (
+        <section class="tarjeta">
+          <h2>Egresos que esperan algo</h2>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Folio</th>
+                  <th scope="col">Beneficiario</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Qué falta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {porFirmar.map((e) => (
+                  <tr>
+                    <td><a href={`/egresos/${e.id}`}>{e.folio}</a></td>
+                    <td>{e.beneficiario}</td>
+                    <td class="num">{formatoMXN(e.monto_solicitado_centavos)}</td>
+                    <td><span class:list={['insignia', CLASE_ESTADO_EGRESO[e.estado]]}>{NOMBRE_ESTADO_EGRESO[e.estado]}</span></td>
+                    <td>{2 - e.firmas} firma(s)</td>
+                  </tr>
+                ))}
+                {porEntregar.map((e) => (
+                  <tr>
+                    <td><a href={`/egresos/${e.id}`}>{e.folio}</a></td>
+                    <td>{e.beneficiario}</td>
+                    <td class="num">{formatoMXN(e.monto_autorizado_centavos ?? e.monto_solicitado_centavos)}</td>
+                    <td><span class:list={['insignia', CLASE_ESTADO_EGRESO[e.estado]]}>{NOMBRE_ESTADO_EGRESO[e.estado]}</span></td>
+                    <td>Registrar la entrega</td>
+                  </tr>
+                ))}
+                {porComprobar.map((p) => (
+                  <tr>
+                    <td><a href={`/egresos/${p.id}`}>{p.folio}</a></td>
+                    <td>{p.beneficiario}</td>
+                    <td class="num">{formatoMXN(p.pendiente_centavos)}</td>
+                    <td><span class="insignia insignia--alerta">Por comprobar</span></td>
+                    <td>Recibos o devolución, entregado el {formatoFechaCorta(p.fecha_entrega)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )
+    }
+
+    <section class="tarjeta">
+      <h2>Capturar</h2>
+      <div style="display: flex; flex-wrap: wrap; gap: 0.6rem;">
+        <a class="btn btn--primary" href="/capitas/pagos/nuevo">Pago de cápita</a>
+        <a class="btn btn--ghost" href="/ingresos/nuevo">Otro ingreso</a>
+        <a class="btn btn--ghost" href="/egresos/nuevo">Egreso</a>
+        <a class="btn btn--ghost" href="/gran-tesoreria">Gran Tesorería</a>
+      </div>
+    </section>
+  </div>
+</LayoutAdmin>

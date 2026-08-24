@@ -1,0 +1,35 @@
+---
+/* Pantalla de acceso. Sin navegación y sin ningún dato del sistema. */
+import '@styles/admin.css';
+
+interface Props {
+  titulo: string;
+}
+
+const { titulo } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{titulo}</title>
+  </head>
+  <body>
+    <main class="acceso">
+      <div class="acceso__caja">
+        <div class="acceso__marca">
+          <p class="text-gold" style="font-family: var(--font-display); font-size: 1.35rem; margin: 0;">
+            R∴L∴S∴ Masada No. 324
+          </p>
+          <span>Tesorería</span>
+        </div>
+        <div class="tarjeta">
+          <slot />
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
