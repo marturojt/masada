@@ -91,6 +91,7 @@ if (Astro.request.method === 'POST') {
             anioSiguiente,
             r.datos.capita_mensual,
             r.datos.capita_promocion,
+            r.datos.capita_promocion_dos,
           );
           return Astro.redirect('/herramientas?ok=ejercicio', 303);
         }
@@ -221,7 +222,8 @@ Astro.response.status = estado;
               <th scope="col">Estado</th>
               <th scope="col" class="num">Cortes cerrados</th>
               <th scope="col" class="num">Cápita mensual</th>
-              <th scope="col" class="num">Anual preferencial</th>
+              <th scope="col" class="num">Anual pref., un pago</th>
+              <th scope="col" class="num">Anual pref., dos pagos</th>
               <th scope="col" class="num">Apertura</th>
             </tr>
           </thead>
@@ -240,6 +242,7 @@ Astro.response.status = estado;
                   <td class="num">{cortesPorAnio.get(e.anio) ?? 0} de 12</td>
                   <td class="num">{formatoMXN(e.capita_mensual_centavos)}</td>
                   <td class="num">{formatoMXN(e.capita_promocion_centavos)}</td>
+                  <td class="num">{formatoMXN(e.capita_promocion_dos_centavos)}</td>
                   <td class="num">{formatoMXN(e.saldo_apertura_centavos)}</td>
                 </tr>
               ))
@@ -268,11 +271,19 @@ Astro.response.status = estado;
             />
             <Campo
               nombre="capita_promocion"
-              etiqueta={`Anual preferencial ${anioSiguiente}`}
+              etiqueta={`Anual preferencial, un pago, ${anioSiguiente}`}
               error={errores.capita_promocion}
               modoTeclado="decimal"
               monto
               ayuda={`Vacía hereda ${formatoMXN(vigente.capita_promocion_centavos)}.`}
+            />
+            <Campo
+              nombre="capita_promocion_dos"
+              etiqueta={`Anual preferencial, dos pagos, ${anioSiguiente}`}
+              error={errores.capita_promocion_dos}
+              modoTeclado="decimal"
+              monto
+              ayuda={`Vacía hereda ${formatoMXN(vigente.capita_promocion_dos_centavos)}.`}
             />
             <div class="formulario__acciones">
               <button class="btn btn--primary" type="submit">

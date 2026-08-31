@@ -45,5 +45,6 @@ export const esquemaTraspaso = z.object({
 /** Apertura del ejercicio siguiente. Las tarifas vacías heredan las del anterior. */
 export const esquemaAbrirEjercicio = z.object({
   capita_mensual: montoEnCentavosOpcional('La cápita mensual'),
-  capita_promocion: montoEnCentavosOpcional('La promoción'),
+  capita_promocion: montoEnCentavosOpcional('La promoción de un pago'),
+  capita_promocion_dos: montoEnCentavosOpcional('La promoción de dos pagos'),
 });

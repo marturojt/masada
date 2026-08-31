@@ -341,3 +341,89 @@ test('el sobrante convertido en donativo deja de contar como saldo a favor y no 
     assert.equal(despues[0].caja, antes[0].caja);
   });
 });
+
+test('promoción convertida a mensual: lo pagado la salda y el resto del año va mes a mes', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    const hermano = await crearHermano(cliente, 'Hermano Del Trato Raro', '2025-12-31');
+
+    /* Promoción de dos pagos (5,500), asignada con el monto del ejercicio. */
+    const { rows: ej } = await cliente.query(
+      'select capita_promocion_dos_centavos as monto from ejercicio where anio = 2026',
+    );
+    await cliente.query('select fn_asignar_capita($1, 2026, $2, 8, $3, $4, $5)', [
+      hermano, 'promocion', vm, 'Dos pagos semestrales', ej[0].monto,
+    ]);
+
+    /* Paga el primer semestre: 2,750. */
+    await pagarCapita(cliente, hermano, '2026-01-15', 275000, tesorero);
+
+    /* Cambio de trato: el resto del año mes a mes, desde julio. */
+    await cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 7, $2)', [
+      hermano, 'Acordó pagar el segundo semestre mes a mes',
+    ]);
+
+    /* La promoción quedó saldada en lo pagado (el resto, condonado). */
+    const { rows: promo } = await cliente.query(
+      `select cc.monto_esperado_centavos, cc.periodo::text,
+              (select monto_centavos from capita_condonacion where capita_cargo_id = cc.id)
+                as condonado,
+              (select coalesce(sum(monto_aplicado_centavos), 0)::int from capita_aplicacion
+                where capita_cargo_id = cc.id) as pagado
+         from capita_cargo cc
+        where cc.hermano_id = $1 and cc.clase = 'promocion' and cc.estado = 'vigente'`,
+      [hermano],
+    );
+    assert.equal(Number(promo[0].pagado), 275000);
+    assert.equal(Number(promo[0].condonado), 550000 - 275000);
+    /* Y su cargo se recorrió a un mes anterior al tramo mensual. */
+    assert.ok(promo[0].periodo < '2026-07-01');
+
+    /* Nacieron las seis mensualidades de julio a diciembre. */
+    const { rows: meses } = await cliente.query(
+      `select periodo::text, monto_esperado_centavos from capita_cargo
+        where hermano_id = $1 and clase = 'mensual' and estado = 'vigente'
+        order by periodo`,
+      [hermano],
+    );
+    assert.equal(meses.length, 6);
+    assert.equal(meses[0].periodo, '2026-07-01');
+    assert.equal(meses[5].periodo, '2026-12-01');
+
+    /* El total exigible del año es el del trato: 2,750 + 3,000 = 5,750. */
+    const { rows: total } = await cliente.query(
+      `select sum(cc.monto_esperado_centavos)::int
+              - coalesce((select sum(monto_centavos) from capita_condonacion co
+                           join capita_cargo c2 on c2.id = co.capita_cargo_id
+                          where c2.hermano_id = $1), 0) as exigible
+         from capita_cargo cc where cc.hermano_id = $1 and cc.estado = 'vigente'`,
+      [hermano],
+    );
+    assert.equal(Number(total[0].exigible), 575000);
+
+    /* Sus abonos de 500 se aplican a julio, agosto... */
+    const pago = await pagarCapita(cliente, hermano, '2026-07-10', 50000, tesorero);
+    assert.equal(pago.aplicado, 50000);
+  });
+});
+
+test('la conversión no procede sin promoción vigente ni dos veces', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    const hermano = await crearHermano(cliente, 'Hermano Mensual Normal', '2025-12-31');
+    await cliente.query('select fn_asignar_capita($1, 2026, $2)', [hermano, 'mensual']);
+    await debeFallar(
+      cliente,
+      () => cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 7)', [hermano]),
+      /solo para un plan vigente de promoción/,
+    );
+
+    const otro = await crearHermano(cliente, 'Hermano Promo Sin Pagos', '2025-12-31');
+    await cliente.query('select fn_asignar_capita($1, 2026, $2, 8, $3)', [otro, 'promocion', vm]);
+    await pagarCapita(cliente, otro, '2026-01-15', 100000, tesorero);
+    await cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 7)', [otro]);
+    await debeFallar(
+      cliente,
+      () => cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 9)', [otro]),
+      /solo para un plan vigente de promoción/,
+    );
+  });
+});

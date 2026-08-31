@@ -34,7 +34,6 @@ const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
 const ETIQUETAS: Record<string, string> = {
   hermano_id: 'Hermano',
   modalidad: 'Modalidad',
-  monto_dispensa: 'Monto de la dispensa',
   motivo: 'Motivo',
 };
 
@@ -87,9 +86,21 @@ const opcionesHermano: Opcion[] = hermanos.map((h) => ({
   grupo: NOMBRE_GRADO_PLURAL[h.grado],
 }));
 
-const opcionesModalidad: Opcion[] = (
-  ['mensual', 'promocion', 'prorrateo'] as const
-).map((m) => ({ valor: m, texto: NOMBRE_MODALIDAD[m] }));
+const opcionesModalidad: Opcion[] = [
+  { valor: 'mensual', texto: `Mensual, ${formatoMXN(ejercicio.capita_mensual_centavos)} al mes` },
+  {
+    valor: 'promocion',
+    texto: `Anual preferencial, un pago (${formatoMXN(ejercicio.capita_promocion_centavos)})`,
+  },
+  {
+    valor: 'promocion_dos',
+    texto: `Anual preferencial, dos pagos (${formatoMXN(ejercicio.capita_promocion_dos_centavos)})`,
+  },
+  {
+    valor: 'prorrateo',
+    texto: `Prorrateo, ${formatoMXN(ejercicio.capita_mensual_centavos)} por mes restante`,
+  },
+];
 
 Astro.response.status = estado;
 ---
@@ -98,13 +109,13 @@ Astro.response.status = estado;
   <div class="barra__contexto" slot="contexto">
     <span>Ejercicio {anio}</span>
     <span>Mensual: {formatoMXN(ejercicio.capita_mensual_centavos)} al mes</span>
-    <span>Anual preferencial: {formatoMXN(ejercicio.capita_promocion_centavos)}, o el monto de la dispensa</span>
+    <span>Anual preferencial: {formatoMXN(ejercicio.capita_promocion_centavos)} en un pago, {formatoMXN(ejercicio.capita_promocion_dos_centavos)} en dos</span>
   </div>
 
   <h1>Asignar modalidad de cápita</h1>
 
   <div class="tarjeta" style="margin-bottom: 1.25rem;">
-    <h2>Las tres modalidades</h2>
+    <h2>Las cuatro opciones</h2>
     <ul style="margin: 0; font-size: 0.9rem;">
       <li>
         <strong>Mensual</strong>: {formatoMXN(ejercicio.capita_mensual_centavos)} al mes, doce
@@ -112,12 +123,16 @@ Astro.response.status = estado;
         desde enero.
       </li>
       <li>
-        <strong>Anual preferencial</strong>: {formatoMXN(ejercicio.capita_promocion_centavos)},
-        o el monto de la dispensa que el V∴M∴ acuerde (por ejemplo, $5,500.00 en dos pagos
-        semestrales): se captura en el campo de abajo y en blanco usa la del ejercicio. A
-        discreción del Venerable Maestro y en cualquier mes del año, solo para quien viene
-        desde enero. Si ya pagó meses, se le descuenta lo pagado, y el cargo admite abonos:
-        no hace falta liquidarlo en una sola exhibición.
+        <strong>Anual preferencial, un pago</strong>:{' '}
+        {formatoMXN(ejercicio.capita_promocion_centavos)} en una sola exhibición. La
+        habilita el Venerable Maestro, en cualquier mes del año, solo para quien viene
+        desde enero. Si ya pagó meses, se le descuenta lo pagado.
+      </li>
+      <li>
+        <strong>Anual preferencial, dos pagos</strong>:{' '}
+        {formatoMXN(ejercicio.capita_promocion_dos_centavos)} en dos pagos semestrales, o
+        en los abonos que el hermano vaya haciendo (el cargo es uno y admite abonos, por
+        ejemplo un semestre y luego pagos de $500.00). Mismas reglas que la de un pago.
       </li>
       <li>
         <strong>Prorrateo</strong>: {formatoMXN(ejercicio.capita_mensual_centavos)} por cada
@@ -156,16 +171,6 @@ Astro.response.status = estado;
       error={errores.modalidad}
       requerido
       ayuda="Si eliges una que no corresponde al mes de ingreso, el sistema lo dirá."
-    />
-
-    <Campo
-      nombre="monto_dispensa"
-      etiqueta={ETIQUETAS.monto_dispensa!}
-      valor={valores.monto_dispensa}
-      error={errores.monto_dispensa}
-      modoTeclado="decimal"
-      monto
-      ayuda={`Solo para la anual preferencial, si la dispensa difiere de la del ejercicio (${formatoMXN(ejercicio.capita_promocion_centavos)}). En blanco usa esa. Se descuenta lo ya pagado.`}
     />
 
     <Campo

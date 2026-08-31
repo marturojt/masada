@@ -111,6 +111,14 @@ sistema no deja asignar una modalidad que no corresponda al mes de ingreso, y lo
 explica cuando pasa. El prorrateo cuenta desde la fecha de ingreso interna, sin
 depender de cuándo reconozca al hermano la Gran Tesorería.
 
+**Promoción convertida a mensual** (el trato de "un tramo con promoción y el
+resto mes a mes"): desde la ficha de cápitas del hermano, el V∴M∴ puede convertir
+una promoción con pagos. Lo ya pagado la salda (el resto se condona, con motivo
+visible en la matriz), su cargo queda amparando el tramo anterior al cambio, y
+nacen mensualidades desde el mes del cambio. Ejemplo real: dos pagos de 5,500,
+pagó 2,750 el primer semestre y cambió a mensual desde julio: termina el año en
+2,750 + 6 x 500 = 5,750, y el sistema exige exactamente eso.
+
 Si un hermano paga de más, el sobrante queda visible como **saldo a favor** con
 tres salidas, ninguna automática: aplicarlo a meses pendientes, devolvérselo como
 egreso con dos firmas, o **convertirlo en donativo con su consentimiento** (dos

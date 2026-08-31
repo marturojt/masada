@@ -10,6 +10,7 @@ import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import {
   aplicarSaldoAFavor,
+  convertirPromocionAMensual,
   convertirSaldoEnDonativo,
   devolverSaldoAFavor,
   exentarMes,
@@ -31,9 +32,9 @@ import { foliosDeRecibo } from '@lib/datos/movimientos';
 import { aPesosTexto, formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaExencion } from '@lib/esquemas/capita';
-import { esquemaVacio, idPositivo, montoEnCentavos, opcionDe, textoOpcional } from '@lib/esquemas/comunes';
+import { esquemaVacio, idPositivo, mes, montoEnCentavos, opcionDe, textoOpcional } from '@lib/esquemas/comunes';
 import { z } from 'zod';
-import { formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
+import { MESES, formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { esVM, requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO } from '@lib/tipos';
@@ -104,6 +105,33 @@ if (Astro.request.method === 'POST') {
         errores = { [error.campo ?? '_general']: error.message };
         estado = 422;
         seccion = 'saldo';
+      }
+    }
+  } else if (entrada.accion === 'convertir_promocion') {
+    const r = await validar(entrada, {
+      esquema: z.object({
+        mes_desde: mes,
+        motivo: textoOpcional('El motivo', 300),
+      }),
+      proposito: 'capita_convertir',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+      seccion = 'convertir';
+    } else {
+      try {
+        await convertirPromocionAMensual(
+          { sesion, anio, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          { hermano_id: id, ...r.datos },
+        );
+        return Astro.redirect(`/capitas/hermano/${id}?ok=modalidad`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
+        seccion = 'convertir';
       }
     }
   } else if (entrada.accion === 'saldo_donar') {
@@ -215,6 +243,7 @@ const noncesQuitarEx = await emitirNonces(
 const nonceSaldoAplicar = await emitirNonce(sesion.idHash, 'capita_saldo_aplicar');
 const nonceSaldoDevolver = await emitirNonce(sesion.idHash, 'capita_saldo_devolver');
 const nonceSaldoDonar = await emitirNonce(sesion.idHash, 'capita_saldo_donar');
+const nonceConvertir = await emitirNonce(sesion.idHash, 'capita_convertir');
 
 const ETIQUETA_ESTADO: Record<string, { texto: string; clase: string }> = {
   cubierto: { texto: 'Cubierto', clase: 'insignia--ok' },
@@ -309,6 +338,43 @@ Astro.response.status = estado;
             {plan.autorizado_en && <> el {formatoMomento(plan.autorizado_en)}</>}
             {plan.motivo && <>. {plan.motivo}</>}
           </p>
+        )}
+        {plan?.modalidad === 'promocion' && puedeExentar && (
+          <details open={seccion === 'convertir'} style="margin-top: 0.75rem;">
+            <summary style="cursor: pointer;">Convertir la promoción a mensual</summary>
+            <div style="margin-top: 0.75rem; max-width: 22rem;">
+              <p class="apagado" style="font-size: 0.85rem;">
+                Para el trato de "un tramo con promoción y el resto mes a mes": lo ya
+                pagado salda la promoción (el resto se condona, con motivo) y nacen
+                mensualidades de {formatoMXN(vigente.capita_mensual_centavos)} desde el
+                mes del cambio hasta diciembre.
+              </p>
+              {seccion === 'convertir' && <ResumenErrores errores={errores} />}
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonceConvertir}
+                accionInterna="convertir_promocion"
+              >
+                <Selector
+                  nombre="mes_desde"
+                  etiqueta="Mensualidades desde"
+                  opciones={MESES.map((nombre, i) => ({ valor: String(i + 1), texto: nombre }))}
+                  error={errores.mes_desde}
+                  requerido
+                  ayuda="El mes en que se acordó el cambio, aunque la captura sea posterior."
+                />
+                <Campo
+                  nombre="motivo"
+                  etiqueta="Motivo"
+                  error={errores.motivo}
+                  ayuda="Queda en la exención y en la bitácora."
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--ghost" type="submit">Convertir a mensual</button>
+                </div>
+              </Formulario>
+            </div>
+          </details>
         )}
       </section>
     )

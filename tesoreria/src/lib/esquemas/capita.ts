@@ -4,7 +4,6 @@ import {
   fechaISO,
   idPositivo,
   montoEnCentavos,
-  montoEnCentavosOpcional,
   notas,
   opcionDe,
   texto,
@@ -14,10 +13,12 @@ import {
 /** Asignación o cambio de modalidad de cápita de un hermano. */
 export const esquemaModalidad = z.object({
   hermano_id: idPositivo('El hermano'),
-  modalidad: opcionDe(['mensual', 'promocion', 'prorrateo'], 'Elige una modalidad.'),
-  /* Solo para la anual preferencial: el monto de la dispensa, si difiere del
-     del ejercicio. En blanco usa el del ejercicio. */
-  monto_dispensa: montoEnCentavosOpcional('El monto de la dispensa'),
+  /* Las dos promociones son la misma modalidad en la base (un cargo único que
+     admite abonos); el monto sale de la tarifa del ejercicio según la opción. */
+  modalidad: opcionDe(
+    ['mensual', 'promocion', 'promocion_dos', 'prorrateo'],
+    'Elige una modalidad.',
+  ),
   motivo: textoOpcional('El motivo', 300),
 });
 

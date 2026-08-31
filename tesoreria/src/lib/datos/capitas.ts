@@ -9,7 +9,7 @@ export type Modalidad = 'mensual' | 'promocion' | 'prorrateo';
 
 export const NOMBRE_MODALIDAD: Record<Modalidad, string> = {
   mensual: 'Mensual, 500 al mes',
-  promocion: 'Anual preferencial, pago único',
+  promocion: 'Anual preferencial',
   prorrateo: 'Prorrateo por meses restantes',
 };
 

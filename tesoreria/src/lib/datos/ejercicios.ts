@@ -9,6 +9,7 @@ export interface Ejercicio {
   fecha_fin: string;
   capita_mensual_centavos: number;
   capita_promocion_centavos: number;
+  capita_promocion_dos_centavos: number;
   saldo_apertura_centavos: number;
   apertura_banco_centavos: number;
   apertura_efectivo_centavos: number;
@@ -17,7 +18,7 @@ export interface Ejercicio {
 }
 
 const COLUMNAS = `anio, fecha_inicio, fecha_fin, capita_mensual_centavos,
-       capita_promocion_centavos, saldo_apertura_centavos, apertura_banco_centavos,
+       capita_promocion_centavos, capita_promocion_dos_centavos, saldo_apertura_centavos, apertura_banco_centavos,
        apertura_efectivo_centavos, estado, notas`;
 
 export const listarEjercicios = (): Promise<Ejercicio[]> =>

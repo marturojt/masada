@@ -140,16 +140,18 @@ export async function abrirEjercicio(
   anio: number,
   capitaMensualCentavos: number | null,
   capitaPromocionCentavos: number | null,
+  capitaPromocionDosCentavos: number | null = null,
 ): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
 
   await enTransaccion(async (tx) => {
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'ejercicio_abrir');
 
-    await tx.consulta('select fn_abrir_ejercicio($1, $2, $3)', [
+    await tx.consulta('select fn_abrir_ejercicio($1, $2, $3, $4)', [
       anio,
       capitaMensualCentavos,
       capitaPromocionCentavos,
+      capitaPromocionDosCentavos,
     ]);
 
     await registrarEn(tx, {
@@ -162,6 +164,9 @@ export async function abrirEjercicio(
         capita_mensual: capitaMensualCentavos ? formatoMXN(capitaMensualCentavos) : 'heredada',
         capita_promocion: capitaPromocionCentavos
           ? formatoMXN(capitaPromocionCentavos)
+          : 'heredada',
+        capita_promocion_dos: capitaPromocionDosCentavos
+          ? formatoMXN(capitaPromocionDosCentavos)
           : 'heredada',
       },
     });

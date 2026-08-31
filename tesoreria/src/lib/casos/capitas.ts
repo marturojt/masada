@@ -59,8 +59,12 @@ export async function asignarModalidad(
   const usuarioId = ctx.sesion.usuario.id;
   const esVM = esNivelVM(ctx.sesion.usuario.rol);
 
+  /* Las dos promociones comparten la modalidad de la base: cargo único que
+     admite abonos. Cambia solo el monto, que sale de la tarifa del ejercicio. */
+  const esPromocion = datos.modalidad === 'promocion' || datos.modalidad === 'promocion_dos';
+
   /* La promoción es discrecional del Venerable Maestro. */
-  if (datos.modalidad === 'promocion' && !esVM) {
+  if (esPromocion && !esVM) {
     throw new ErrorDeNegocio(
       'La promoción de pago único la autoriza el Venerable Maestro. Pídele que la habilite.',
       'modalidad',
@@ -73,6 +77,17 @@ export async function asignarModalidad(
   );
   if (!hermano) throw new ErrorDeNegocio('Ese hermano no está en el padrón.', 'hermano_id');
 
+  /* El monto de la promoción en dos pagos es tarifa del ejercicio, no del código. */
+  let montoPromocion: number | null = null;
+  if (datos.modalidad === 'promocion_dos') {
+    const ejercicio = await unaFila<{ monto: number }>(
+      'select capita_promocion_dos_centavos as monto from ejercicio where anio = $1',
+      [ctx.anio],
+    );
+    if (!ejercicio) throw new ErrorDeNegocio(`No existe el ejercicio ${ctx.anio}.`);
+    montoPromocion = ejercicio.monto;
+  }
+
   await enTransaccion(async (tx) => {
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'capita_modalidad');
 
@@ -82,14 +97,14 @@ export async function asignarModalidad(
         tx,
         datos.hermano_id,
         ctx.anio,
-        datos.modalidad as Modalidad,
+        (esPromocion ? 'promocion' : datos.modalidad) as Modalidad,
         /* El cargo de la promoción aterriza en el mes en que el V∴M∴ la
            habilita: hoy si el ejercicio es el año en curso, enero si se asigna
            para otro año. No se pregunta, para no fecharla hacia atrás. */
-        datos.modalidad === 'promocion' ? (ctx.anio === anioActual() ? mesActual() : 1) : null,
-        datos.modalidad === 'promocion' ? usuarioId : null,
+        esPromocion ? (ctx.anio === anioActual() ? mesActual() : 1) : null,
+        esPromocion ? usuarioId : null,
         datos.motivo ?? null,
-        datos.modalidad === 'promocion' ? (datos.monto_dispensa ?? null) : null,
+        montoPromocion,
       );
     } catch (error) {
       comoErrorDeNegocio(error, 'modalidad');
@@ -104,12 +119,56 @@ export async function asignarModalidad(
       detalle: {
         hermano: hermano.nombre_completo,
         modalidad: datos.modalidad,
-        mes_promocion:
-          datos.modalidad === 'promocion' ? (ctx.anio === anioActual() ? mesActual() : 1) : null,
-        monto_dispensa:
-          datos.modalidad === 'promocion' && datos.monto_dispensa != null
-            ? formatoMXN(datos.monto_dispensa)
-            : null,
+        mes_promocion: esPromocion ? (ctx.anio === anioActual() ? mesActual() : 1) : null,
+        monto_promocion: montoPromocion != null ? formatoMXN(montoPromocion) : null,
+        motivo: datos.motivo ?? null,
+      },
+    });
+  }, usuarioId);
+}
+
+/**
+ * Promoción con pagos que cambia a mensual, el trato de "primer semestre con
+ * promoción y el resto mes a mes". Lo pagado salda la promoción (el resto se
+ * condona, con motivo) y nacen mensualidades desde el mes del cambio. Solo el
+ * Venerable Maestro, porque toca una condonación.
+ */
+export async function convertirPromocionAMensual(
+  ctx: Contexto,
+  datos: { hermano_id: number; mes_desde: number; motivo?: string | undefined },
+): Promise<void> {
+  const usuarioId = ctx.sesion.usuario.id;
+  if (!esNivelVM(ctx.sesion.usuario.rol)) {
+    throw new ErrorDeNegocio('La conversión la autoriza el Venerable Maestro.');
+  }
+
+  const hermano = await unaFila<{ nombre_completo: string }>(
+    'select nombre_completo from hermano where id = $1',
+    [datos.hermano_id],
+  );
+  if (!hermano) throw new ErrorDeNegocio('Ese hermano no está en el padrón.');
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'capita_convertir');
+    try {
+      await tx.consulta('select fn_convertir_promocion_a_mensual($1, $2, $3, $4)', [
+        datos.hermano_id,
+        ctx.anio,
+        datos.mes_desde,
+        datos.motivo ?? null,
+      ]);
+    } catch (error) {
+      comoErrorDeNegocio(error, 'mes_desde');
+    }
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'capita_promocion_convertida',
+      entidad: 'hermano',
+      entidadId: datos.hermano_id,
+      detalle: {
+        hermano: hermano.nombre_completo,
+        mes_desde: datos.mes_desde,
         motivo: datos.motivo ?? null,
       },
     });
