@@ -272,3 +272,72 @@ test('no se puede exentar más de lo que falta del mes', async () => {
     );
   });
 });
+
+test('la promoción acepta un monto de dispensa distinto al del ejercicio', async () => {
+  await enPrueba(async ({ cliente, vm }) => {
+    const hermano = await crearHermano(cliente, 'Con Dispensa De 5500', '2025-12-31');
+    await cliente.query('select fn_asignar_capita($1, 2026, $2, 8, $3, $4, $5)', [
+      hermano,
+      'promocion',
+      vm,
+      'Dispensa especial',
+      550000,
+    ]);
+    const { rows } = await cliente.query(
+      'select monto_total_centavos from capita_plan where hermano_id = $1 and vigente',
+      [hermano],
+    );
+    assert.equal(Number(rows[0].monto_total_centavos), 550000);
+
+    /* Sin monto, sigue usando la tarifa del ejercicio. */
+    const otro = await crearHermano(cliente, 'Con Dispensa Normal', '2025-12-31');
+    await cliente.query('select fn_asignar_capita($1, 2026, $2, 8, $3)', [
+      otro,
+      'promocion',
+      vm,
+    ]);
+    const { rows: normal } = await cliente.query(
+      'select monto_total_centavos from capita_plan where hermano_id = $1 and vigente',
+      [otro],
+    );
+    const { rows: ej } = await cliente.query(
+      'select capita_promocion_centavos from ejercicio where anio = 2026',
+    );
+    assert.equal(Number(normal[0].monto_total_centavos), Number(ej[0].capita_promocion_centavos));
+  });
+});
+
+test('el sobrante convertido en donativo deja de contar como saldo a favor y no mueve la caja', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    const hermano = await crearHermano(cliente, 'Hermano Que Pagó De Más', '2025-12-31');
+    await cliente.query('select fn_asignar_capita($1, 2026, $2)', [hermano, 'mensual']);
+
+    /* Paga 6,200: cubre el año completo (6,000) y sobran 200. */
+    const pago = await pagarCapita(cliente, hermano, '2026-01-10', 620000, tesorero);
+    assert.equal(pago.sinAplicar, 20000);
+
+    const { rows: antes } = await cliente.query(
+      "select coalesce(sum(efecto_centavos), 0)::int as caja from movimiento",
+    );
+
+    /* La reclasificación: dos movimientos en la misma bolsa que se anulan. */
+    const { rows: conceptos } = await cliente.query(
+      "select clave, id from concepto where clave in ('capita_a_donativo', 'donativo')",
+    );
+    const idDe = (clave) => conceptos.find((c) => c.clave === clave).id;
+    await cliente.query(
+      `insert into movimiento (fecha, ejercicio_anio, periodo, tipo, bolsa, concepto_id,
+         monto_centavos, descripcion, hermano_id, creado_por)
+       values ('2026-02-01', 2026, '2026-02-01', 'egreso', 'banco', $1, 20000,
+               'Reclasificación', $2, $3),
+              ('2026-02-01', 2026, '2026-02-01', 'ingreso', 'banco', $4, 20000,
+               'Donativo del sobrante', $2, $3)`,
+      [idDe('capita_a_donativo'), hermano, vm, idDe('donativo')],
+    );
+
+    const { rows: despues } = await cliente.query(
+      "select coalesce(sum(efecto_centavos), 0)::int as caja from movimiento",
+    );
+    assert.equal(despues[0].caja, antes[0].caja);
+  });
+});

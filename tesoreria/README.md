@@ -103,11 +103,19 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 | Prorrateo | 500 por mes restante | Quien se inicia o afilia dentro del año |
 
 La anual preferencial la autoriza únicamente el Venerable Maestro, en cualquier
-mes del año. Si el hermano ya pagó meses, se le descuentan: habilitarla en agosto
-con 2,000 ya pagados son 3,000 por cubrir. El sistema no deja asignar una
-modalidad que no corresponda al mes de ingreso, y lo explica cuando pasa. El
-prorrateo cuenta desde la fecha de ingreso interna, sin depender de cuándo
-reconozca al hermano la Gran Tesorería.
+mes del año, y el monto de la dispensa puede diferir del de la tabla: se captura
+al asignarla y en blanco usa el del ejercicio. Si el hermano ya pagó meses, se le
+descuentan: habilitarla en agosto con 2,000 ya pagados son 3,000 por cubrir. El
+cargo único aterriza en el mes en que se habilita, el sistema lo decide solo. El
+sistema no deja asignar una modalidad que no corresponda al mes de ingreso, y lo
+explica cuando pasa. El prorrateo cuenta desde la fecha de ingreso interna, sin
+depender de cuándo reconozca al hermano la Gran Tesorería.
+
+Si un hermano paga de más, el sobrante queda visible como **saldo a favor** con
+tres salidas, ninguna automática: aplicarlo a meses pendientes, devolvérselo como
+egreso con dos firmas, o **convertirlo en donativo con su consentimiento** (dos
+movimientos en la misma bolsa que se anulan entre sí, queda como aportación con
+su recibo). No se arrastra solo a futuros años.
 
 Las tarifas viven en la tabla `ejercicio`, no en el código: el día que cambien,
 los ejercicios anteriores conservan las suyas.

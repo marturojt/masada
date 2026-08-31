@@ -18,7 +18,7 @@ import { hermanosActivos } from '@lib/datos/hermanos';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaModalidad } from '@lib/esquemas/capita';
-import { MESES, mesActual } from '@lib/fechas';
+
 import { procesarFormulario } from '@lib/formulario';
 import { esVM, requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
@@ -34,7 +34,7 @@ const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
 const ETIQUETAS: Record<string, string> = {
   hermano_id: 'Hermano',
   modalidad: 'Modalidad',
-  mes_promocion: 'Mes de la promoción',
+  monto_dispensa: 'Monto de la dispensa',
   motivo: 'Motivo',
 };
 
@@ -42,7 +42,6 @@ let errores: Record<string, string> = {};
 let valores: Record<string, string> = {
   hermano_id: Astro.url.searchParams.get('hermano') ?? '',
   modalidad: 'mensual',
-  mes_promocion: String(mesActual()),
 };
 let estado = 200;
 
@@ -91,11 +90,6 @@ const opcionesHermano: Opcion[] = hermanos.map((h) => ({
 const opcionesModalidad: Opcion[] = (
   ['mensual', 'promocion', 'prorrateo'] as const
 ).map((m) => ({ valor: m, texto: NOMBRE_MODALIDAD[m] }));
-
-const opcionesMes: Opcion[] = MESES.map((nombre, i) => ({
-  valor: String(i + 1),
-  texto: nombre,
-}));
 
 Astro.response.status = estado;
 ---
@@ -161,13 +155,14 @@ Astro.response.status = estado;
       ayuda="Si eliges una que no corresponde al mes de ingreso, el sistema lo dirá."
     />
 
-    <Selector
-      nombre="mes_promocion"
-      etiqueta={ETIQUETAS.mes_promocion!}
-      opciones={opcionesMes}
-      valor={valores.mes_promocion}
-      error={errores.mes_promocion}
-      ayuda="Solo aplica a la promoción: el mes en que el V∴M∴ la habilita."
+    <Campo
+      nombre="monto_dispensa"
+      etiqueta={ETIQUETAS.monto_dispensa!}
+      valor={valores.monto_dispensa}
+      error={errores.monto_dispensa}
+      modoTeclado="decimal"
+      monto
+      ayuda={`Solo para la anual preferencial, si la dispensa difiere de la del ejercicio (${formatoMXN(ejercicio.capita_promocion_centavos)}). En blanco usa esa. Se descuenta lo ya pagado.`}
     />
 
     <Campo

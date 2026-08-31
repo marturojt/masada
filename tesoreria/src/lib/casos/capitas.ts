@@ -26,7 +26,7 @@ import { conceptoPorClave } from '../datos/conceptos';
 import { insertarMovimiento } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
-import { hoyISO, nombrePeriodoCorto } from '../fechas';
+import { anioActual, hoyISO, mesActual, nombrePeriodoCorto } from '../fechas';
 import type { DatosExencion, DatosModalidad, DatosPagoCapita } from '../esquemas/capita';
 import type { Sesion } from '../sesion';
 
@@ -83,9 +83,13 @@ export async function asignarModalidad(
         datos.hermano_id,
         ctx.anio,
         datos.modalidad as Modalidad,
-        datos.mes_promocion ?? null,
+        /* El cargo de la promoción aterriza en el mes en que el V∴M∴ la
+           habilita: hoy si el ejercicio es el año en curso, enero si se asigna
+           para otro año. No se pregunta, para no fecharla hacia atrás. */
+        datos.modalidad === 'promocion' ? (ctx.anio === anioActual() ? mesActual() : 1) : null,
         datos.modalidad === 'promocion' ? usuarioId : null,
         datos.motivo ?? null,
+        datos.modalidad === 'promocion' ? (datos.monto_dispensa ?? null) : null,
       );
     } catch (error) {
       comoErrorDeNegocio(error, 'modalidad');
@@ -100,7 +104,12 @@ export async function asignarModalidad(
       detalle: {
         hermano: hermano.nombre_completo,
         modalidad: datos.modalidad,
-        mes_promocion: datos.mes_promocion ?? null,
+        mes_promocion:
+          datos.modalidad === 'promocion' ? (ctx.anio === anioActual() ? mesActual() : 1) : null,
+        monto_dispensa:
+          datos.modalidad === 'promocion' && datos.monto_dispensa != null
+            ? formatoMXN(datos.monto_dispensa)
+            : null,
         motivo: datos.motivo ?? null,
       },
     });
@@ -349,6 +358,108 @@ export async function aplicarSaldoAFavor(
     });
 
     return { aplicado, meses };
+  }, usuarioId);
+}
+
+/**
+ * Convierte saldo a favor en donativo, con el consentimiento del hermano. El
+ * dinero ya está en la caja: son dos movimientos en la misma bolsa que se
+ * anulan entre sí (sale de cápitas, entra como donativo), así el total no se
+ * mueve y el corte lo lee claro. Queda como aportación, con su recibo.
+ */
+export async function convertirSaldoEnDonativo(
+  ctx: Omit<Contexto, 'anio'>,
+  hermanoId: number,
+  montoCentavos: number,
+  bolsa: 'banco' | 'efectivo',
+  motivo: string | undefined,
+): Promise<{ movimientoId: number }> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  const hermano = await unaFila<{ nombre_completo: string }>(
+    'select nombre_completo from hermano where id = $1',
+    [hermanoId],
+  );
+  if (!hermano) throw new ErrorDeNegocio('Ese hermano no está en el padrón.');
+
+  const disponible = await saldoAFavorDisponible(hermanoId);
+  if (montoCentavos > disponible) {
+    throw new ErrorDeNegocio(
+      `Lo que se quiere convertir (${formatoMXN(montoCentavos)}) pasa del saldo a favor ` +
+        `disponible (${formatoMXN(disponible)}).`,
+      'monto',
+    );
+  }
+
+  const salida = await conceptoPorClave('capita_a_donativo');
+  const donativo = await conceptoPorClave('donativo');
+  if (!salida || !donativo) {
+    throw new Error('Faltan conceptos del catálogo (capita_a_donativo, donativo).');
+  }
+
+  return enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'capita_saldo_donar');
+
+    await insertarMovimiento(
+      tx,
+      {
+        fecha: hoyISO(),
+        tipo: 'egreso',
+        bolsa,
+        conceptoId: salida.id,
+        montoCentavos,
+        descripcion: `Sobrante de cápita de ${hermano.nombre_completo} reclasificado a donativo`,
+        hermanoId,
+        archivoId: null,
+      },
+      usuarioId,
+    );
+
+    const movimientoId = await insertarMovimiento(
+      tx,
+      {
+        fecha: hoyISO(),
+        tipo: 'ingreso',
+        bolsa,
+        conceptoId: donativo.id,
+        montoCentavos,
+        descripcion:
+          motivo ?? `Donativo de ${hermano.nombre_completo}, sobrante de su cápita`,
+        hermanoId,
+        archivoId: null,
+      },
+      usuarioId,
+    );
+
+    await tx.consulta(
+      `insert into aportacion
+         (tipo, hermano_id, aportante_nombre, fecha, descripcion, movimiento_id, creado_por)
+       values ('monetaria', $1, $2, $3, $4, $5, $6)`,
+      [
+        hermanoId,
+        hermano.nombre_completo,
+        hoyISO(),
+        motivo ?? 'Sobrante de cápita convertido en donativo, con su consentimiento',
+        movimientoId,
+        usuarioId,
+      ],
+    );
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'capita_saldo_donado',
+      entidad: 'movimiento',
+      entidadId: movimientoId,
+      detalle: {
+        hermano: hermano.nombre_completo,
+        monto: formatoMXN(montoCentavos),
+        bolsa,
+        motivo: motivo ?? null,
+      },
+    });
+
+    return { movimientoId };
   }, usuarioId);
 }
 

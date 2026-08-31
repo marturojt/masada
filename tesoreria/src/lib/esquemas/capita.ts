@@ -3,8 +3,8 @@ import {
   bolsa,
   fechaISO,
   idPositivo,
-  mes,
   montoEnCentavos,
+  montoEnCentavosOpcional,
   notas,
   opcionDe,
   texto,
@@ -15,8 +15,9 @@ import {
 export const esquemaModalidad = z.object({
   hermano_id: idPositivo('El hermano'),
   modalidad: opcionDe(['mensual', 'promocion', 'prorrateo'], 'Elige una modalidad.'),
-  /* Solo aplica a promoción: mes en que el VM la habilita. */
-  mes_promocion: mes.optional().or(z.literal('').transform(() => undefined)),
+  /* Solo para la anual preferencial: el monto de la dispensa, si difiere del
+     del ejercicio. En blanco usa el del ejercicio. */
+  monto_dispensa: montoEnCentavosOpcional('El monto de la dispensa'),
   motivo: textoOpcional('El motivo', 300),
 });
 

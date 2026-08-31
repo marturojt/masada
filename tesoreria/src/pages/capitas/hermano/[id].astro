@@ -5,10 +5,12 @@
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
+import Selector from '@componentes/Selector.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import {
   aplicarSaldoAFavor,
+  convertirSaldoEnDonativo,
   devolverSaldoAFavor,
   exentarMes,
   quitarExencion,
@@ -29,7 +31,7 @@ import { foliosDeRecibo } from '@lib/datos/movimientos';
 import { aPesosTexto, formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaExencion } from '@lib/esquemas/capita';
-import { esquemaVacio, idPositivo, montoEnCentavos } from '@lib/esquemas/comunes';
+import { esquemaVacio, idPositivo, montoEnCentavos, opcionDe, textoOpcional } from '@lib/esquemas/comunes';
 import { z } from 'zod';
 import { formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
@@ -97,6 +99,37 @@ if (Astro.request.method === 'POST') {
           r.datos.monto,
         );
         return Astro.redirect(`/egresos/${creado.egresoId}?ok=egreso`, 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
+        seccion = 'saldo';
+      }
+    }
+  } else if (entrada.accion === 'saldo_donar') {
+    const r = await validar(entrada, {
+      esquema: z.object({
+        monto: montoEnCentavos('El monto a convertir'),
+        bolsa: opcionDe(['banco', 'efectivo'], 'Elige la bolsa.'),
+        motivo: textoOpcional('El motivo', 300),
+      }),
+      proposito: 'capita_saldo_donar',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+      seccion = 'saldo';
+    } else {
+      try {
+        const creado = await convertirSaldoEnDonativo(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          id,
+          r.datos.monto,
+          r.datos.bolsa,
+          r.datos.motivo,
+        );
+        return Astro.redirect(`/recibos/${creado.movimientoId}`, 303);
       } catch (error) {
         if (!(error instanceof ErrorDeNegocio)) throw error;
         errores = { [error.campo ?? '_general']: error.message };
@@ -181,6 +214,7 @@ const noncesQuitarEx = await emitirNonces(
 );
 const nonceSaldoAplicar = await emitirNonce(sesion.idHash, 'capita_saldo_aplicar');
 const nonceSaldoDevolver = await emitirNonce(sesion.idHash, 'capita_saldo_devolver');
+const nonceSaldoDonar = await emitirNonce(sesion.idHash, 'capita_saldo_donar');
 
 const ETIQUETA_ESTADO: Record<string, { texto: string; clase: string }> = {
   cubierto: { texto: 'Cubierto', clase: 'insignia--ok' },
@@ -285,9 +319,10 @@ Astro.response.status = estado;
       <section class="tarjeta" style="margin-top: 1.25rem;">
         <h2>Saldo a favor: {formatoMXN(disponible)}</h2>
         <p class="apagado" style="font-size: 0.85rem;">
-          Dinero recibido que no cubre ningún mes todavía. Se puede aplicar a los meses
-          pendientes (incluidos los del ejercicio siguiente, si ya está abierto) o
-          devolvérselo al hermano como un egreso con sus dos firmas.
+          Dinero recibido que no cubre ningún mes todavía. Tres salidas: aplicarlo a
+          meses pendientes (incluidos los del ejercicio siguiente, si ya está abierto),
+          devolvérselo al hermano como un egreso con sus dos firmas, o convertirlo en
+          donativo con su consentimiento. No se arrastra solo a futuros años.
         </p>
         {seccion === 'saldo' && <ResumenErrores errores={errores} />}
         <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
@@ -322,6 +357,51 @@ Astro.response.status = estado;
                 <div class="formulario__acciones">
                   <button class="btn btn--ghost" type="submit">
                     Crear el egreso de devolución
+                  </button>
+                </div>
+              </Formulario>
+            </div>
+          </details>
+          <details open={seccion === 'saldo' && errores.motivo !== undefined}>
+            <summary style="cursor: pointer;">Convertir en donativo</summary>
+            <div style="margin-top: 0.75rem; max-width: 18rem;">
+              <p class="apagado" style="font-size: 0.85rem;">
+                Con el consentimiento del hermano. El dinero ya está en la caja: el total
+                no cambia, solo deja de ser cápita y queda como donativo, con su recibo.
+              </p>
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonceSaldoDonar}
+                accionInterna="saldo_donar"
+              >
+                <Campo
+                  nombre="monto"
+                  etiqueta="Monto a convertir"
+                  valor={aPesosTexto(disponible)}
+                  error={errores.monto}
+                  modoTeclado="decimal"
+                  monto
+                  requerido
+                />
+                <Selector
+                  nombre="bolsa"
+                  etiqueta="Bolsa donde quedó ese dinero"
+                  opciones={[
+                    { valor: 'banco', texto: 'Banco' },
+                    { valor: 'efectivo', texto: 'Efectivo' },
+                  ]}
+                  error={errores.bolsa}
+                  requerido
+                />
+                <Campo
+                  nombre="motivo"
+                  etiqueta="Motivo"
+                  error={errores.motivo}
+                  ayuda="Queda en el recibo y en la bitácora."
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--ghost" type="submit">
+                    Convertir y generar recibo
                   </button>
                 </div>
               </Formulario>

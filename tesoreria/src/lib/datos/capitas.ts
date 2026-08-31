@@ -141,10 +141,11 @@ export async function asignarCapitaEnBase(
   mesPromocion: number | null,
   autorizadoPor: number | null,
   motivo: string | null,
+  montoPromocion: number | null = null,
 ): Promise<number> {
   const fila = await tx.laFila<{ plan_id: number }>(
-    'select fn_asignar_capita($1, $2, $3, $4, $5, $6) as plan_id',
-    [hermanoId, anio, modalidad, mesPromocion, autorizadoPor, motivo],
+    'select fn_asignar_capita($1, $2, $3, $4, $5, $6, $7) as plan_id',
+    [hermanoId, anio, modalidad, mesPromocion, autorizadoPor, motivo, montoPromocion],
   );
   return fila.plan_id;
 }
@@ -301,9 +302,16 @@ export async function saldoAFavorDisponible(hermanoId: number): Promise<number> 
         where e.hermano_id = $1
           and c.clave = 'devolucion_saldo_favor'
           and e.estado not in ('rechazado', 'cancelado')
+     ),
+     -- Lo que ya se reclasificó a donativo con el consentimiento del hermano.
+     donado as (
+       select coalesce(sum(m.monto_centavos), 0)::int as s
+         from movimiento m
+         join concepto c on c.id = m.concepto_id
+        where m.hermano_id = $1 and c.clave = 'capita_a_donativo'
      )
      select greatest((select s from pagos) - (select s from aplicado)
-                     - (select s from devuelto), 0) as disponible`,
+                     - (select s from devuelto) - (select s from donado), 0) as disponible`,
     [hermanoId],
   );
   return fila?.disponible ?? 0;
