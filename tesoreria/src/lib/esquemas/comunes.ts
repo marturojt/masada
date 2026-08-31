@@ -114,6 +114,13 @@ export const montoEnCentavosOpcional = (etiqueta = 'El monto') =>
       ),
   );
 
+/* Acepta también 31/08/2026 (día/mes/año, como se escribe aquí) y lo vuelve ISO. */
+const normalizarFecha = (v: string): string => {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v.trim());
+  if (!m) return v.trim();
+  return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+};
+
 const esFechaReal = (v: string): boolean => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
   const [a, m, d] = v.split('-').map(Number) as [number, number, number];
@@ -133,7 +140,7 @@ export const fechaISO = (etiqueta = 'La fecha') =>
     comoTexto,
     z
       .string()
-      .transform((v) => v.trim())
+      .transform((v) => normalizarFecha(v))
       .refine((v) => v.length > 0, `${etiqueta} es obligatoria.`)
       .refine((v) => v.length === 0 || esFechaReal(v), `${etiqueta} no es una fecha válida.`),
   );
@@ -145,7 +152,7 @@ export const fechaISOOpcional = (etiqueta = 'La fecha') =>
     z
       .string()
       .transform((v) => {
-        const limpio = v.trim();
+        const limpio = normalizarFecha(v);
         return limpio.length === 0 ? undefined : limpio;
       })
       .refine(

@@ -8,7 +8,7 @@ import { ejercicioVigente } from '@lib/datos/ejercicios';
 import { obtenerHermano } from '@lib/datos/hermanos';
 import { emitirNonce } from '@lib/csrf';
 import { ErrorDeNegocio } from '@lib/errores';
-import { esquemaHermano } from '@lib/esquemas/hermano';
+import { derivarFechasPorMotivo, esquemaHermano } from '@lib/esquemas/hermano';
 import { procesarFormulario } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 
@@ -60,7 +60,7 @@ if (Astro.request.method === 'POST') {
           idPeticion: Astro.locals.idPeticion,
         },
         id,
-        resultado.datos,
+        derivarFechasPorMotivo(resultado.datos, ejercicio.anio),
       );
       return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
     } catch (error) {

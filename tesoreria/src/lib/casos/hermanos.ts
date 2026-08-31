@@ -19,7 +19,7 @@ import { asignarCargo } from '../datos/cargos';
 import { ErrorDeNegocio } from '../errores';
 import type { Sesion } from '../sesion';
 import type { Grado } from '../tipos';
-import type { DatosFormularioHermano } from '../esquemas/hermano';
+import type { DatosHermanoCompletos } from '../esquemas/hermano';
 
 interface Contexto {
   sesion: Sesion;
@@ -28,7 +28,7 @@ interface Contexto {
   idPeticion: string;
 }
 
-function comoDatos(f: DatosFormularioHermano): DatosHermano {
+function comoDatos(f: DatosHermanoCompletos): DatosHermano {
   return {
     nombre_completo: f.nombre_completo,
     grado: f.grado,
@@ -59,7 +59,7 @@ function traducirError(error: unknown): never {
  * El evento de grado inicial se deriva del motivo de ingreso: quien se inició en
  * la logia empieza como aprendiz, quien se afilió llega con el grado que traía.
  */
-export function eventoInicial(f: DatosFormularioHermano): {
+export function eventoInicial(f: DatosHermanoCompletos): {
   grado: Grado;
   fecha: string;
   tipoEvento: string;
@@ -75,7 +75,7 @@ export function eventoInicial(f: DatosFormularioHermano): {
 
 export async function crearHermano(
   ctx: Contexto,
-  formulario: DatosFormularioHermano,
+  formulario: DatosHermanoCompletos,
 ): Promise<number> {
   const usuarioId = ctx.sesion.usuario.id;
 
@@ -116,7 +116,7 @@ export async function crearHermano(
 export async function editarHermano(
   ctx: Contexto,
   id: number,
-  formulario: DatosFormularioHermano,
+  formulario: DatosHermanoCompletos,
 ): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
 

@@ -51,8 +51,11 @@ export const GET: APIRoute = async (contexto) => {
     const notas = [
       '# Padrón actual. Fila con id = actualiza (celda vacía conserva lo que hay);',
       '# fila sin id = alta. Grados: aprendiz | companero | maestro. Fechas AAAA-MM-DD.',
-      '# Motivos: fundacion | iniciacion | afiliacion | regularizacion (miembro de años',
-      '# anteriores, cuando no se sabe si nació en Masada o llegó de otra logia).',
+      '# Motivos: iniciacion | afiliacion | regularizacion (miembro de años anteriores,',
+      '# cuando no se sabe si nació en Masada o llegó de otra logia). Si el motivo es',
+      '# regularizacion y la fecha de ingreso va vacía, queda el 31 de diciembre del',
+      '# año anterior. En iniciados y afiliados, las fechas de secretaría que vayan',
+      '# vacías se toman de la fecha de ingreso.',
       '# Las fechas de iniciación, aumento de salario y exaltación completan el',
       '# historial de grados solo si el hermano no tiene ya un evento de ese tipo;',
       '# corregir una fecha ya capturada se hace en la ficha del hermano.',

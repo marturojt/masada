@@ -10,7 +10,10 @@ import {
   textoOpcional,
 } from './comunes';
 
-const MOTIVOS_INGRESO = ['fundacion', 'iniciacion', 'afiliacion', 'regularizacion'] as const;
+/* Fundador ya no se ofrece: en la práctica es un miembro de años anteriores.
+   El valor sigue siendo válido en la base para no tocar filas históricas. */
+const MOTIVOS_INGRESO = ['iniciacion', 'afiliacion', 'regularizacion'] as const;
+export const OPCIONES_MOTIVO_INGRESO = MOTIVOS_INGRESO;
 const MOTIVOS_BAJA = [
   'plancha_de_quite',
   'irradiacion',
@@ -40,7 +43,7 @@ export const NOMBRE_MOTIVO_BAJA: Record<string, string> = {
 export const esquemaHermanoBase = z.object({
   nombre_completo: texto('El nombre completo', 120),
   grado,
-  fecha_ingreso: fechaISO('La fecha de ingreso'),
+  fecha_ingreso: fechaISOOpcional('La fecha de ingreso'),
   motivo_ingreso: opcionDe(MOTIVOS_INGRESO, 'Elige el motivo de ingreso.'),
   fecha_iniciacion: fechaISOOpcional('La fecha de iniciación'),
   fecha_afiliacion: fechaISOOpcional('La fecha de afiliación'),
@@ -55,29 +58,23 @@ export const esquemaHermanoBase = z.object({
 });
 
 /*
- * Qué fecha es obligatoria depende del motivo: un recién iniciado lleva su
- * fecha de iniciación (de ahí salen su historial y sus cápitas) y un afiliado
- * la de afiliación. Un miembro de años anteriores puede no tener ninguna: si
- * no se conoce, se deja en blanco y se completa el día que aparezca el dato.
+ * La única fecha que se captura es la de ingreso, y ni esa es obligatoria para
+ * un miembro de años anteriores: si va en blanco, el sistema pone el 31 de
+ * diciembre del año anterior al ejercicio. Para un recién iniciado o un
+ * afiliado la fecha de ingreso es el día de su iniciación o afiliación, y las
+ * fechas de secretaría se derivan de ahí al guardar.
  */
 export const reglasDeMotivo = (
-  datos: { motivo_ingreso: string; fecha_iniciacion?: string | undefined; fecha_afiliacion?: string | undefined },
+  datos: { motivo_ingreso: string; fecha_ingreso?: string | undefined },
   ctx: z.RefinementCtx,
 ): void => {
-  if (datos.motivo_ingreso === 'iniciacion' && !datos.fecha_iniciacion) {
+  if (datos.motivo_ingreso !== 'regularizacion' && !datos.fecha_ingreso) {
     ctx.addIssue({
       code: 'custom',
-      path: ['fecha_iniciacion'],
+      path: ['fecha_ingreso'],
       message:
-        'Un recién iniciado lleva su fecha de iniciación: de ahí salen su historial de ' +
-        'grados y sus cápitas.',
-    });
-  }
-  if (datos.motivo_ingreso === 'afiliacion' && !datos.fecha_afiliacion) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['fecha_afiliacion'],
-      message: 'Un afiliado lleva su fecha de afiliación. Si no se conoce porque viene de años atrás, el motivo es Miembro de años anteriores.',
+        'Para un recién iniciado o un afiliado, la fecha de ingreso es el día de su ' +
+        'iniciación o afiliación. Solo un miembro de años anteriores puede ir sin fecha.',
     });
   }
 };
@@ -85,6 +82,36 @@ export const reglasDeMotivo = (
 export const esquemaHermano = esquemaHermanoBase.superRefine(reglasDeMotivo);
 
 export type DatosFormularioHermano = z.infer<typeof esquemaHermano>;
+
+/** Datos ya completos: la fecha de ingreso resuelta y las de secretaría derivadas. */
+export type DatosHermanoCompletos = Omit<DatosFormularioHermano, 'fecha_ingreso'> & {
+  fecha_ingreso: string;
+};
+
+/*
+ * Completa lo que el formulario ya no pide: la fecha de ingreso de un miembro
+ * de años anteriores (31 de diciembre del año anterior al ejercicio) y las
+ * fechas de iniciación o afiliación, que para un alta nueva son la misma fecha
+ * de ingreso. Si ya venían capturadas (edición, carga masiva), se respetan.
+ */
+export function derivarFechasPorMotivo(
+  datos: DatosFormularioHermano,
+  anioEjercicio: number,
+): DatosHermanoCompletos {
+  const fechaIngreso = datos.fecha_ingreso ?? `${anioEjercicio - 1}-12-31`;
+  return {
+    ...datos,
+    fecha_ingreso: fechaIngreso,
+    fecha_iniciacion:
+      datos.motivo_ingreso === 'iniciacion'
+        ? (datos.fecha_iniciacion ?? fechaIngreso)
+        : datos.fecha_iniciacion,
+    fecha_afiliacion:
+      datos.motivo_ingreso === 'afiliacion'
+        ? (datos.fecha_afiliacion ?? fechaIngreso)
+        : datos.fecha_afiliacion,
+  };
+}
 
 /** Baja de un hermano. Los adeudos anteriores se conservan. */
 export const esquemaBaja = z.object({

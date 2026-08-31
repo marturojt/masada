@@ -13,6 +13,7 @@ interface Props {
   ayuda?: string;
   requerido?: boolean;
   autocompletar?: string;
+  marcador?: string;
   modoTeclado?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel';
   aceptar?: string;
   min?: string;
@@ -36,6 +37,7 @@ const {
   ayuda,
   requerido = false,
   autocompletar,
+  marcador,
   modoTeclado,
   aceptar,
   min,
@@ -83,6 +85,7 @@ const valorTexto = valor == null ? '' : String(valor);
         required={requerido}
         readonly={soloLectura}
         autocomplete={autocompletar}
+        placeholder={marcador}
         inputmode={modoTeclado}
         accept={aceptar}
         min={min}

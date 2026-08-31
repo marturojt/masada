@@ -7,7 +7,7 @@ import { listarCargos } from '@lib/datos/cargos';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
 import { emitirNonce } from '@lib/csrf';
 import { ErrorDeNegocio } from '@lib/errores';
-import { esquemaHermano } from '@lib/esquemas/hermano';
+import { derivarFechasPorMotivo, esquemaHermano } from '@lib/esquemas/hermano';
 import { procesarFormulario } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 
@@ -18,8 +18,7 @@ const cargos = await listarCargos();
 let errores: Record<string, string> = {};
 let valores: Record<string, string> = {
   grado: 'aprendiz',
-  motivo_ingreso: 'afiliacion',
-  fecha_ingreso: `${ejercicio.anio}-01-01`,
+  motivo_ingreso: 'iniciacion',
 };
 let estado = 200;
 
@@ -43,7 +42,7 @@ if (Astro.request.method === 'POST') {
           anio: ejercicio.anio,
           idPeticion: Astro.locals.idPeticion,
         },
-        resultado.datos,
+        derivarFechasPorMotivo(resultado.datos, ejercicio.anio),
       );
       return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
     } catch (error) {
@@ -78,5 +77,6 @@ Astro.response.status = estado;
     anio={ejercicio.anio}
     textoBoton="Guardar hermano"
     cancelarA="/hermanos"
+    alta
   />
 </LayoutAdmin>

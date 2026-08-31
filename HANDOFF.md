@@ -156,6 +156,11 @@ queda como ambiente de desarrollo.
       tesorería son legibles por cualquiera.
 - [ ] **Desplegar el sitio** para que la tenida de junio deje de aparecer como
       próxima: `bash deploy/publish.sh`.
+- [ ] **Módulo de control interno de grados** (a futuro): captura formal de las
+      fechas de iniciación, aumento de salario y exaltación de cada hermano, solo
+      para control interno. Hoy el historial de grados ya existe en la ficha del
+      hermano y esas fechas entran por ahí o por la carga masiva; el módulo nuevo
+      les daría su propia pantalla de administración.
 - [ ] **Histórico completo de Past Masters**: hoy están 2022 a 2025 en
       `past_master_historico`. El usuario pasará el resto de la historia de la logia.
 - [ ] (Opcional) Limpiar el código inerte de la insignia "Vigente" en la sección

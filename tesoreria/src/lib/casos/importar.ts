@@ -28,7 +28,13 @@ import { eventoInicial } from './hermanos';
 import { insertarMovimiento } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
-import { esquemaHermanoBase, reglasDeMotivo, type DatosFormularioHermano } from '../esquemas/hermano';
+import {
+  derivarFechasPorMotivo,
+  esquemaHermanoBase,
+  reglasDeMotivo,
+  type DatosHermanoCompletos,
+} from '../esquemas/hermano';
+import { ejercicioVigente } from '../datos/ejercicios';
 import type { Sesion } from '../sesion';
 import { z } from 'zod';
 import {
@@ -163,11 +169,12 @@ const esquemaFechasGrado = z.object({
 interface PlanHermano {
   linea: number;
   id: number | null;
-  datos: DatosFormularioHermano;
+  datos: DatosHermanoCompletos;
   fechasGrado: z.infer<typeof esquemaFechasGrado>;
 }
 
 async function planearHermanos(csv: string): Promise<{ plan: PlanHermano[]; ensayo: Ensayo }> {
+  const ejercicio = await ejercicioVigente();
   const { encabezados, filas } = analizarCSV(csv);
   const requeridos = ['nombre_completo', 'grado', 'fecha_ingreso', 'motivo_ingreso'];
   const faltan = requeridos.filter((c) => !encabezados.includes(c));
@@ -224,7 +231,7 @@ async function planearHermanos(csv: string): Promise<{ plan: PlanHermano[]; ensa
       plan.push({
         linea: fila.linea,
         id,
-        datos: { ...parseo.data, cargo_id: null },
+        datos: derivarFechasPorMotivo({ ...parseo.data, cargo_id: null }, ejercicio.anio),
         fechasGrado: fechasGrado.data,
       });
       resultado.push({

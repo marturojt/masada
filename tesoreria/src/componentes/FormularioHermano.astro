@@ -1,11 +1,15 @@
 ---
-/* Campos del alta y de la edición de un hermano. Los dos formularios son iguales. */
+/*
+ * Campos del alta y de la edición de un hermano. En el alta no se piden las
+ * fechas de iniciación ni de afiliación: se derivan de la fecha de ingreso al
+ * guardar. En la edición sí aparecen, porque son el dato fino de secretaría.
+ */
 import Campo from './Campo.astro';
 import Formulario from './Formulario.astro';
 import ResumenErrores from './ResumenErrores.astro';
 import Selector from './Selector.astro';
 import type { Cargo } from '@lib/datos/cargos';
-import { NOMBRE_MOTIVO_INGRESO } from '@lib/esquemas/hermano';
+import { NOMBRE_MOTIVO_INGRESO, OPCIONES_MOTIVO_INGRESO } from '@lib/esquemas/hermano';
 import { NOMBRE_GRADO, type Opcion } from '@lib/tipos';
 
 interface Props {
@@ -17,9 +21,13 @@ interface Props {
   anio: number;
   textoBoton: string;
   cancelarA: string;
+  /** true en el alta: las fechas de secretaría se derivan, no se piden. */
+  alta?: boolean;
 }
 
-const { csrf, nonce, valores, errores, cargos, anio, textoBoton, cancelarA } = Astro.props;
+const {
+  csrf, nonce, valores, errores, cargos, anio, textoBoton, cancelarA, alta = false,
+} = Astro.props;
 
 const ETIQUETAS: Record<string, string> = {
   nombre_completo: 'Nombre completo',
@@ -39,9 +47,9 @@ const opcionesGrado: Opcion[] = (['aprendiz', 'companero', 'maestro'] as const).
   texto: NOMBRE_GRADO[g],
 }));
 
-const opcionesMotivo: Opcion[] = Object.entries(NOMBRE_MOTIVO_INGRESO).map(([valor, texto]) => ({
+const opcionesMotivo: Opcion[] = OPCIONES_MOTIVO_INGRESO.map((valor) => ({
   valor,
-  texto,
+  texto: NOMBRE_MOTIVO_INGRESO[valor] ?? valor,
 }));
 
 const opcionesCargo: Opcion[] = cargos.map((c) => ({
@@ -73,16 +81,6 @@ const opcionesCargo: Opcion[] = cargos.map((c) => ({
     requerido
   />
 
-  <Campo
-    nombre="fecha_ingreso"
-    etiqueta={ETIQUETAS.fecha_ingreso!}
-    tipo="date"
-    valor={valores.fecha_ingreso}
-    error={errores.fecha_ingreso}
-    ayuda={`Con esta fecha se calcula su cápita. Si ya estaba en la logia antes de ${anio}, usa una fecha anterior al 1 de enero.`}
-    requerido
-  />
-
   <Selector
     nombre="motivo_ingreso"
     etiqueta={ETIQUETAS.motivo_ingreso!}
@@ -91,6 +89,15 @@ const opcionesCargo: Opcion[] = cargos.map((c) => ({
     error={errores.motivo_ingreso}
     requerido
     ayuda="Para un recién iniciado usa Iniciado en la logia. Para quien viene de años atrás y no se sabe su origen, Miembro de años anteriores."
+  />
+
+  <Campo
+    nombre="fecha_ingreso"
+    etiqueta={ETIQUETAS.fecha_ingreso!}
+    valor={valores.fecha_ingreso}
+    error={errores.fecha_ingreso}
+    marcador="AAAA-MM-DD"
+    ayuda={`De aquí salen sus cápitas. Para un recién iniciado o un afiliado es el día de su iniciación o afiliación. Para un miembro de años anteriores déjala en blanco y queda el 31 de diciembre de ${anio - 1}. También vale escribirla como 31/08/${anio}.`}
   />
 
   <Selector
@@ -103,23 +110,32 @@ const opcionesCargo: Opcion[] = cargos.map((c) => ({
     ayuda="Si el cargo ya lo tenía otro hermano, se le traspasa."
   />
 
-  <Campo
-    nombre="fecha_iniciacion"
-    etiqueta={ETIQUETAS.fecha_iniciacion!}
-    tipo="date"
-    valor={valores.fecha_iniciacion}
-    error={errores.fecha_iniciacion}
-    ayuda="Obligatoria para un recién iniciado; en blanco si no se conoce. En un recién iniciado, la fecha de ingreso es esta misma: de ahí salen sus cápitas."
-  />
+  {/* Dato fino de secretaría: en el alta se deriva de la fecha de ingreso.
+      De texto y no de fecha porque Safari pinta un campo de fecha vacío como
+      si trajera la fecha de hoy, y estos pueden ir en blanco de verdad. */}
+  {
+    !alta && (
+      <>
+        <Campo
+          nombre="fecha_iniciacion"
+          etiqueta={ETIQUETAS.fecha_iniciacion!}
+          valor={valores.fecha_iniciacion}
+          error={errores.fecha_iniciacion}
+          marcador="AAAA-MM-DD"
+          ayuda="Dato para la secretaría. En blanco si no se conoce; en un iniciado en la logia que se deje en blanco, se toma su fecha de ingreso."
+        />
 
-  <Campo
-    nombre="fecha_afiliacion"
-    etiqueta={ETIQUETAS.fecha_afiliacion!}
-    tipo="date"
-    valor={valores.fecha_afiliacion}
-    error={errores.fecha_afiliacion}
-    ayuda="Obligatoria si el motivo es Afiliado; en blanco en los demás casos."
-  />
+        <Campo
+          nombre="fecha_afiliacion"
+          etiqueta={ETIQUETAS.fecha_afiliacion!}
+          valor={valores.fecha_afiliacion}
+          error={errores.fecha_afiliacion}
+          marcador="AAAA-MM-DD"
+          ayuda="Dato para la secretaría. En blanco si no se conoce; en un afiliado que se deje en blanco, se toma su fecha de ingreso."
+        />
+      </>
+    )
+  }
 
   <Campo
     nombre="correo"
