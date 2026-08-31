@@ -2,6 +2,7 @@
  * Consultas de egresos, firmas y documentos.
  */
 import { consulta, unaFila, type Tx } from '../db';
+import type { Rol } from '../tipos';
 
 export type EstadoEgreso =
   | 'registrado'
@@ -158,7 +159,7 @@ export interface Firma {
   rol_requerido: 'tesorero' | 'venerable_maestro';
   firmado_por: number;
   firmante_nombre: string;
-  rol_firmante: 'tesorero' | 'venerable_maestro';
+  rol_firmante: Rol;
   es_suplencia: boolean;
   motivo_suplencia: string | null;
   firmado_en: string;
@@ -180,10 +181,14 @@ export async function insertarFirma(
   egresoId: number,
   rolRequerido: 'tesorero' | 'venerable_maestro',
   firmadoPor: number,
-  rolFirmante: 'tesorero' | 'venerable_maestro',
+  rolFirmante: Rol,
   motivoSuplencia: string | null,
 ): Promise<void> {
-  const esSuplencia = rolFirmante !== rolRequerido;
+  /* El super_admin cubre el lugar del V∴M∴ por nivel: no es suplencia. */
+  const cubreDirecto =
+    rolFirmante === rolRequerido ||
+    (rolRequerido === 'venerable_maestro' && rolFirmante === 'super_admin');
+  const esSuplencia = !cubreDirecto;
   await tx.consulta(
     `insert into egreso_firma
        (egreso_id, rol_requerido, firmado_por, rol_firmante, es_suplencia, motivo_suplencia)

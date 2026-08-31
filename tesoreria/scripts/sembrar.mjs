@@ -21,7 +21,7 @@ import { MINIMO_CONTRASENA, hashearContrasena, revisarFortaleza } from '../src/l
 import { argumentos, conectar, pregunta, preguntaOculta, raizApp } from './_comun.mjs';
 
 const { banderas, valores } = argumentos();
-const ROLES = ['tesorero', 'venerable_maestro'];
+const ROLES = ['tesorero', 'venerable_maestro', 'super_admin'];
 
 const cliente = await conectar();
 
@@ -85,8 +85,8 @@ async function sembrarUsuarios(cliente) {
       const nombre = await pregunta('  Nombre completo: ');
       let rol = '';
       while (!ROLES.includes(rol)) {
-        rol = await pregunta('  Rol [tesorero | venerable_maestro]: ');
-        if (!ROLES.includes(rol)) console.log('    Escribe tesorero o venerable_maestro.');
+        rol = await pregunta('  Rol [tesorero | venerable_maestro | super_admin]: ');
+        if (!ROLES.includes(rol)) console.log('    Escribe tesorero, venerable_maestro o super_admin.');
       }
 
       let contrasena = '';

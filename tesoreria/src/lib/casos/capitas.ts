@@ -6,6 +6,7 @@
  * de la misma regla y el invariante se sostiene aunque alguien escriba desde
  * psql.
  */
+import { esNivelVM } from '../tipos';
 import { guardarComprobante } from '../archivos';
 import { registrarEn } from '../bitacora';
 import { consumirNonce } from '../csrf';
@@ -56,7 +57,7 @@ export async function asignarModalidad(
   datos: DatosModalidad,
 ): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
-  const esVM = ctx.sesion.usuario.rol === 'venerable_maestro';
+  const esVM = esNivelVM(ctx.sesion.usuario.rol);
 
   /* La promoción es discrecional del Venerable Maestro. */
   if (datos.modalidad === 'promocion' && !esVM) {
@@ -214,7 +215,7 @@ export async function registrarPagoCapita(
 export async function exentarMes(ctx: Contexto, datos: DatosExencion): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
 
-  if (ctx.sesion.usuario.rol !== 'venerable_maestro') {
+  if (!esNivelVM(ctx.sesion.usuario.rol)) {
     throw new ErrorDeNegocio(
       'Las exenciones las autoriza el Venerable Maestro.',
       'monto',
@@ -426,7 +427,7 @@ export async function quitarExencion(
 ): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
 
-  if (ctx.sesion.usuario.rol !== 'venerable_maestro') {
+  if (!esNivelVM(ctx.sesion.usuario.rol)) {
     throw new ErrorDeNegocio('Las exenciones las administra el Venerable Maestro.');
   }
 

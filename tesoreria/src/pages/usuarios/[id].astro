@@ -1,0 +1,228 @@
+---
+/*
+ * Ficha de un usuario de la plataforma: editar nombre y rol, restablecer su
+ * contraseña y activarlo o desactivarlo. Una página, varias acciones (_accion).
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import {
+  cambiarActivo,
+  editarUsuario,
+  restablecerContrasena,
+} from '@lib/casos/usuarios';
+import { emitirNonce } from '@lib/csrf';
+import { obtenerUsuario } from '@lib/datos/usuarios';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { esquemaContrasenaDeOtro, esquemaUsuarioEditar } from '@lib/esquemas/usuario';
+import { formatoMomento } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirVM } from '@lib/sesion';
+import { NOMBRE_ROL, type Opcion } from '@lib/tipos';
+
+const guard = requerirVM(Astro);
+if (guard instanceof Response) return guard;
+const sesion = guard;
+
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const ETIQUETAS: Record<string, string> = {
+  nombre: 'Nombre completo',
+  rol: 'Rol',
+  contrasena: 'Contraseña nueva',
+  confirmacion: 'Confirmar contraseña',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    seccion = entrada.accion;
+    try {
+      if (entrada.accion === 'editar') {
+        const r = await validar(entrada, {
+          esquema: esquemaUsuarioEditar,
+          proposito: 'usuario_editar',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = r.valores;
+          estado = r.estado;
+        } else {
+          await editarUsuario({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+          return Astro.redirect(`/usuarios/${id}?ok=usuario`, 303);
+        }
+      } else if (entrada.accion === 'contrasena') {
+        const r = await validar(entrada, {
+          esquema: esquemaContrasenaDeOtro,
+          proposito: 'usuario_contrasena',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await restablecerContrasena({ ...ctxBase, nonce: r.nonce }, id, r.datos.contrasena);
+          return Astro.redirect(`/usuarios/${id}?ok=contrasena`, 303);
+        }
+      } else if (entrada.accion === 'desactivar' || entrada.accion === 'reactivar') {
+        const r = await validar(entrada, {
+          esquema: esquemaVacio,
+          proposito: 'usuario_activo',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await cambiarActivo({ ...ctxBase, nonce: r.nonce }, id, entrada.accion === 'reactivar');
+          return Astro.redirect(`/usuarios/${id}?ok=usuario`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const usuario = await obtenerUsuario(id);
+if (!usuario) return new Response('No encontrado', { status: 404 });
+
+const [nonceEditar, nonceContrasena, nonceActivo] = await Promise.all([
+  emitirNonce(sesion.idHash, 'usuario_editar'),
+  emitirNonce(sesion.idHash, 'usuario_contrasena'),
+  emitirNonce(sesion.idHash, 'usuario_activo'),
+]);
+
+const opcionesRol: Opcion[] = (
+  ['tesorero', 'venerable_maestro', 'super_admin'] as const
+).map((r) => ({ valor: r, texto: NOMBRE_ROL[r] }));
+
+const soyYo = usuario.id === sesion.usuario.id;
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={usuario.nombre} sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/usuarios">← Usuarios</a></span>
+    <span>{usuario.correo}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+    <h1>{usuario.nombre}{soyYo && <span class="apagado"> (tú)</span>}</h1>
+    {
+      usuario.activo ? (
+        <span class="insignia insignia--ok">Activo</span>
+      ) : (
+        <span class="insignia insignia--alerta">Desactivado</span>
+      )
+    }
+  </div>
+  <p class="apagado">
+    {NOMBRE_ROL[usuario.rol]} · último acceso:{' '}
+    {usuario.ultimo_acceso ? formatoMomento(usuario.ultimo_acceso) : 'nunca'}
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Datos</h2>
+      <Formulario csrf={sesion.csrfToken} nonce={nonceEditar} accionInterna="editar">
+        <Campo
+          nombre="nombre"
+          etiqueta={ETIQUETAS.nombre!}
+          valor={valores.nombre ?? usuario.nombre}
+          error={seccion === 'editar' ? errores.nombre : undefined}
+          requerido
+        />
+        <Selector
+          nombre="rol"
+          etiqueta={ETIQUETAS.rol!}
+          opciones={opcionesRol}
+          valor={valores.rol ?? usuario.rol}
+          error={seccion === 'editar' ? errores.rol : undefined}
+          requerido
+          ayuda="Siempre debe quedar al menos un usuario activo de nivel V∴M∴ (Venerable Maestro o super administrador)."
+        />
+        <button class="btn btn--primary" type="submit">Guardar cambios</button>
+      </Formulario>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Restablecer contraseña</h2>
+      <p class="apagado">
+        Al cambiarla se cierran las sesiones que este usuario tenga abiertas.
+      </p>
+      <details open={seccion === 'contrasena'}>
+        <summary>Cambiar la contraseña</summary>
+        <Formulario csrf={sesion.csrfToken} nonce={nonceContrasena} accionInterna="contrasena">
+          <Campo
+            nombre="contrasena"
+            etiqueta={ETIQUETAS.contrasena!}
+            tipo="password"
+            error={seccion === 'contrasena' ? errores.contrasena : undefined}
+            autocompletar="new-password"
+            requerido
+            ayuda="Al menos 14 caracteres. Una frase con espacios sirve y se recuerda mejor."
+          />
+          <Campo
+            nombre="confirmacion"
+            etiqueta={ETIQUETAS.confirmacion!}
+            tipo="password"
+            error={seccion === 'contrasena' ? errores.confirmacion : undefined}
+            autocompletar="new-password"
+            requerido
+          />
+          <button class="btn btn--primary" type="submit">Restablecer</button>
+        </Formulario>
+      </details>
+    </section>
+
+    <section class="tarjeta">
+      <h2>{usuario.activo ? 'Desactivar' : 'Reactivar'}</h2>
+      {
+        soyYo ? (
+          <p class="apagado">Tu propio usuario no se puede desactivar desde aquí.</p>
+        ) : usuario.activo ? (
+          <>
+            <p class="apagado">
+              Pierde el acceso de inmediato y se cierran sus sesiones. Su historial,
+              sus firmas y su rastro en la bitácora se conservan.
+            </p>
+            <Formulario csrf={sesion.csrfToken} nonce={nonceActivo} accionInterna="desactivar">
+              <button class="btn btn--ghost" type="submit">Desactivar usuario</button>
+            </Formulario>
+          </>
+        ) : (
+          <Formulario csrf={sesion.csrfToken} nonce={nonceActivo} accionInterna="reactivar">
+            <button class="btn btn--primary" type="submit">Reactivar usuario</button>
+          </Formulario>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

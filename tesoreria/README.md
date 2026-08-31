@@ -31,7 +31,31 @@ npm run dev           # http://127.0.0.1:4322
 
 `npm run sembrar` pide correo, nombre, rol y contraseña de cada usuario, sin
 mostrar lo que escribes. La contraseña debe tener al menos 14 caracteres: una
-frase con espacios sirve y se recuerda mejor que una clave con símbolos.
+frase con espacios sirve y se recuerda mejor que una clave con símbolos. Solo
+hace falta para el primer usuario: los demás se administran desde la interfaz.
+
+### Los tres roles
+
+| Rol | Qué puede |
+|---|---|
+| Tesorero | Opera la caja: captura, comprueba, cierra cortes |
+| Venerable Maestro | Todo lo del tesorero, y además autoriza: firmas, promociones, reaperturas |
+| Super administrador | El mismo nivel que el V∴M∴, y además existe para que la operación de la plataforma no dependa de quién ocupe el cargo cada año |
+
+En las firmas de egresos, el super administrador firma en el lugar del V∴M∴ sin
+ser suplencia (es su mismo nivel) y puede suplir al tesorero igual que el V∴M∴,
+con motivo.
+
+Cuando la misma persona es V∴M∴ y administrador de la plataforma (como en 2026),
+su cuenta lleva el rol venerable_maestro y ya puede todo: no hacen falta dos
+cuentas. En el cambio de año, la transición son dos ediciones en Usuarios: al
+administrador saliente se le cambia el rol a super_admin (conserva su nivel y
+sus firmas nuevas quedan registradas con el rol correcto) y el V∴M∴ entrante
+recibe el rol venerable_maestro. Los candados obligan a hacerlo en ese orden. La administración de usuarios (altas, roles, contraseñas,
+desactivación) vive en Usuarios y es solo de nivel V∴M∴, con dos candados: nadie
+se desactiva ni se baja de nivel a sí mismo, y siempre queda al menos un usuario
+activo de nivel V∴M∴. Los usuarios nunca se borran, se desactivan: las firmas y
+la bitácora siguen apuntando a alguien con nombre.
 
 Para importar el padrón desde el cuadro logial publicado, en vez de capturar los
 mismos nombres dos veces:
@@ -57,6 +81,7 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 | Traspasos | Depósitos del efectivo al banco y retiros, con su ficha |
 | Cortes | Cierre mensual, saldos encadenados por bolsa, hoja imprimible |
 | Conceptos | Catálogo administrable de ingresos y egresos |
+| Usuarios | Altas, roles, contraseñas y desactivación (solo nivel V∴M∴) |
 | Herramientas | Saldo de apertura, carga masiva por CSV, exportación del cuadro, contraseña |
 
 ### El orden de las cosas

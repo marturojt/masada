@@ -1,0 +1,176 @@
+---
+/*
+ * Usuarios de la plataforma. Solo nivel V∴M∴ (Venerable Maestro o super
+ * administrador). Los usuarios no se borran: se desactivan.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { crearUsuario } from '@lib/casos/usuarios';
+import { emitirNonce } from '@lib/csrf';
+import { listarUsuarios } from '@lib/datos/usuarios';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaUsuarioNuevo } from '@lib/esquemas/usuario';
+import { formatoMomento } from '@lib/fechas';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirVM } from '@lib/sesion';
+import { NOMBRE_ROL, type Opcion } from '@lib/tipos';
+
+const guard = requerirVM(Astro);
+if (guard instanceof Response) return guard;
+const sesion = guard;
+
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const ETIQUETAS: Record<string, string> = {
+  correo: 'Correo',
+  nombre: 'Nombre completo',
+  rol: 'Rol',
+  contrasena: 'Contraseña',
+  confirmacion: 'Confirmar contraseña',
+};
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { rol: 'tesorero' };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaUsuarioNuevo,
+    proposito: 'usuario_nuevo',
+    sesion,
+  });
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores, contrasena: '', confirmacion: '' };
+    estado = resultado.estado;
+  } else {
+    try {
+      const id = await crearUsuario(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos,
+      );
+      return Astro.redirect(`/usuarios/${id}?ok=usuario`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores, contrasena: '', confirmacion: '' };
+      estado = 422;
+    }
+  }
+}
+
+const usuarios = await listarUsuarios();
+const nonce = await emitirNonce(sesion.idHash, 'usuario_nuevo');
+
+const opcionesRol: Opcion[] = (
+  ['tesorero', 'venerable_maestro', 'super_admin'] as const
+).map((r) => ({ valor: r, texto: NOMBRE_ROL[r] }));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Usuarios" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/herramientas">← Herramientas</a></span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Usuarios de la plataforma</h1>
+  <p class="apagado">
+    El tesorero opera la caja; el Venerable Maestro autoriza; el super administrador
+    tiene el mismo nivel que el V∴M∴ y además administra a los usuarios. Nadie se
+    borra: se desactiva, para que las firmas y la bitácora sigan apuntando a alguien
+    con nombre.
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Quiénes tienen acceso</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Nombre</th>
+              <th scope="col">Correo</th>
+              <th scope="col">Rol</th>
+              <th scope="col">Último acceso</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usuarios.map((u) => (
+              <tr>
+                <td>
+                  <a href={`/usuarios/${u.id}`}>{u.nombre}</a>
+                  {u.id === sesion.usuario.id && <span class="apagado"> (tú)</span>}
+                </td>
+                <td>{u.correo}</td>
+                <td>{NOMBRE_ROL[u.rol]}</td>
+                <td>{u.ultimo_acceso ? formatoMomento(u.ultimo_acceso) : 'Nunca'}</td>
+                <td>
+                  {u.activo ? (
+                    <span class="insignia insignia--ok">Activo</span>
+                  ) : (
+                    <span class="insignia insignia--alerta">Desactivado</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Dar de alta un usuario</h2>
+      <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+        <Campo
+          nombre="nombre"
+          etiqueta={ETIQUETAS.nombre!}
+          valor={valores.nombre}
+          error={errores.nombre}
+          requerido
+        />
+        <Campo
+          nombre="correo"
+          etiqueta={ETIQUETAS.correo!}
+          tipo="email"
+          valor={valores.correo}
+          error={errores.correo}
+          requerido
+        />
+        <Selector
+          nombre="rol"
+          etiqueta={ETIQUETAS.rol!}
+          opciones={opcionesRol}
+          valor={valores.rol}
+          error={errores.rol}
+          requerido
+        />
+        <Campo
+          nombre="contrasena"
+          etiqueta={ETIQUETAS.contrasena!}
+          tipo="password"
+          error={errores.contrasena}
+          autocompletar="new-password"
+          requerido
+          ayuda="Al menos 14 caracteres. Una frase con espacios sirve y se recuerda mejor."
+        />
+        <Campo
+          nombre="confirmacion"
+          etiqueta={ETIQUETAS.confirmacion!}
+          tipo="password"
+          error={errores.confirmacion}
+          autocompletar="new-password"
+          requerido
+        />
+        <button class="btn btn--primary" type="submit">Crear usuario</button>
+      </Formulario>
+    </section>
+  </div>
+</LayoutAdmin>

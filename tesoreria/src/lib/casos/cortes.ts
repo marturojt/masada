@@ -6,6 +6,7 @@
  * reescribir el pasado destruye la confianza en los números. La reapertura existe
  * para lo excepcional, la autoriza el Venerable Maestro y deja huella permanente.
  */
+import { esNivelVM } from '../tipos';
 import { registrarEn } from '../bitacora';
 import { consumirNonce } from '../csrf';
 import { enTransaccion, unaFila } from '../db';
@@ -23,7 +24,7 @@ interface Contexto {
   idPeticion: string;
 }
 
-const esVM = (s: Sesion): boolean => s.usuario.rol === 'venerable_maestro';
+const esVM = (s: Sesion): boolean => esNivelVM(s.usuario.rol);
 
 /** Los mensajes de la base ya vienen en español y pensados para el tesorero. */
 function comoErrorDeNegocio(error: unknown, campo?: string): never {

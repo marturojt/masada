@@ -11,6 +11,7 @@
  *   entregan por comprobar cierran con recibos más devolución igual a lo entregado.
  * - El pago a la Gran Tesorería lleva además el cálculo que ella misma envía.
  */
+import { esNivelVM } from '../tipos';
 import { guardarComprobante } from '../archivos';
 import { registrarEn } from '../bitacora';
 import { consumirNonce } from '../csrf';
@@ -60,7 +61,7 @@ interface ContextoAlta extends Contexto {
   proposito: 'egreso_nuevo' | 'egreso_gran_tesoreria';
 }
 
-const esVM = (s: Sesion): boolean => s.usuario.rol === 'venerable_maestro';
+const esVM = (s: Sesion): boolean => esNivelVM(s.usuario.rol);
 
 /** Estado del egreso con bloqueo de fila, para decidir sin carreras. */
 async function egresoParaEditar(
@@ -238,7 +239,11 @@ export async function firmarEgreso(
 ): Promise<{ autorizado: boolean }> {
   const usuarioId = ctx.sesion.usuario.id;
   const rolFirmante = ctx.sesion.usuario.rol;
-  const esSuplencia = datos.rol_requerido !== rolFirmante;
+  /* El super_admin cubre el lugar del V∴M∴ por nivel: no es suplencia. */
+  const cubreDirecto =
+    rolFirmante === datos.rol_requerido ||
+    (datos.rol_requerido === 'venerable_maestro' && rolFirmante === 'super_admin');
+  const esSuplencia = !cubreDirecto;
 
   if (esSuplencia) {
     if (!esVM(ctx.sesion)) {

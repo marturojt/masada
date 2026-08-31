@@ -5,6 +5,7 @@
  * identificador: un volcado de la base no alcanza para secuestrar una sesión
  * viva. La cookie lleva el identificador en claro, que es la única copia.
  */
+import { esNivelVM } from './tipos';
 import { createHash, randomBytes } from 'node:crypto';
 import type { AstroCookies } from 'astro';
 import { config, esProduccion } from './config';
@@ -165,8 +166,7 @@ export function requerirSesion(ctx: { locals: App.Locals }): Sesion {
   return sesion;
 }
 
-export const esVM = (sesion: Sesion): boolean =>
-  sesion.usuario.rol === 'venerable_maestro';
+export const esVM = (sesion: Sesion): boolean => esNivelVM(sesion.usuario.rol);
 
 /**
  * Guard de página para lo que solo puede hacer el Venerable Maestro. Devuelve la

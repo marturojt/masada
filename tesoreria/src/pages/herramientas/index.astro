@@ -26,7 +26,7 @@ import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaAbrirEjercicio, esquemaApertura } from '@lib/esquemas/corte';
 import { esquemaVacio } from '@lib/esquemas/comunes';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
-import { requerirSesion } from '@lib/sesion';
+import { esVM, requerirSesion } from '@lib/sesion';
 import { NOMBRE_ROL } from '@lib/tipos';
 
 const sesion = requerirSesion(Astro);
@@ -308,6 +308,19 @@ Astro.response.status = estado;
           )
       }
     </section>
+
+    {
+      esVM(sesion) && (
+        <section class="tarjeta">
+          <h2>Usuarios de la plataforma</h2>
+          <p class="apagado">
+            Dar de alta al tesorero o a un super administrador, editar roles,
+            restablecer contraseñas y desactivar accesos. Solo nivel V∴M∴.
+          </p>
+          <a class="btn btn--ghost" href="/usuarios">Administrar usuarios</a>
+        </section>
+      )
+    }
 
     <section class="tarjeta">
       <h2>Carga masiva por CSV</h2>

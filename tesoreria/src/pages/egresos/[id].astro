@@ -236,8 +236,9 @@ const nonces = {
 const firmaDe = (rol: 'tesorero' | 'venerable_maestro') =>
   firmas.find((f) => f.rol_requerido === rol);
 
-const miRol = sesion.usuario.rol;
-const faltaMiFirma = egreso.estado === 'registrado' && !firmaDe(miRol);
+/* El super_admin firma en el lugar del V∴M∴: es su mismo nivel. */
+const miLado = esVM(sesion) ? 'venerable_maestro' : 'tesorero';
+const faltaMiFirma = egreso.estado === 'registrado' && !firmaDe(miLado);
 const faltaFirmaTesorero = egreso.estado === 'registrado' && !firmaDe('tesorero');
 
 const entregado = egreso.monto_entregado_centavos ?? 0;
@@ -481,10 +482,10 @@ Astro.response.status = estado;
 
             {faltaMiFirma && (
               <Formulario csrf={sesion.csrfToken} nonce={nonces.firma} accionInterna="firmar">
-                <input type="hidden" name="rol_requerido" value={miRol} />
+                <input type="hidden" name="rol_requerido" value={miLado} />
                 <div class="formulario__acciones" style="margin-top: 0;">
                   <button class="btn btn--primary" type="submit">
-                    Firmar como {NOMBRE_ROL[miRol]}
+                    Firmar como {NOMBRE_ROL[miLado]}
                   </button>
                 </div>
               </Formulario>

@@ -1,6 +1,10 @@
 /* Tipos del dominio compartidos por toda la app. */
 
-export type Rol = 'tesorero' | 'venerable_maestro';
+export type Rol = 'tesorero' | 'venerable_maestro' | 'super_admin';
+
+/** El super_admin tiene el mismo nivel de autoridad que el Venerable Maestro. */
+export const esNivelVM = (rol: Rol): boolean =>
+  rol === 'venerable_maestro' || rol === 'super_admin';
 
 export type Grado = 'aprendiz' | 'companero' | 'maestro';
 
@@ -14,6 +18,7 @@ export const NOMBRE_BOLSA: Record<Bolsa, string> = {
 export const NOMBRE_ROL: Record<Rol, string> = {
   tesorero: 'Tesorero',
   venerable_maestro: 'Venerable Maestro',
+  super_admin: 'Super administrador',
 };
 
 export const NOMBRE_GRADO: Record<Grado, string> = {

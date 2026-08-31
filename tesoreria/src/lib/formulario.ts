@@ -235,6 +235,7 @@ const AVISOS: Record<string, string> = {
   tarifa: 'Tarifa capturada.',
   aportacion: 'Aportación registrada.',
   registro: 'Registro externo actualizado.',
+  usuario: 'Usuario guardado.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>

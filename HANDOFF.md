@@ -62,6 +62,13 @@ del cliente).
 - **Informe mensual ampliado**: el corte y su hoja imprimible traen resumen por
   clasificación, sección de Gran Tesorería y aportaciones en especie fuera de las
   cifras.
+- **Usuarios de la plataforma**: ABC en la interfaz (solo nivel V∴M∴) con el rol
+  nuevo super_admin, del mismo nivel que el V∴M∴: firma en su lugar sin ser
+  suplencia y puede suplir al tesorero con motivo (migración 016). Candados: nadie
+  se desactiva ni se baja de nivel a sí mismo y siempre queda un usuario activo de
+  nivel V∴M∴. Los usuarios se desactivan, nunca se borran. En 2026 la cuenta del
+  V∴M∴ (Arturo) cubre ambos papeles; en el cambio de año se le cambia el rol a
+  super_admin y el V∴M∴ entrante recibe el suyo, en ese orden.
 - **Carga masiva por CSV** (Herramientas): plantilla con el padrón actual para
   actualizar o dar de alta hermanos en lote, y captura de ingresos y egresos
   desde archivo, con ensayo previo y todo o nada. Las cápitas aplican con el
