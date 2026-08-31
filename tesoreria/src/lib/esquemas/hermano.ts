@@ -24,7 +24,7 @@ export const NOMBRE_MOTIVO_INGRESO: Record<string, string> = {
   fundacion: 'Fundador',
   iniciacion: 'Iniciado en la logia',
   afiliacion: 'Afiliado',
-  regularizacion: 'Regularizado',
+  regularizacion: 'Miembro de años anteriores',
 };
 
 export const NOMBRE_MOTIVO_BAJA: Record<string, string> = {

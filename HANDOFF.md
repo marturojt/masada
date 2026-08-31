@@ -62,6 +62,11 @@ del cliente).
 - **Informe mensual ampliado**: el corte y su hoja imprimible traen resumen por
   clasificación, sección de Gran Tesorería y aportaciones en especie fuera de las
   cifras.
+- **Carga masiva por CSV** (Herramientas): plantilla con el padrón actual para
+  actualizar o dar de alta hermanos en lote, y captura de ingresos y egresos
+  desde archivo, con ensayo previo y todo o nada. Las cápitas aplican con el
+  mismo FIFO; los egresos cargados nacen registrados y sus firmas, entrega y
+  comprobante siguen siendo manuales.
 - **Dos bolsas**: cada movimiento indica banco o efectivo, hay traspasos entre
   bolsas (depósitos y retiros, con ficha) y los cortes muestran el saldo por bolsa.
 - **Cortes mensuales**: saldos encadenados por bolsa, cierre en orden, bloqueo del
@@ -115,7 +120,9 @@ hacen los usuarios en la interfaz, no requiere código:
    y el contacto.
 5. **Asignar la modalidad de cápita** de cada hermano para 2026.
 6. **Capturar lo que va del año**: ingresos, egresos, obligaciones y pagos de la
-   Gran Tesorería, con sus comprobantes.
+   Gran Tesorería, con sus comprobantes. Para el grueso conviene la **carga
+   masiva por CSV** de Herramientas: se descarga la plantilla, se llena en Excel
+   y se ensaya antes de aplicar; las evidencias se adjuntan después a mano.
 7. **Cerrar los meses** ya terminados, en orden.
 
 ### Datos que el sistema todavía no conoce

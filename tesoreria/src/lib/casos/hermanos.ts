@@ -59,7 +59,7 @@ function traducirError(error: unknown): never {
  * El evento de grado inicial se deriva del motivo de ingreso: quien se inició en
  * la logia empieza como aprendiz, quien se afilió llega con el grado que traía.
  */
-function eventoInicial(f: DatosFormularioHermano): {
+export function eventoInicial(f: DatosFormularioHermano): {
   grado: Grado;
   fecha: string;
   tipoEvento: string;

@@ -1,0 +1,237 @@
+---
+/*
+ * Carga masiva por CSV, en dos pasos: subir el archivo lo ENSAYA (valida todo
+ * y muestra qué haría, sin escribir nada) y el botón de aplicar lo mete en una
+ * sola transacción. Nada a medias: si una fila falla, no entra ninguna.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import {
+  aplicarImportacion,
+  ensayarImportacion,
+  type Ensayo,
+  type TipoImportacion,
+} from '@lib/casos/importar';
+import { emitirNonce } from '@lib/csrf';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { z } from 'zod';
+import { leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const TIPOS: { tipo: TipoImportacion; titulo: string; nota: string }[] = [
+  {
+    tipo: 'hermanos',
+    titulo: 'Hermanos',
+    nota:
+      'La plantilla trae el padrón actual. Fila con id actualiza (las celdas vacías ' +
+      'conservan lo que ya está), fila sin id da de alta.',
+  },
+  {
+    tipo: 'ingresos',
+    titulo: 'Ingresos',
+    nota:
+      'Un ingreso por fila, con la clave del concepto. Los de cápita se aplican con el ' +
+      'mismo FIFO del módulo y exigen modalidad asignada. El comprobante se adjunta ' +
+      'después, a mano, donde haga falta.',
+  },
+  {
+    tipo: 'egresos',
+    titulo: 'Egresos',
+    nota:
+      'Los egresos nacen en estado registrado: las dos firmas y la entrega con su ' +
+      'comprobante siguen siendo manuales, en la pantalla de cada egreso.',
+  },
+];
+
+const esTipo = (v: string): v is TipoImportacion =>
+  v === 'hermanos' || v === 'ingresos' || v === 'egresos';
+
+const esquemaAplicar = z.object({ csv: z.string().min(1, 'No llegó el contenido del archivo.') });
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let ensayo: Ensayo | null = null;
+let csvEnsayado = '';
+let aplicado: { tipo: TipoImportacion; aplicadas: number; detalle: string } | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const [verbo, tipo] = (entrada.accion ?? '').split(':');
+    try {
+      if (verbo === 'ensayar' && tipo && esTipo(tipo)) {
+        const r = await validar(entrada, { esquema: esquemaVacio, proposito: 'importar_ensayo', sesion });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          const archivo = entrada.archivos.archivo;
+          if (!archivo) throw new ErrorDeNegocio('Elige el archivo CSV.', 'archivo');
+          if (archivo.size > 2_000_000) {
+            throw new ErrorDeNegocio('El archivo es demasiado grande para una carga.', 'archivo');
+          }
+          csvEnsayado = await archivo.text();
+          ensayo = await ensayarImportacion(tipo, csvEnsayado);
+        }
+      } else if (verbo === 'aplicar' && tipo && esTipo(tipo)) {
+        const r = await validar(entrada, { esquema: esquemaAplicar, proposito: 'importar', sesion });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          const resultado = await aplicarImportacion(
+            { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+            tipo,
+            r.datos.csv,
+          );
+          aplicado = { tipo, ...resultado };
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const noncesEnsayo = new Map<TipoImportacion, string>();
+for (const t of TIPOS) {
+  noncesEnsayo.set(t.tipo, await emitirNonce(sesion.idHash, 'importar_ensayo'));
+}
+const nonceAplicar = await emitirNonce(sesion.idHash, 'importar');
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Carga masiva" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/herramientas">← Herramientas</a></span>
+  </div>
+
+  <ResumenErrores errores={errores} />
+
+  <h1>Carga masiva por CSV</h1>
+  <p class="apagado">
+    En dos pasos: subir el archivo lo <strong>ensaya</strong> (valida cada fila y muestra
+    qué haría, sin escribir nada) y aplicar lo mete completo en una sola operación. Si
+    una fila tiene error, no entra ninguna. Todas las reglas de siempre siguen mandando:
+    mes cerrado, conceptos del catálogo, doble firma de egresos.
+  </p>
+
+  {
+    aplicado && (
+      <div class="aviso">
+        Carga aplicada: {aplicado.detalle}.
+        {aplicado.tipo === 'egresos' && (
+          <>
+            {' '}Siguen en <a href="/egresos">Egresos</a> para firmarlos y registrar su
+            entrega con comprobante.
+          </>
+        )}
+        {aplicado.tipo === 'hermanos' && <> Revisa el <a href="/hermanos">padrón</a>.</>}
+        {aplicado.tipo === 'ingresos' && <> Revisa <a href="/ingresos">Ingresos</a>.</>}
+      </div>
+    )
+  }
+
+  {
+    ensayo && (
+      <section class="tarjeta" style="margin-top: 1.25rem;">
+        <h2>Ensayo: {TIPOS.find((t) => t.tipo === ensayo!.tipo)?.titulo}</h2>
+        <p>
+          {ensayo.total} fila(s), <strong>{ensayo.validas} válida(s)</strong>
+          {ensayo.total - ensayo.validas > 0 && (
+            <>
+              {' '}y{' '}
+              <span class="insignia insignia--alerta">
+                {ensayo.total - ensayo.validas} con error
+              </span>
+            </>
+          )}
+          . Nada se ha escrito todavía.
+        </p>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Línea</th>
+                <th scope="col">Qué haría</th>
+                <th scope="col">Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ensayo.filas.map((f) => (
+                <tr>
+                  <td>{f.linea}</td>
+                  <td>{f.resumen}</td>
+                  <td>{f.error && <span class="campo__error">{f.error}</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {ensayo.validas === ensayo.total ? (
+          <Formulario
+            csrf={sesion.csrfToken}
+            nonce={nonceAplicar}
+            accionInterna={`aplicar:${ensayo.tipo}`}
+          >
+            <textarea name="csv" hidden set:text={csvEnsayado} />
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">
+                Aplicar las {ensayo.validas} fila(s)
+              </button>
+              <a class="btn btn--ghost" href="/herramientas/importar">Descartar</a>
+            </div>
+          </Formulario>
+        ) : (
+          <p class="apagado">
+            Corrige las filas marcadas en tu archivo y vuelve a subirlo. No se aplica una
+            carga con errores.
+          </p>
+        )}
+      </section>
+    )
+  }
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1.25rem; margin-top: 1.25rem;">
+    {
+      TIPOS.map((t) => (
+        <section class="tarjeta">
+          <h2>{t.titulo}</h2>
+          <p class="apagado" style="font-size: 0.9rem;">{t.nota}</p>
+          <p>
+            <a class="btn btn--ghost" href={`/herramientas/plantillas/${t.tipo}`}>
+              Descargar plantilla
+            </a>
+          </p>
+          <Formulario
+            csrf={sesion.csrfToken}
+            nonce={noncesEnsayo.get(t.tipo) ?? ''}
+            archivos
+            accionInterna={`ensayar:${t.tipo}`}
+          >
+            <div class="campo">
+              <label class="campo__etiqueta" for={`archivo-${t.tipo}`}>Archivo CSV</label>
+              <input id={`archivo-${t.tipo}`} type="file" name="archivo" accept=".csv,text/csv" required />
+            </div>
+            <button class="btn btn--primary" type="submit">Ensayar carga</button>
+          </Formulario>
+        </section>
+      ))
+    }
+  </div>
+</LayoutAdmin>

@@ -57,7 +57,7 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 | Traspasos | Depósitos del efectivo al banco y retiros, con su ficha |
 | Cortes | Cierre mensual, saldos encadenados por bolsa, hoja imprimible |
 | Conceptos | Catálogo administrable de ingresos y egresos |
-| Herramientas | Saldo de apertura, exportación del cuadro, cambio de contraseña |
+| Herramientas | Saldo de apertura, carga masiva por CSV, exportación del cuadro, contraseña |
 
 ### El orden de las cosas
 
@@ -131,6 +131,38 @@ que informa y nunca bloquea.
 Las cápitas internas y lo que se paga a GT están **desacoplados a propósito**: los
 500 del hermano a Masada son ingreso ordinario de libre uso; los de GT son un
 egreso institucional. Nada se reserva ni se calcula automáticamente entre ambos.
+
+### Carga masiva por CSV
+
+Para capturar mucho de golpe (el arranque del ejercicio, por ejemplo) sin perder
+ninguna regla. En Herramientas → Carga masiva:
+
+1. **Descargar la plantilla**: la de hermanos trae el padrón actual con su id;
+   las de ingresos y egresos traen las columnas y las claves válidas como notas.
+2. **Subir el archivo lo ensaya**: valida cada fila con las mismas reglas de la
+   captura manual y muestra qué haría, sin escribir nada.
+3. **Aplicar** lo mete completo en una sola transacción: si una fila tiene
+   error, no entra ninguna.
+
+Lo que respeta, a propósito: los hermanos con id se actualizan y las celdas
+vacías conservan lo que ya está; los pagos de cápita exigen modalidad asignada y
+se aplican con el mismo FIFO del módulo; los **egresos nacen registrados**, sus
+dos firmas y su entrega con comprobante siguen siendo manuales; y los pagos a la
+Gran Tesorería no van por aquí, se capturan como obligaciones en su módulo. Los
+comprobantes se adjuntan después, a mano, donde hagan falta. Cada carga queda en
+la bitácora y el reenvío del formulario no la duplica.
+
+Las fechas de **iniciación, aumento de salario y exaltación** de la plantilla de
+hermanos completan el historial de grados, pero solo si el hermano no tiene ya
+un evento de ese tipo, y nunca recalculan el grado vigente: un maestro al que
+solo se le llenó la iniciación sigue siendo maestro. Corregir una fecha ya
+capturada se hace en la ficha del hermano, viendo el historial completo.
+
+Sobre el **motivo de ingreso**: para los hermanos de años atrás de los que no se
+sabe si nacieron en Masada o llegaron de otra logia, el valor es
+`regularizacion`, que en pantalla se lee "Miembro de años anteriores". Significa
+exactamente eso: ya era miembro cuando el sistema arrancó y su origen no está
+documentado. Si algún día aparece el dato real, se corrige en su ficha.
 
 ### Aportaciones
 
