@@ -98,7 +98,7 @@ Astro.response.status = estado;
   <div class="barra__contexto" slot="contexto">
     <span>Ejercicio {anio}</span>
     <span>Mensual: {formatoMXN(ejercicio.capita_mensual_centavos)} al mes</span>
-    <span>Anual preferencial: {formatoMXN(ejercicio.capita_promocion_centavos)}</span>
+    <span>Anual preferencial: {formatoMXN(ejercicio.capita_promocion_centavos)}, o el monto de la dispensa</span>
   </div>
 
   <h1>Asignar modalidad de cápita</h1>
@@ -112,9 +112,12 @@ Astro.response.status = estado;
         desde enero.
       </li>
       <li>
-        <strong>Anual preferencial</strong>: {formatoMXN(ejercicio.capita_promocion_centavos)}
-        en un solo pago, a discreción del Venerable Maestro y en cualquier mes del año. Solo
-        para quien viene desde enero. Si ya pagó meses, se le descuenta lo pagado.
+        <strong>Anual preferencial</strong>: {formatoMXN(ejercicio.capita_promocion_centavos)},
+        o el monto de la dispensa que el V∴M∴ acuerde (por ejemplo, $5,500.00 en dos pagos
+        semestrales): se captura en el campo de abajo y en blanco usa la del ejercicio. A
+        discreción del Venerable Maestro y en cualquier mes del año, solo para quien viene
+        desde enero. Si ya pagó meses, se le descuenta lo pagado, y el cargo admite abonos:
+        no hace falta liquidarlo en una sola exhibición.
       </li>
       <li>
         <strong>Prorrateo</strong>: {formatoMXN(ejercicio.capita_mensual_centavos)} por cada
