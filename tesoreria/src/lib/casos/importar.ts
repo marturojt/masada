@@ -28,7 +28,7 @@ import { eventoInicial } from './hermanos';
 import { insertarMovimiento } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
-import { esquemaHermano } from '../esquemas/hermano';
+import { esquemaHermanoBase, reglasDeMotivo, type DatosFormularioHermano } from '../esquemas/hermano';
 import type { Sesion } from '../sesion';
 import { z } from 'zod';
 import {
@@ -163,7 +163,7 @@ const esquemaFechasGrado = z.object({
 interface PlanHermano {
   linea: number;
   id: number | null;
-  datos: z.infer<typeof esquemaHermano>;
+  datos: DatosFormularioHermano;
   fechasGrado: z.infer<typeof esquemaFechasGrado>;
 }
 
@@ -210,7 +210,7 @@ async function planearHermanos(csv: string): Promise<{ plan: PlanHermano[]; ensa
         if (campo !== 'id' && v[campo] !== '') combinado[campo] = v[campo];
       }
 
-      const parseo = esquemaHermano.omit({ cargo_id: true }).safeParse(combinado);
+      const parseo = esquemaHermanoBase.omit({ cargo_id: true }).superRefine(reglasDeMotivo).safeParse(combinado);
       if (!parseo.success) throw new ErrorDeNegocio(primerError(parseo));
       const fechasGrado = esquemaFechasGrado.safeParse(v);
       if (!fechasGrado.success) throw new ErrorDeNegocio(primerError(fechasGrado));

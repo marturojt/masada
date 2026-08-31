@@ -90,6 +90,7 @@ const opcionesCargo: Opcion[] = cargos.map((c) => ({
     valor={valores.motivo_ingreso}
     error={errores.motivo_ingreso}
     requerido
+    ayuda="Para un recién iniciado usa Iniciado en la logia. Para quien viene de años atrás y no se sabe su origen, Miembro de años anteriores."
   />
 
   <Selector
@@ -108,6 +109,7 @@ const opcionesCargo: Opcion[] = cargos.map((c) => ({
     tipo="date"
     valor={valores.fecha_iniciacion}
     error={errores.fecha_iniciacion}
+    ayuda="Obligatoria para un recién iniciado; en blanco si no se conoce. En un recién iniciado, la fecha de ingreso es esta misma: de ahí salen sus cápitas."
   />
 
   <Campo
@@ -116,6 +118,7 @@ const opcionesCargo: Opcion[] = cargos.map((c) => ({
     tipo="date"
     valor={valores.fecha_afiliacion}
     error={errores.fecha_afiliacion}
+    ayuda="Obligatoria si el motivo es Afiliado; en blanco en los demás casos."
   />
 
   <Campo
