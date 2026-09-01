@@ -29,7 +29,7 @@ const [adeudos, estados, resumen, faltantes] = await Promise.all([
   sinPlan(anio),
 ]);
 
-const conAdeudo = estados.filter((e) => e.adeudo_centavos > 0);
+const conAdeudo = estados.filter((e) => e.vencido_centavos > 0);
 const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
 ---
 
@@ -38,7 +38,8 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
     <span>Ejercicio {anio}</span>
     <span>Esperado: {formatoMXN(resumen?.esperado ?? 0)}</span>
     <span>Cobrado: {formatoMXN(resumen?.pagado ?? 0)}</span>
-    <span>Por cobrar: {formatoMXN(resumen?.adeudo ?? 0)}</span>
+    <span>Vencido: {formatoMXN(resumen?.vencido ?? 0)}</span>
+    <span>Por vencer: {formatoMXN(resumen?.por_vencer ?? 0)}</span>
     <span>{resumen?.al_corriente ?? 0} al corriente, {resumen?.con_adeudo ?? 0} con adeudo</span>
   </div>
 
@@ -95,7 +96,8 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                   <th scope="col" class="num">Esperado</th>
                   <th scope="col" class="num">Pagado</th>
                   <th scope="col" class="num">Exento</th>
-                  <th scope="col" class="num">Adeudo</th>
+                  <th scope="col" class="num">Vencido</th>
+                  <th scope="col" class="num">Por vencer</th>
                   <th scope="col">Situación</th>
                 </tr>
               </thead>
@@ -118,7 +120,10 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                       {e.condonado_centavos > 0 ? formatoMXN(e.condonado_centavos) : '—'}
                     </td>
                     <td class="num">
-                      {e.adeudo_centavos > 0 ? formatoMXN(e.adeudo_centavos) : '—'}
+                      {e.vencido_centavos > 0 ? formatoMXN(e.vencido_centavos) : '—'}
+                    </td>
+                    <td class="num">
+                      {e.por_vencer_centavos > 0 ? formatoMXN(e.por_vencer_centavos) : '—'}
                     </td>
                     <td>
                       {e.al_corriente ? (
@@ -146,7 +151,8 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                   <td class="num">{formatoMXN(resumen?.esperado ?? 0)}</td>
                   <td class="num">{formatoMXN(resumen?.pagado ?? 0)}</td>
                   <td class="num">{formatoMXN(resumen?.condonado ?? 0)}</td>
-                  <td class="num">{formatoMXN(resumen?.adeudo ?? 0)}</td>
+                  <td class="num">{formatoMXN(resumen?.vencido ?? 0)}</td>
+                  <td class="num">{formatoMXN(resumen?.por_vencer ?? 0)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -161,8 +167,11 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
               {conAdeudo.map((e) => (
                 <li>
                   <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>:{' '}
-                  {formatoMXN(e.adeudo_centavos)}
-                  {e.meses_vencidos > 0 && <> · {e.meses_vencidos} mes(es) vencido(s)</>}
+                  {formatoMXN(e.vencido_centavos)} vencido(s)
+                  {e.meses_vencidos > 0 && <> · {e.meses_vencidos} mes(es)</>}
+                  {e.por_vencer_centavos > 0 && (
+                    <span class="apagado"> · más {formatoMXN(e.por_vencer_centavos)} por vencer en el año</span>
+                  )}
                 </li>
               ))}
             </ul>

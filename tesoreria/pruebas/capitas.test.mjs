@@ -413,7 +413,7 @@ test('la conversión no procede sin promoción vigente ni dos veces', async () =
     await debeFallar(
       cliente,
       () => cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 7)', [hermano]),
-      /solo para un plan vigente de promoción/,
+      /cargo de promoción vigente/,
     );
 
     const otro = await crearHermano(cliente, 'Hermano Promo Sin Pagos', '2025-12-31');
@@ -423,7 +423,104 @@ test('la conversión no procede sin promoción vigente ni dos veces', async () =
     await debeFallar(
       cliente,
       () => cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 9)', [otro]),
-      /solo para un plan vigente de promoción/,
+      /ya tiene una exención registrada/,
     );
+  });
+});
+
+test('el adeudo se separa en vencido y por vencer: nadie debe los meses que no llegan', async () => {
+  await enPrueba(async ({ cliente }) => {
+    const hermano = await crearHermano(cliente, 'Hermano Sin Un Pago', '2025-12-31');
+    await cliente.query('select fn_asignar_capita($1, 2026, $2)', [hermano, 'mensual']);
+
+    const { rows } = await cliente.query(
+      `select esperado_centavos, vencido_centavos, por_vencer_centavos, adeudo_centavos
+         from v_estado_cuenta_capita where hermano_id = $1`,
+      [hermano],
+    );
+    const fila = rows[0];
+    /* Vencido: solo los meses anteriores al mes en curso. */
+    const { rows: hoy } = await cliente.query(
+      "select (extract(month from current_date)::int - 1) as vencidos",
+    );
+    assert.equal(Number(fila.vencido_centavos), hoy[0].vencidos * 50000);
+    /* Y el total del año sigue cuadrando: vencido + por vencer = esperado. */
+    assert.equal(
+      Number(fila.vencido_centavos) + Number(fila.por_vencer_centavos),
+      Number(fila.adeudo_centavos),
+    );
+    assert.equal(Number(fila.adeudo_centavos), 600000);
+  });
+});
+
+test('el estado torcido de una reasignación vieja se repara con la conversión', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    /* Reproduce a Miller: promoción de dos pagos, pagó 2,750, y una
+       reasignación a mensual hecha ANTES de la guarda dejó 11,000 esperados.
+       El estado se fabrica a mano porque la guarda nueva ya no deja crearlo. */
+    const hermano = await crearHermano(cliente, 'Miller De Prueba', '2025-12-31');
+    const { rows: ej } = await cliente.query(
+      'select capita_promocion_dos_centavos as m from ejercicio where anio = 2026',
+    );
+    await cliente.query('select fn_asignar_capita($1, 2026, $2, 8, $3, $4, $5)', [
+      hermano, 'promocion', vm, 'Dos pagos', ej[0].m,
+    ]);
+    await pagarCapita(cliente, hermano, '2026-01-15', 275000, tesorero);
+
+    /* La reasignación equivocada, como quedó en producción. */
+    await cliente.query('update capita_plan set vigente = false where hermano_id = $1', [
+      hermano,
+    ]);
+    const { rows: plan } = await cliente.query(
+      `insert into capita_plan (hermano_id, ejercicio_anio, modalidad, mes_desde, mes_hasta,
+         monto_mensual_centavos, monto_total_centavos, creado_por, actualizado_por)
+       select $1, 2026, 'mensual', 1, 12, 50000, 600000, $2, $2 returning id`,
+      [hermano, vm],
+    );
+    for (let mes = 1; mes <= 12; mes++) {
+      if (mes === 8) continue; /* agosto lo ocupa la promoción */
+      await cliente.query(
+        `insert into capita_cargo (plan_id, hermano_id, ejercicio_anio, periodo,
+           monto_esperado_centavos, clase, creado_por)
+         values ($1, $2, 2026, make_date(2026, $3, 1), 50000, 'mensual', $4)`,
+        [plan[0].id, hermano, mes, vm],
+      );
+    }
+    const { rows: torcido } = await cliente.query(
+      `select sum(monto_esperado_centavos)::int as esperado from capita_cargo
+        where hermano_id = $1 and estado = 'vigente'`,
+      [hermano],
+    );
+    assert.equal(Number(torcido[0].esperado), 1100000);
+
+    /* La guarda nueva impide volver a tropezar con la misma piedra. */
+    await debeFallar(
+      cliente,
+      () => cliente.query('select fn_asignar_capita($1, 2026, $2)', [hermano, 'mensual']),
+      /usa "Convertir la promoción a mensual"/,
+    );
+
+    /* Y la conversión repara: 2,750 saldados + julio a diciembre mensual. */
+    await cliente.query('select fn_convertir_promocion_a_mensual($1, 2026, 7, $2)', [
+      hermano, 'Reparación del caso real',
+    ]);
+
+    const { rows: final_ } = await cliente.query(
+      `select sum(monto_esperado_centavos)::int
+              - coalesce((select sum(co.monto_centavos) from capita_condonacion co
+                           join capita_cargo c2 on c2.id = co.capita_cargo_id
+                          where c2.hermano_id = $1), 0) as exigible,
+              count(*) filter (where clase = 'mensual')::int as mensuales,
+              min(periodo) filter (where clase = 'mensual')::text as primer_mensual
+         from capita_cargo where hermano_id = $1 and estado = 'vigente'`,
+      [hermano],
+    );
+    assert.equal(Number(final_[0].exigible), 575000);
+    assert.equal(Number(final_[0].mensuales), 6);
+    assert.equal(final_[0].primer_mensual, '2026-07-01');
+
+    /* Sus siguientes 500 caen en julio. */
+    const pago = await pagarCapita(cliente, hermano, '2026-09-01', 50000, tesorero);
+    assert.equal(pago.aplicado, 50000);
   });
 });

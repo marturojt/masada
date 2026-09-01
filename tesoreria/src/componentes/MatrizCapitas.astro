@@ -64,7 +64,7 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
       <tr>
         <th scope="col">Hermano</th>
         {meses.map((m) => <th scope="col" class="celda">{MESES_CORTOS[m - 1]}</th>)}
-        <th scope="col" class="num">Adeudo</th>
+        <th scope="col" class="num">Vencido</th>
       </tr>
     </thead>
     <tbody>
@@ -115,7 +115,7 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
                 );
               })}
               <td class="num">
-                {e.adeudo_centavos > 0 ? formatoCifra(e.adeudo_centavos) : '—'}
+                {e.vencido_centavos > 0 ? formatoCifra(e.vencido_centavos) : '—'}
               </td>
             </tr>
           );

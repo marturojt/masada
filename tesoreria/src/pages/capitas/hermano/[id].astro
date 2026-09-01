@@ -308,8 +308,12 @@ Astro.response.status = estado;
                 </tr>
               )}
               <tr>
-                <th scope="row">Adeudo</th>
-                <td class="num">{formatoMXN(cuenta.adeudo_centavos)}</td>
+                <th scope="row">Vencido</th>
+                <td class="num">{formatoMXN(cuenta.vencido_centavos)}</td>
+              </tr>
+              <tr>
+                <th scope="row">Por vencer en el año</th>
+                <td class="num">{formatoMXN(cuenta.por_vencer_centavos)}</td>
               </tr>
               {cuenta.saldo_a_favor_centavos > 0 && (
                 <tr>
@@ -339,7 +343,7 @@ Astro.response.status = estado;
             {plan.motivo && <>. {plan.motivo}</>}
           </p>
         )}
-        {plan?.modalidad === 'promocion' && puedeExentar && (
+        {plan && puedeExentar && meses.some((m) => m.clase === 'promocion' && m.pagado_centavos > 0 && m.saldo_centavos > 0) && (
           <details open={seccion === 'convertir'} style="margin-top: 0.75rem;">
             <summary style="cursor: pointer;">Convertir la promoción a mensual</summary>
             <div style="margin-top: 0.75rem; max-width: 22rem;">

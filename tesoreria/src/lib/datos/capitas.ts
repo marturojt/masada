@@ -63,6 +63,8 @@ export interface EstadoCuenta {
   pagado_centavos: number;
   condonado_centavos: number;
   adeudo_centavos: number;
+  vencido_centavos: number;
+  por_vencer_centavos: number;
   saldo_a_favor_centavos: number;
   meses_vencidos: number;
   meses: number;
@@ -73,7 +75,7 @@ export const estadosDeCuenta = (anio: number): Promise<EstadoCuenta[]> =>
   consulta<EstadoCuenta>(
     `select * from v_estado_cuenta_capita
       where ejercicio_anio = $1
-      order by al_corriente, adeudo_centavos desc, nombre_completo`,
+      order by al_corriente, vencido_centavos desc, nombre_completo`,
     [anio],
   );
 
@@ -257,6 +259,8 @@ export const resumenCapitas = (
   pagado: number;
   condonado: number;
   adeudo: number;
+  vencido: number;
+  por_vencer: number;
   al_corriente: number;
   con_adeudo: number;
 } | null> =>
@@ -265,6 +269,8 @@ export const resumenCapitas = (
             coalesce(sum(pagado_centavos), 0)::int as pagado,
             coalesce(sum(condonado_centavos), 0)::int as condonado,
             coalesce(sum(adeudo_centavos), 0)::int as adeudo,
+            coalesce(sum(vencido_centavos), 0)::int as vencido,
+            coalesce(sum(por_vencer_centavos), 0)::int as por_vencer,
             count(*) filter (where al_corriente)::int as al_corriente,
             count(*) filter (where not al_corriente)::int as con_adeudo
        from v_estado_cuenta_capita

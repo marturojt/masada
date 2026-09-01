@@ -94,11 +94,15 @@ const ETIQUETA_ESTADO: Record<string, string> = {
             )}
             <tr>
               <td>
-                <strong>Adeudo</strong>
+                <strong>Vencido a la fecha</strong>
               </td>
               <td class="num">
-                <strong>{formatoMXN(cuenta.adeudo_centavos)}</strong>
+                <strong>{formatoMXN(cuenta.vencido_centavos)}</strong>
               </td>
+            </tr>
+            <tr>
+              <td>Por vencer en el resto del año</td>
+              <td class="num">{formatoMXN(cuenta.por_vencer_centavos)}</td>
             </tr>
             {disponible > 0 && (
               <tr>

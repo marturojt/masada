@@ -119,6 +119,17 @@ nacen mensualidades desde el mes del cambio. Ejemplo real: dos pagos de 5,500,
 pagó 2,750 el primer semestre y cambió a mensual desde julio: termina el año en
 2,750 + 6 x 500 = 5,750, y el sistema exige exactamente eso.
 
+Dos protecciones alrededor: una promoción con pagos **no se puede reasignar** por
+el camino normal de cambiar modalidad (duplicaría cargos, la base lo impide y
+manda a la conversión), y la conversión **repara** al hermano que haya quedado
+torcido por una reasignación hecha antes de esta regla: cancela las mensualidades
+sin pago anteriores al cambio y deja la cuenta del trato exacta.
+
+El adeudo que muestran la matriz, el estado por hermano, la cartera y el estado
+de cuenta es lo **vencido**: los meses anteriores al mes en curso con saldo. Lo
+que falta del año aparece aparte como "por vencer", porque nadie debe los meses
+que no han llegado.
+
 Si un hermano paga de más, el sobrante queda visible como **saldo a favor** con
 tres salidas, ninguna automática: aplicarlo a meses pendientes, devolvérselo como
 egreso con dos firmas, o **convertirlo en donativo con su consentimiento** (dos
