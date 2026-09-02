@@ -437,6 +437,7 @@ Astro.response.status = estado;
                       <tr>
                         <td>
                           {formatoFechaCorta(m.fecha)} · {m.concepto_nombre}
+                          {m.hermano_nombre && <> · <strong>{m.hermano_nombre}</strong></>}
                           <br />
                           <span class="apagado" style="font-size: 0.8rem;">
                             {m.descripcion}
