@@ -14,6 +14,8 @@ interface Props {
   conHermano?: boolean;
   /** Muestra el signo del efecto en caja en vez del monto a secas. */
   conSigno?: boolean;
+  /** Ofrece adjuntar comprobante a los ingresos que no lo tienen. */
+  conAdjuntar?: boolean;
   vacio?: string;
 }
 
@@ -21,6 +23,7 @@ const {
   movimientos,
   titulo,
   folios,
+  conAdjuntar = false,
   conHermano = true,
   conSigno = false,
   vacio = 'Sin movimientos.',
@@ -86,6 +89,8 @@ const total = movimientos.reduce(
                   <a href={`/comprobantes/${m.archivo_id}`} rel="noopener">
                     Ver
                   </a>
+                ) : conAdjuntar && m.tipo === 'ingreso' && !m.es_ajuste ? (
+                  <a href={`/ingresos/${m.id}/comprobante`}>Adjuntar</a>
                 ) : (
                   <span class="apagado">—</span>
                 )}

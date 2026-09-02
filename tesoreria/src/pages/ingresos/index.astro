@@ -83,6 +83,7 @@ const total = movimientos.reduce((s, m) => s + m.monto_centavos, 0);
   }
 
   <TablaMovimientos
+    conAdjuntar
     movimientos={movimientos}
     titulo={`${movimientos.length} movimiento(s) de ingreso en ${anio}`}
     folios={folios}

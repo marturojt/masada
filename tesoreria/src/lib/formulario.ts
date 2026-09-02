@@ -236,6 +236,7 @@ const AVISOS: Record<string, string> = {
   aportacion: 'Aportación registrada.',
   registro: 'Registro externo actualizado.',
   usuario: 'Usuario guardado.',
+  comprobante: 'Comprobante adjuntado.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>

@@ -249,6 +249,8 @@ export interface Recibo {
   folio: string;
   fecha: string;
   monto_centavos: number;
+  /** Ajustes ligados al movimiento: el recibo ampara el neto. */
+  ajustado_centavos: number;
   descripcion: string;
   concepto_nombre: string;
   tipo_especial: string;
@@ -271,6 +273,10 @@ export const reciboDe = (movimientoId: number): Promise<Recibo | null> =>
         where ${PREDICADO_RECIBO}
      )
      select m.id as movimiento_id, e.folio, m.fecha, m.monto_centavos, m.descripcion,
+            coalesce((select sum(a.monto_centavos)::int
+                        from movimiento_ajuste ma
+                        join movimiento a on a.id = ma.movimiento_ajuste_id
+                       where ma.movimiento_origen_id = m.id), 0) as ajustado_centavos,
             c.nombre as concepto_nombre, c.tipo_especial,
             h.nombre_completo as hermano_nombre, m.archivo_id,
             u.nombre as capturado_por,
@@ -286,6 +292,18 @@ export const reciboDe = (movimientoId: number): Promise<Recibo | null> =>
       where m.id = $1`,
     [movimientoId],
   );
+
+/** Pone el comprobante a un movimiento que se capturó sin él. */
+export async function ponerComprobante(
+  tx: Tx,
+  movimientoId: number,
+  archivoId: number,
+): Promise<void> {
+  await tx.consulta('update movimiento set archivo_id = $2 where id = $1', [
+    movimientoId,
+    archivoId,
+  ]);
+}
 
 /** Los folios de recibo de varios movimientos, para pintar enlaces en listas. */
 export const foliosDeRecibo = (

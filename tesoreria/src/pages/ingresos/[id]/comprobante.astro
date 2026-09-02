@@ -1,0 +1,105 @@
+---
+/*
+ * Adjuntar el comprobante a un ingreso ya capturado: ayer se registró el pago,
+ * hoy apareció el recibo. Solo agrega; un comprobante adjunto no se sustituye.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { adjuntarComprobante } from '@lib/casos/ingresos';
+import { emitirNonce } from '@lib/csrf';
+import { obtenerMovimiento } from '@lib/datos/movimientos';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { formatoFechaCorta } from '@lib/fechas';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+let errores: Record<string, string> = {};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaVacio,
+    proposito: 'ingreso_comprobante',
+    sesion,
+  });
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    estado = resultado.estado;
+  } else if (!resultado.archivos.comprobante) {
+    errores = { comprobante: 'Elige el archivo del comprobante.' };
+    estado = 422;
+  } else {
+    try {
+      await adjuntarComprobante(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        id,
+        resultado.archivos.comprobante,
+      );
+      return Astro.redirect('/ingresos?ok=comprobante', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const movimiento = await obtenerMovimiento(id);
+if (!movimiento || movimiento.tipo !== 'ingreso') {
+  return new Response('No encontrado', { status: 404 });
+}
+
+const nonce = await emitirNonce(sesion.idHash, 'ingreso_comprobante');
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Adjuntar comprobante" sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/ingresos">← Ingresos</a></span>
+  </div>
+
+  <h1>Adjuntar comprobante</h1>
+  <p class="apagado">
+    {formatoFechaCorta(movimiento.fecha)} · {movimiento.concepto_nombre} ·{' '}
+    {formatoMXN(movimiento.monto_centavos)}
+    {movimiento.hermano_nombre && <> · {movimiento.hermano_nombre}</>}
+    <br />
+    {movimiento.descripcion}
+  </p>
+
+  <ResumenErrores errores={errores} />
+
+  {
+    movimiento.archivo_id ? (
+      <p>
+        Este ingreso ya tiene <a href={`/comprobantes/${movimiento.archivo_id}`}>su comprobante</a>.
+        No se sustituye desde aquí: es el dato probatorio.
+      </p>
+    ) : (
+      <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+        <Campo
+          nombre="comprobante"
+          etiqueta="Comprobante"
+          tipo="file"
+          error={errores.comprobante}
+          aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+          requerido
+          ayuda="Imagen o PDF. Queda ligado a este ingreso y en la bitácora."
+        />
+        <div class="formulario__acciones">
+          <button class="btn btn--primary" type="submit">Adjuntar</button>
+          <a class="btn btn--ghost" href="/ingresos">Cancelar</a>
+        </div>
+      </Formulario>
+    )
+  }
+</LayoutAdmin>

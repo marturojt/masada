@@ -10,7 +10,7 @@ import { registrarEn } from '../bitacora';
 import { consumirNonce } from '../csrf';
 import { enTransaccion } from '../db';
 import { obtenerConcepto } from '../datos/conceptos';
-import { insertarMovimiento } from '../datos/movimientos';
+import { insertarMovimiento, obtenerMovimiento, ponerComprobante } from '../datos/movimientos';
 import { ErrorDeNegocio } from '../errores';
 import { formatoMXN } from '../dinero';
 import type { DatosIngreso } from '../esquemas/movimiento';
@@ -108,5 +108,58 @@ export async function registrarIngreso(
     });
 
     return id;
+  }, usuarioId);
+}
+
+/**
+ * Adjunta el comprobante a un ingreso que se capturó sin él, como cuando el
+ * recibo aparece días después. Solo agrega: un comprobante ya adjunto no se
+ * sustituye desde aquí, porque es el dato probatorio.
+ */
+export async function adjuntarComprobante(
+  ctx: ContextoCaso,
+  movimientoId: number,
+  comprobante: File,
+): Promise<void> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  const movimiento = await obtenerMovimiento(movimientoId);
+  if (!movimiento) throw new ErrorDeNegocio('Ese movimiento no existe.');
+  if (movimiento.tipo !== 'ingreso') {
+    throw new ErrorDeNegocio(
+      'Los documentos de un egreso se adjuntan en su propia pantalla.',
+    );
+  }
+  if (movimiento.archivo_id) {
+    throw new ErrorDeNegocio(
+      'Ese ingreso ya tiene comprobante. El comprobante es el dato probatorio: si el ' +
+        'archivo está mal, anótalo en la bitácora con el V∴M∴ en lugar de sustituirlo.',
+    );
+  }
+
+  const guardado = await guardarComprobante(comprobante, usuarioId, movimiento.fecha);
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'ingreso_comprobante');
+    try {
+      await ponerComprobante(tx, movimientoId, guardado.id);
+    } catch (error) {
+      const e = error as { code?: string; message?: string };
+      if (e.code === 'P0001') {
+        throw new ErrorDeNegocio(
+          'Ese ingreso está en un mes ya cerrado y sellado: su registro no se toca. ' +
+            'Guarda el comprobante con una nota en el mes abierto si hace falta constancia.',
+        );
+      }
+      throw error;
+    }
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'ingreso_comprobante_adjuntado',
+      entidad: 'movimiento',
+      entidadId: movimientoId,
+      detalle: { fecha: movimiento.fecha, monto: formatoMXN(movimiento.monto_centavos) },
+    });
   }, usuarioId);
 }

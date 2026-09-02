@@ -31,6 +31,8 @@ const CONCEPTO_LARGO: Record<string, string> = {
 };
 
 const recibimosDe = recibo.hermano_nombre ?? recibo.descripcion;
+/* El recibo ampara el neto: si el registro se corrigió con un ajuste, aquí se ve. */
+const montoNeto = recibo.monto_centavos - recibo.ajustado_centavos;
 ---
 
 <LayoutImpresion
@@ -54,9 +56,9 @@ const recibimosDe = recibo.hermano_nombre ?? recibo.descripcion;
       <tr>
         <th scope="row">La cantidad de</th>
         <td colspan="3">
-          <strong>{formatoMXN(recibo.monto_centavos)}</strong>
+          <strong>{formatoMXN(montoNeto)}</strong>
           <br />
-          <span class="letra">({montoEnLetras(recibo.monto_centavos)})</span>
+          <span class="letra">({montoEnLetras(montoNeto)})</span>
         </td>
       </tr>
       <tr>
@@ -76,6 +78,12 @@ const recibimosDe = recibo.hermano_nombre ?? recibo.descripcion;
     {' '}{CONCEPTO_LARGO[recibo.tipo_especial] ?? 'ingreso'}. Registrado en el sistema de
     tesorería{recibo.capturado_por && <> por {recibo.capturado_por}</>} con el número de
     movimiento {recibo.movimiento_id}.
+    {recibo.ajustado_centavos > 0 && (
+      <>
+        {' '}El registro original ({formatoMXN(recibo.monto_centavos)}) se corrigió con un
+        movimiento de ajuste autorizado; este recibo ampara el monto ya corregido.
+      </>
+    )}
   </p>
 </LayoutImpresion>
 
