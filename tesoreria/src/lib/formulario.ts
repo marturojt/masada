@@ -237,6 +237,7 @@ const AVISOS: Record<string, string> = {
   registro: 'Registro externo actualizado.',
   usuario: 'Usuario guardado.',
   comprobante: 'Comprobante adjuntado.',
+  ajuste: 'Movimiento de ajuste registrado: revisa el neto en la lista de abajo.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>

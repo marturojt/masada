@@ -12,7 +12,7 @@ import { consumirNonce } from '../csrf';
 import { enTransaccion, unaFila } from '../db';
 import { conceptoPorClave } from '../datos/conceptos';
 import { cerrarCorteEnBase, reabrirCorteEnBase } from '../datos/cortes';
-import { insertarMovimiento, ligarAjuste, obtenerMovimiento } from '../datos/movimientos';
+import { insertarMovimiento, ligarAjuste, obtenerMovimiento, ajustadoDe } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
 import { nombrePeriodo, periodoDe } from '../fechas';
@@ -139,10 +139,18 @@ export async function registrarAjuste(
       'Ese movimiento ya es un ajuste. Corrige el original, no el ajuste.',
     );
   }
-  if (datos.monto > origen.monto_centavos) {
+  /* El tope es sobre lo ACUMULADO: un movimiento ya ajustado no admite otro
+     ajuste que en conjunto pase del original. La base lo vuelve a comprobar. */
+  const yaAjustado = await ajustadoDe(movimientoOrigenId);
+  if (yaAjustado + datos.monto > origen.monto_centavos) {
     throw new ErrorDeNegocio(
-      `El ajuste (${formatoMXN(datos.monto)}) no puede pasar del movimiento original ` +
-        `(${formatoMXN(origen.monto_centavos)}).`,
+      yaAjustado > 0
+        ? `Este movimiento ya tiene ajustes por ${formatoMXN(yaAjustado)}: con este ` +
+          `(${formatoMXN(datos.monto)}) pasaría del original (${formatoMXN(origen.monto_centavos)}). ` +
+          'Recuerda que el monto del ajuste es lo que se RESTA, no el total corregido.'
+        : `El ajuste (${formatoMXN(datos.monto)}) no puede pasar del movimiento original ` +
+          `(${formatoMXN(origen.monto_centavos)}). El monto del ajuste es lo que se resta: ` +
+          'para dejar un movimiento de $4,500 en $4,250, el ajuste es de $250.',
       'monto',
     );
   }

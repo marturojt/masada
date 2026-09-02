@@ -3,7 +3,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { debeFallar, enPrueba } from './ayuda.mjs';
+import { debeFallar, enPrueba, crearHermano } from './ayuda.mjs';
 
 async function ingreso(cliente, fecha, centavos, usuarioId, clave = 'donativo', bolsa = 'banco') {
   const { rows: concepto } = await cliente.query(
@@ -176,5 +176,48 @@ test('reabrir quita el sello de los movimientos', async () => {
       movimiento,
     ]);
     assert.equal(rows[0].corte_id, null);
+  });
+});
+
+test('los ajustes acumulados no pueden pasar del movimiento original', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    const { rows: concepto } = await cliente.query(
+      "select id from concepto where clave = 'cuota_iniciacion'",
+    );
+    /* El ajuste de un ingreso es un egreso: su concepto es ajuste_ingreso. */
+    const { rows: conceptoAjuste } = await cliente.query(
+      "select id from concepto where clave = 'ajuste_ingreso'",
+    );
+    const hermano = await crearHermano(cliente, 'Hermano Doble Ajuste', '2025-12-31');
+    const { rows: mov } = await cliente.query(
+      `insert into movimiento (fecha, ejercicio_anio, periodo, tipo, bolsa, concepto_id,
+         monto_centavos, descripcion, hermano_id, creado_por)
+       values ('2026-04-27', 2026, '2026-04-01', 'ingreso', 'banco', $1, 450000,
+               'Cuota capturada de más', $2, $3) returning id`,
+      [concepto[0].id, hermano, tesorero],
+    );
+
+    const ajustar = async (centavos) => {
+      const { rows: a } = await cliente.query(
+        `insert into movimiento (fecha, ejercicio_anio, periodo, tipo, bolsa, concepto_id,
+           monto_centavos, descripcion, creado_por)
+         values ('2026-09-02', 2026, '2026-09-01', 'egreso', 'banco', $1, $2,
+                 'Ajuste de prueba', $3) returning id`,
+        [conceptoAjuste[0].id, centavos, vm],
+      );
+      await cliente.query(
+        `insert into movimiento_ajuste
+           (movimiento_ajuste_id, movimiento_origen_id, motivo, autorizado_por)
+         values ($1, $2, 'Estaba mal capturado', $3)`,
+        [a[0].id, mov[0].id, vm],
+      );
+    };
+
+    /* El primer ajuste de 4,250 entra (aunque el correcto era 250)... */
+    await ajustar(425000);
+    /* ...pero el segundo, que dejaría el neto en -4,000, ya no. */
+    await debeFallar(cliente, () => ajustar(425000), /no puede dejarlo en negativo/);
+    /* Uno chico que sí cabe (250 restantes) pasa. */
+    await ajustar(25000);
   });
 });

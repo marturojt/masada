@@ -19,9 +19,9 @@ import {
   reaperturasDe,
 } from '@lib/datos/cortes';
 import { estadoAplomo } from '@lib/datos/gt';
-import { listarMovimientos, totalesPorConcepto } from '@lib/datos/movimientos';
+import { ajustadosDeVarios, listarMovimientos, totalesPorConcepto } from '@lib/datos/movimientos';
 import { pendientesDeComprobar } from '@lib/datos/egresos';
-import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaAjuste, esquemaCierre, esquemaReapertura } from '@lib/esquemas/corte';
 import {
@@ -100,7 +100,7 @@ if (Astro.request.method === 'POST') {
             monto: r.datos.monto,
             motivo: r.datos.motivo,
           });
-          return Astro.redirect(`/cortes/${periodo}?ok=corte`, 303);
+          return Astro.redirect(`/cortes/${periodo}?ok=ajuste`, 303);
         }
       } else {
         errores = { _general: 'Acción no reconocida.' };
@@ -129,6 +129,12 @@ const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo] =
   ]);
 
 const reaperturas = guardado ? await reaperturasDe(guardado.id) : [];
+const ajustados = new Map(
+  (await ajustadosDeVarios(movimientos.map((m) => m.id))).map((a) => [
+    a.movimiento_origen_id,
+    a.ajustado,
+  ]),
+);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 
 const cerrado = guardado?.estado === 'cerrado';
@@ -414,7 +420,7 @@ Astro.response.status = estado;
 
       {
         soyVM && movimientos.length > 0 && (
-          <details style="margin-top: 1rem;">
+          <details style="margin-top: 1rem;" open={seccion === 'ajustar'}>
             <summary style="cursor: pointer;">Corregir un movimiento con un ajuste</summary>
             <div style="margin-top: 0.75rem;">
               <p class="apagado" style="font-size: 0.85rem;">
@@ -442,6 +448,15 @@ Astro.response.status = estado;
                           <span class="apagado" style="font-size: 0.8rem;">
                             {m.descripcion}
                           </span>
+                          {(ajustados.get(m.id) ?? 0) > 0 && (
+                            <>
+                              <br />
+                              <span class="insignia insignia--pendiente">
+                                Ya ajustado por {formatoMXN(ajustados.get(m.id) ?? 0)}, neto{' '}
+                                {formatoMXN(m.monto_centavos - (ajustados.get(m.id) ?? 0))}
+                              </span>
+                            </>
+                          )}
                         </td>
                         <td class="num">{formatoMXN(m.monto_centavos)}</td>
                         <td>
@@ -463,11 +478,11 @@ Astro.response.status = estado;
                             />
                             <Campo
                               nombre="monto"
-                              etiqueta="Monto"
-                              valor={aPesosTexto(m.monto_centavos)}
+                              etiqueta="Monto a restar"
                               modoTeclado="decimal"
                               monto
                               requerido
+                              ayuda={`Lo que se RESTA, no el total corregido: para dejar ${formatoMXN(m.monto_centavos)} en ${formatoMXN(m.monto_centavos - 25000)}, el ajuste es $250.00.`}
                             />
                             <Campo nombre="motivo" etiqueta="Motivo" requerido />
                             <div class="formulario__acciones">

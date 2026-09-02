@@ -324,3 +324,30 @@ export const foliosDeRecibo = (
          select id as movimiento_id, folio from elegibles where id = any($1::bigint[])`,
         [movimientoIds],
       );
+
+/** Lo ya ajustado sobre un movimiento: la suma de sus ajustes ligados. */
+export async function ajustadoDe(movimientoOrigenId: number): Promise<number> {
+  const fila = await unaFila<{ ajustado: number }>(
+    `select coalesce(sum(a.monto_centavos), 0)::int as ajustado
+       from movimiento_ajuste ma
+       join movimiento a on a.id = ma.movimiento_ajuste_id
+      where ma.movimiento_origen_id = $1`,
+    [movimientoOrigenId],
+  );
+  return fila?.ajustado ?? 0;
+}
+
+/** Ajustes acumulados de varios movimientos, para pintarlos en listas. */
+export const ajustadosDeVarios = (
+  ids: number[],
+): Promise<{ movimiento_origen_id: number; ajustado: number }[]> =>
+  ids.length === 0
+    ? Promise.resolve([])
+    : consulta(
+        `select ma.movimiento_origen_id, sum(a.monto_centavos)::int as ajustado
+           from movimiento_ajuste ma
+           join movimiento a on a.id = ma.movimiento_ajuste_id
+          where ma.movimiento_origen_id = any($1::bigint[])
+          group by ma.movimiento_origen_id`,
+        [ids],
+      );
