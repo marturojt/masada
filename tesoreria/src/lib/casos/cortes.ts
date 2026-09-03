@@ -139,6 +139,27 @@ export async function registrarAjuste(
       'Ese movimiento ya es un ajuste. Corrige el original, no el ajuste.',
     );
   }
+  /* Un ajuste idéntico al de hace unos minutos es casi siempre un reenvío de
+     quien creyó que el primero no entró: se rechaza con la explicación. */
+  const repetido = await unaFila<{ id: number }>(
+    `select a.id
+       from movimiento_ajuste ma
+       join movimiento a on a.id = ma.movimiento_ajuste_id
+      where ma.movimiento_origen_id = $1
+        and a.monto_centavos = $2
+        and a.creado_en > now() - interval '30 minutes'
+      limit 1`,
+    [movimientoOrigenId, datos.monto],
+  );
+  if (repetido) {
+    throw new ErrorDeNegocio(
+      `Hace unos minutos ya se registró un ajuste de ${formatoMXN(datos.monto)} sobre este ` +
+        'mismo movimiento: revisa la lista, seguramente sí entró. Si de verdad hace falta ' +
+        'otro igual, espera media hora o usa un monto distinto.',
+      'monto',
+    );
+  }
+
   /* El tope es sobre lo ACUMULADO: un movimiento ya ajustado no admite otro
      ajuste que en conjunto pase del original. La base lo vuelve a comprobar. */
   const yaAjustado = await ajustadoDe(movimientoOrigenId);

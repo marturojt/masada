@@ -16,6 +16,8 @@ interface Props {
   conSigno?: boolean;
   /** Ofrece adjuntar comprobante a los ingresos que no lo tienen. */
   conAdjuntar?: boolean;
+  /** Ajustes acumulados por movimiento: pinta el neto junto al monto. */
+  ajustados?: Map<number, number>;
   vacio?: string;
 }
 
@@ -23,16 +25,20 @@ const {
   movimientos,
   titulo,
   folios,
+  ajustados,
   conAdjuntar = false,
   conHermano = true,
   conSigno = false,
   vacio = 'Sin movimientos.',
 } = Astro.props;
 
+/* El total al pie descuenta los ajustes ligados cuando la tabla los conoce. */
 const total = movimientos.reduce(
-  (suma, m) => suma + (conSigno ? m.efecto_centavos : m.monto_centavos),
+  (suma, m) =>
+    suma + (conSigno ? m.efecto_centavos : m.monto_centavos) - (ajustados?.get(m.id) ?? 0),
   0,
 );
+const hayAjustes = [...(ajustados?.values() ?? [])].some((a) => a > 0);
 ---
 
 {
@@ -83,6 +89,14 @@ const total = movimientos.reduce(
               <td class="num">
                 {conSigno && m.tipo === 'egreso' ? '−' : ''}
                 {formatoCifra(m.monto_centavos)}
+                {(ajustados?.get(m.id) ?? 0) > 0 && (
+                  <>
+                    <br />
+                    <span class="insignia insignia--pendiente">
+                      neto {formatoCifra(m.monto_centavos - (ajustados?.get(m.id) ?? 0))}
+                    </span>
+                  </>
+                )}
               </td>
               <td>
                 {m.archivo_id ? (
@@ -109,7 +123,7 @@ const total = movimientos.reduce(
         </tbody>
         <tfoot>
           <tr>
-            <td colspan={conHermano ? 5 : 4}>Total</td>
+            <td colspan={conHermano ? 5 : 4}>Total{hayAjustes && ', neto de ajustes'}</td>
             <td class="num">{formatoCifra(total)}</td>
             <td />
             {folios && <td />}

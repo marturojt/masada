@@ -7,7 +7,7 @@
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import TablaMovimientos from '@componentes/TablaMovimientos.astro';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
-import { foliosDeRecibo, listarMovimientos } from '@lib/datos/movimientos';
+import { ajustadosDeVarios, foliosDeRecibo, listarMovimientos } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
@@ -30,17 +30,31 @@ const folios = new Map(
   (await foliosDeRecibo(movimientos.map((m) => m.id))).map((f) => [f.movimiento_id, f.folio]),
 );
 
+/* Los ajustes ligados: el libro no reescribe la fila, pero aquí se ve el neto. */
+const ajustados = new Map(
+  (await ajustadosDeVarios(movimientos.map((m) => m.id))).map((a) => [
+    a.movimiento_origen_id,
+    a.ajustado,
+  ]),
+);
+const netoDe = (m: { id: number; monto_centavos: number }): number =>
+  m.monto_centavos - (ajustados.get(m.id) ?? 0);
+
 const porTipo = new Map<string, number>();
 for (const m of movimientos) {
-  porTipo.set(m.concepto_nombre, (porTipo.get(m.concepto_nombre) ?? 0) + m.monto_centavos);
+  porTipo.set(m.concepto_nombre, (porTipo.get(m.concepto_nombre) ?? 0) + netoDe(m));
 }
-const total = movimientos.reduce((s, m) => s + m.monto_centavos, 0);
+const total = movimientos.reduce((s, m) => s + netoDe(m), 0);
+const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0), 0);
 ---
 
 <LayoutAdmin titulo="Ingresos" sesion={sesion}>
   <div class="barra__contexto" slot="contexto">
     <span>Ejercicio {anio}</span>
-    <span>Ingresos distintos de cápita: {formatoMXN(total)}</span>
+    <span>
+      Ingresos distintos de cápita: {formatoMXN(total)}
+      {totalAjustado > 0 && ' (neto de ajustes)'}
+    </span>
   </div>
 
   {aviso && <div class="aviso">{aviso}</div>}
@@ -84,6 +98,7 @@ const total = movimientos.reduce((s, m) => s + m.monto_centavos, 0);
 
   <TablaMovimientos
     conAdjuntar
+    ajustados={ajustados}
     movimientos={movimientos}
     titulo={`${movimientos.length} movimiento(s) de ingreso en ${anio}`}
     folios={folios}
