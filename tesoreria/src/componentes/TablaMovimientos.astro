@@ -18,6 +18,11 @@ interface Props {
   conAdjuntar?: boolean;
   /** Ajustes acumulados por movimiento: pinta el neto junto al monto. */
   ajustados?: Map<number, number>;
+  /**
+   * false cuando el total debe ser el bruto del periodo (el corte mensual:
+   * los ajustes restan en SU mes, no en el del movimiento corregido).
+   */
+  netearTotal?: boolean;
   vacio?: string;
 }
 
@@ -26,19 +31,20 @@ const {
   titulo,
   folios,
   ajustados,
+  netearTotal = true,
   conAdjuntar = false,
   conHermano = true,
   conSigno = false,
   vacio = 'Sin movimientos.',
 } = Astro.props;
 
-/* El total al pie descuenta los ajustes ligados cuando la tabla los conoce. */
-const total = movimientos.reduce(
-  (suma, m) =>
-    suma + (conSigno ? m.efecto_centavos : m.monto_centavos) - (ajustados?.get(m.id) ?? 0),
-  0,
-);
-const hayAjustes = [...(ajustados?.values() ?? [])].some((a) => a > 0);
+/* El total al pie descuenta los ajustes ligados cuando la tabla los conoce,
+   salvo que el contexto pida el bruto (el corte suma por mes de movimiento). */
+const totalAjustado = movimientos.reduce((s, m) => s + (ajustados?.get(m.id) ?? 0), 0);
+const total =
+  movimientos.reduce((suma, m) => suma + (conSigno ? m.efecto_centavos : m.monto_centavos), 0) -
+  (netearTotal ? totalAjustado : 0);
+const hayAjustes = totalAjustado > 0;
 ---
 
 {
@@ -123,7 +129,15 @@ const hayAjustes = [...(ajustados?.values() ?? [])].some((a) => a > 0);
         </tbody>
         <tfoot>
           <tr>
-            <td colspan={conHermano ? 5 : 4}>Total{hayAjustes && ', neto de ajustes'}</td>
+            <td colspan={conHermano ? 5 : 4}>
+              Total{hayAjustes && netearTotal && ', neto de ajustes'}
+              {hayAjustes && !netearTotal && (
+                <span class="apagado">
+                  {' '}· {formatoCifra(totalAjustado)} corregidos con ajustes que restan en su
+                  propio mes
+                </span>
+              )}
+            </td>
             <td class="num">{formatoCifra(total)}</td>
             <td />
             {folios && <td />}
