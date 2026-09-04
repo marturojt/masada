@@ -267,3 +267,64 @@ test('las tarifas GT no se editan: se capturan nuevas', async () => {
     );
   });
 });
+
+test('la clase de trámite es solo de trámites, y "otro" exige su nombre', async () => {
+  await enPrueba(async ({ cliente, tesorero }) => {
+    /* Una ordinaria no puede llevar clase de trámite. */
+    const { rows: folio } = await cliente.query(
+      "select fn_gt_folio_obligacion(2026, 'ordinaria') as folio",
+    );
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          `insert into gt_obligacion
+             (folio, tipo, periodo_desde, periodo_hasta, fecha_documento,
+              monto_reportado_centavos, tramite_clase, creado_por, actualizado_por)
+           values ($1, 'ordinaria', '2026-04-01', '2026-04-01', '2026-04-06', 120000,
+                   'afiliacion', $2, $2)`,
+          [folio[0].folio, tesorero],
+        ),
+      /tramite_clase_solo_en_tramite/,
+    );
+
+    /* Un trámite "otro" sin nombre no pasa. */
+    const { rows: hermano } = await cliente.query(
+      `insert into hermano (nombre_completo, grado, fecha_ingreso, motivo_ingreso)
+       values ('Miller De Tramites', 'maestro', '2025-12-31', 'regularizacion') returning id`,
+    );
+    const { rows: f2 } = await cliente.query(
+      "select fn_gt_folio_obligacion(2026, 'tramite') as folio",
+    );
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          `insert into gt_obligacion
+             (folio, tipo, periodo_desde, periodo_hasta, fecha_documento,
+              monto_reportado_centavos, hermano_id, tramite_clase, creado_por, actualizado_por)
+           values ($1, 'tramite', '2026-08-01', '2026-08-01', '2026-08-20', 6000,
+                   $2, 'otro', $3, $3)`,
+          [f2[0].folio, hermano[0].id, tesorero],
+        ),
+      /tramite_otro_con_descripcion/,
+    );
+
+    /* Con nombre, entra: la carta de regularidad de 60 pesos. */
+    await cliente.query(
+      `insert into gt_obligacion
+         (folio, tipo, periodo_desde, periodo_hasta, fecha_documento,
+          monto_reportado_centavos, hermano_id, tramite_clase, tramite_descripcion,
+          creado_por, actualizado_por)
+       values ($1, 'tramite', '2026-08-01', '2026-08-01', '2026-08-20', 6000,
+               $2, 'otro', 'Carta de regularidad para grados filosóficos', $3, $3)`,
+      [f2[0].folio, hermano[0].id, tesorero],
+    );
+
+    /* Y un trámite de agosto NO marca agosto como mes cubierto. */
+    const { rows: cubierto } = await cliente.query(
+      "select cubierto from v_gt_periodos_cubiertos where periodo = '2026-08-01'",
+    );
+    assert.equal(cubierto[0].cubierto, false);
+  });
+});

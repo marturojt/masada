@@ -173,6 +173,13 @@ que informa y nunca bloquea.
   ordinarias, REG- regularizaciones). El esperado interno solo concilia: una
   diferencia se muestra, no bloquea. Una regularización es una obligación nueva,
   jamás toca meses ya cerrados.
+- **Trámites**: pantalla propia, como pasa en la ventanilla: una fecha de
+  solicitud, un hermano, una clase (iniciación, afiliación, aumento de salario,
+  exaltación, u otro trámite administrativo con su nombre, como una carta de
+  regularidad) y lo que la GT cobró. No amparan meses ni cuentan para el a
+  plomo; su pago sale igual, como egreso con dos firmas. La regla de grados es
+  la de siempre: iniciación da aprendiz, aumento da compañero, exaltación da
+  maestro, y así lo registra el padrón.
 - **Pagos**: de las obligaciones pendientes se genera un egreso normal con dos
   firmas; la entrega materializa el pago (GTP-) y sus aplicaciones. La base
   impide aplicar más que el pago o que la obligación, y una obligación con pagos

@@ -11,7 +11,6 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { capturarObligacion } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
-import { hermanosActivos } from '@lib/datos/hermanos';
 import {
   NOMBRE_TIPO_OBLIGACION,
   calculoEsperado,
@@ -41,11 +40,10 @@ const ETIQUETAS: Record<string, string> = {
   observaciones: 'Observaciones',
 };
 
-const [esperadoRows, membresia, aplomo, hermanos] = await Promise.all([
+const [esperadoRows, membresia, aplomo] = await Promise.all([
   calculoEsperado(),
   membresiaActual(),
   estadoAplomo(),
-  hermanosActivos(),
 ]);
 const totalEsperado = esperadoRows.reduce((s, e) => s + e.subtotal_centavos, 0);
 
@@ -90,15 +88,10 @@ if (Astro.request.method === 'POST') {
 
 const nonce = await emitirNonce(sesion.idHash, 'gt_obligacion');
 
+/* Los trámites tienen su propia pantalla: una fecha, un hermano, una clase. */
 const opcionesTipo: Opcion[] = (
-  ['ordinaria', 'regularizacion', 'tramite', 'extraordinaria'] as const
+  ['ordinaria', 'regularizacion', 'extraordinaria'] as const
 ).map((t) => ({ valor: t, texto: NOMBRE_TIPO_OBLIGACION[t] }));
-
-const opcionesHermano: Opcion[] = hermanos.map((h) => ({
-  valor: String(h.id),
-  texto: h.nombre_completo,
-  grupo: NOMBRE_GRADO_PLURAL[h.grado],
-}));
 
 Astro.response.status = estado;
 ---
@@ -115,7 +108,8 @@ Astro.response.status = estado;
   <p class="apagado">
     Lo exigible es lo que la Gran Tesorería reporta en su documento. El esperado interno
     (membresía por tarifas) va como referencia: si difieren, se registra la diferencia y
-    se paga lo reportado.
+    se paga lo reportado. Las iniciaciones, afiliaciones, grados y demás trámites de un
+    hermano se capturan en <a href="/gran-tesoreria/tramites/nuevo">su propia pantalla</a>.
   </p>
 
   {
@@ -194,16 +188,6 @@ Astro.response.status = estado;
     />
 
     <input type="hidden" name="membresia_id" value={valores.membresia_id} />
-
-    <Selector
-      nombre="hermano_id"
-      etiqueta={ETIQUETAS.hermano_id!}
-      opciones={opcionesHermano}
-      valor={valores.hermano_id}
-      error={errores.hermano_id}
-      vacio="No aplica"
-      ayuda="Obligatorio si el tipo es trámite: la afiliación, iniciación o grado de un hermano concreto."
-    />
 
     <Campo
       nombre="calculo"

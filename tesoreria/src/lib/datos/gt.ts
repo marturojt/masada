@@ -23,6 +23,21 @@ export const NOMBRE_CONCEPTO_GT: Record<ConceptoGT, string> = {
   otro: 'Otro',
 };
 
+export type ClaseTramite =
+  | 'iniciacion'
+  | 'afiliacion'
+  | 'aumento_salario'
+  | 'exaltacion'
+  | 'otro';
+
+export const NOMBRE_CLASE_TRAMITE: Record<ClaseTramite, string> = {
+  iniciacion: 'Iniciación (da el grado de aprendiz)',
+  afiliacion: 'Afiliación',
+  aumento_salario: 'Aumento de salario (da el grado de compañero)',
+  exaltacion: 'Exaltación (da el grado de maestro)',
+  otro: 'Otro trámite administrativo',
+};
+
 export const NOMBRE_TIPO_OBLIGACION: Record<TipoObligacion, string> = {
   ordinaria: 'Ordinaria del mes',
   regularizacion: 'Regularización',
@@ -170,6 +185,8 @@ export interface ObligacionFila {
   documento_calculo_id: number | null;
   motivo_cancelacion: string | null;
   observaciones: string | null;
+  tramite_clase: ClaseTramite | null;
+  tramite_descripcion: string | null;
   pagado_centavos: number;
   saldo_centavos: number;
 }
@@ -178,6 +195,7 @@ const COLS_OBL = `o.id, o.folio, o.tipo, o.periodo_desde::text, o.periodo_hasta:
        o.fecha_documento::text, o.monto_reportado_centavos, o.monto_esperado_centavos,
        o.estatus, o.hermano_id, h.nombre_completo as hermano_nombre, o.membresia_id,
        o.documento_calculo_id, o.motivo_cancelacion, o.observaciones,
+       o.tramite_clase, o.tramite_descripcion,
        coalesce((select sum(a.monto_centavos)::int from gt_pago_aplicacion a
                   where a.obligacion_id = o.id), 0) as pagado_centavos,
        (o.monto_reportado_centavos

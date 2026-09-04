@@ -56,6 +56,19 @@ export const esquemaObligacion = z.object({
   observaciones: notas(800),
 });
 
+/** Trámite ante la Gran Tesorería: una fecha de solicitud, un hermano, una clase. */
+export const esquemaTramite = z.object({
+  hermano_id: idPositivo('El hermano'),
+  tramite_clase: opcionDe(
+    ['iniciacion', 'afiliacion', 'aumento_salario', 'exaltacion', 'otro'],
+    'Indica qué trámite es.',
+  ),
+  tramite_descripcion: textoOpcional('El nombre del trámite', 200),
+  fecha_solicitud: fechaISO('La fecha de solicitud'),
+  monto_reportado: montoEnCentavos('Lo que cobró la Gran Tesorería'),
+  observaciones: notas(800),
+});
+
 export const esquemaDetalleObligacion = z.object({
   concepto: opcionDe(['capita', 'templo', 'locker', 'tramite', 'otro'], 'Elige el concepto.'),
   cantidad: z.preprocess(

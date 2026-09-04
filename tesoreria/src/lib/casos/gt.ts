@@ -244,6 +244,8 @@ export async function capturarObligacion(
     membresia_id?: number | null;
     hermano_id?: number | null;
     observaciones?: string | undefined;
+    tramite_clase?: string | null;
+    tramite_descripcion?: string | undefined;
   },
   documentoCalculo: File | undefined,
 ): Promise<{ id: number; folio: string }> {
@@ -256,6 +258,15 @@ export async function capturarObligacion(
     throw new ErrorDeNegocio(
       'Un trámite (afiliación, iniciación, grado) es de un hermano concreto: indícalo.',
       'hermano_id',
+    );
+  }
+  if (datos.tipo === 'tramite' && !datos.tramite_clase) {
+    throw new ErrorDeNegocio('Indica qué trámite es.', 'tramite_clase');
+  }
+  if (datos.tramite_clase === 'otro' && !datos.tramite_descripcion) {
+    throw new ErrorDeNegocio(
+      'Un trámite administrativo lleva su nombre, como "Carta de regularidad para grados filosóficos".',
+      'tramite_descripcion',
     );
   }
 
@@ -278,8 +289,9 @@ export async function capturarObligacion(
       `insert into gt_obligacion
          (folio, tipo, periodo_desde, periodo_hasta, fecha_documento,
           monto_reportado_centavos, monto_esperado_centavos, membresia_id,
-          documento_calculo_id, hermano_id, observaciones, creado_por, actualizado_por)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+          documento_calculo_id, hermano_id, observaciones,
+          tramite_clase, tramite_descripcion, creado_por, actualizado_por)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
        returning id`,
       [
         folio.folio,
@@ -293,6 +305,8 @@ export async function capturarObligacion(
         archivoId,
         datos.hermano_id ?? null,
         datos.observaciones ?? null,
+        datos.tramite_clase ?? null,
+        datos.tramite_descripcion ?? null,
         usuarioId,
       ],
     );

@@ -1,0 +1,191 @@
+---
+/*
+ * Trámite ante la Gran Tesorería, como pasa en la vida real: el tesorero va,
+ * pregunta cuánto cuesta, y lo paga. Una fecha de solicitud, un hermano, una
+ * clase (la iniciación da aprendiz, el aumento compañero, la exaltación
+ * maestro) o un trámite administrativo con su nombre. Por dentro es una
+ * obligación GT de tipo trámite, así que su pago viaja igual: egreso con dos
+ * firmas y entrega con comprobante.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { capturarObligacion } from '@lib/casos/gt';
+import { emitirNonce } from '@lib/csrf';
+import { NOMBRE_CLASE_TRAMITE, estadoAplomo } from '@lib/datos/gt';
+import { hermanosActivos } from '@lib/datos/hermanos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaTramite } from '@lib/esquemas/gt';
+import { hoyISO, nombrePeriodo } from '@lib/fechas';
+import { procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+
+const ETIQUETAS: Record<string, string> = {
+  hermano_id: 'Hermano',
+  tramite_clase: 'Qué trámite es',
+  tramite_descripcion: 'Nombre del trámite',
+  fecha_solicitud: 'Fecha de solicitud',
+  monto_reportado: 'Lo que cobró la Gran Tesorería',
+  calculo: 'Documento o nota de la GT',
+  observaciones: 'Observaciones',
+};
+
+const [hermanos, aplomo] = await Promise.all([hermanosActivos(), estadoAplomo()]);
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  fecha_solicitud: hoyISO(),
+  tramite_clase: 'afiliacion',
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaTramite,
+    proposito: 'gt_obligacion',
+    sesion,
+  });
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      /* El trámite no ampara meses: su periodo es el mes de la solicitud. */
+      const periodo = resultado.datos.fecha_solicitud.slice(0, 7);
+      const creada = await capturarObligacion(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        {
+          tipo: 'tramite',
+          periodo_desde: periodo,
+          periodo_hasta: periodo,
+          fecha_documento: resultado.datos.fecha_solicitud,
+          monto_reportado: resultado.datos.monto_reportado,
+          hermano_id: resultado.datos.hermano_id,
+          observaciones: resultado.datos.observaciones,
+          tramite_clase: resultado.datos.tramite_clase,
+          tramite_descripcion: resultado.datos.tramite_descripcion,
+        },
+        resultado.archivos.calculo,
+      );
+      return Astro.redirect(`/gran-tesoreria/obligaciones/${creada.id}?ok=obligacion`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const nonce = await emitirNonce(sesion.idHash, 'gt_obligacion');
+
+const opcionesHermano: Opcion[] = hermanos.map((h) => ({
+  valor: String(h.id),
+  texto: h.nombre_completo,
+  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+}));
+const opcionesClase: Opcion[] = Object.entries(NOMBRE_CLASE_TRAMITE).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Capturar trámite" sesion={sesion} angosto>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+  </div>
+
+  <h1>Capturar trámite</h1>
+  <p class="apagado">
+    Como pasa en la ventanilla: se pregunta el costo y se paga en el momento. Aquí se
+    captura lo que la Gran Tesorería cobró; el pago sale después como egreso con sus dos
+    firmas y su comprobante, desde la ficha del trámite.
+  </p>
+
+  {
+    !aplomo.ordinario_a_plomo && (
+      <div class="aviso aviso--error">
+        Aviso: la logia no está a plomo en lo ordinario
+        {aplomo.primer_pendiente && (
+          <> (pendiente desde {nombrePeriodo(aplomo.primer_pendiente.slice(0, 7))})</>
+        )}
+        . Los trámites suelen requerir estar a plomo; el sistema avisa pero no lo impide,
+        la palabra final la tiene la Gran Tesorería.
+      </div>
+    )
+  }
+
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <Formulario csrf={sesion.csrfToken} nonce={nonce} archivos>
+    <Selector
+      nombre="hermano_id"
+      etiqueta={ETIQUETAS.hermano_id!}
+      opciones={opcionesHermano}
+      valor={valores.hermano_id}
+      error={errores.hermano_id}
+      requerido
+    />
+    <Selector
+      nombre="tramite_clase"
+      etiqueta={ETIQUETAS.tramite_clase!}
+      opciones={opcionesClase}
+      valor={valores.tramite_clase}
+      error={errores.tramite_clase}
+      requerido
+    />
+    <Campo
+      nombre="tramite_descripcion"
+      etiqueta={ETIQUETAS.tramite_descripcion!}
+      valor={valores.tramite_descripcion}
+      error={errores.tramite_descripcion}
+      ayuda='Obligatorio si es "Otro trámite administrativo": por ejemplo, Carta de regularidad para grados filosóficos.'
+    />
+    <Campo
+      nombre="fecha_solicitud"
+      etiqueta={ETIQUETAS.fecha_solicitud!}
+      valor={valores.fecha_solicitud}
+      error={errores.fecha_solicitud}
+      marcador="AAAA-MM-DD"
+      requerido
+      ayuda="El día que se pidió y cobró en la Gran Tesorería. También vale 06/04/2026."
+    />
+    <Campo
+      nombre="monto_reportado"
+      etiqueta={ETIQUETAS.monto_reportado!}
+      valor={valores.monto_reportado}
+      error={errores.monto_reportado}
+      modoTeclado="decimal"
+      monto
+      requerido
+    />
+    <Campo
+      nombre="calculo"
+      etiqueta={ETIQUETAS.calculo!}
+      tipo="file"
+      error={errores.calculo}
+      aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+      ayuda="Si la GT entregó nota o documento del cobro."
+    />
+    <Campo
+      nombre="observaciones"
+      etiqueta={ETIQUETAS.observaciones!}
+      valor={valores.observaciones}
+      error={errores.observaciones}
+      largo
+      filas={2}
+    />
+    <div class="formulario__acciones">
+      <button class="btn btn--primary" type="submit">Capturar trámite</button>
+      <a class="btn btn--ghost" href="/gran-tesoreria">Cancelar</a>
+    </div>
+  </Formulario>
+</LayoutAdmin>

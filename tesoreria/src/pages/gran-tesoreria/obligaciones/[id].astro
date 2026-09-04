@@ -16,6 +16,7 @@ import {
 } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
 import {
+  NOMBRE_CLASE_TRAMITE,
   NOMBRE_ESTATUS_OBLIGACION,
   NOMBRE_TIPO_OBLIGACION,
   aplicacionesDeObligacion,
@@ -206,8 +207,23 @@ Astro.response.status = estado;
       <div class="tabla-envoltura">
       <table class="tabla">
         <tbody>
-          <tr><th>Tipo</th><td>{NOMBRE_TIPO_OBLIGACION[obligacion.tipo]}</td></tr>
-          <tr><th>Ampara</th><td>{rangoPeriodos}</td></tr>
+          <tr>
+            <th>Tipo</th>
+            <td>
+              {NOMBRE_TIPO_OBLIGACION[obligacion.tipo]}
+              {obligacion.tramite_clase && (
+                <> · {NOMBRE_CLASE_TRAMITE[obligacion.tramite_clase]}</>
+              )}
+              {obligacion.tramite_descripcion && <> · {obligacion.tramite_descripcion}</>}
+            </td>
+          </tr>
+          {
+            obligacion.tipo === 'tramite' ? (
+              <tr><th>Fecha de solicitud</th><td>{formatoFechaCorta(obligacion.fecha_documento)}</td></tr>
+            ) : (
+              <tr><th>Ampara</th><td>{rangoPeriodos}</td></tr>
+            )
+          }
           <tr><th>Fecha del documento</th><td>{formatoFechaCorta(obligacion.fecha_documento)}</td></tr>
           <tr>
             <th>Monto reportado por GT</th>
