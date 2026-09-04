@@ -518,7 +518,7 @@ Astro.response.status = estado;
               </details>
             )}
 
-            <details style="margin-top: 0.75rem;">
+            <details style="margin-top: 0.75rem;" open={seccion === 'rechazar'}>
               <summary style="cursor: pointer;">Rechazar este egreso</summary>
               <div style="margin-top: 0.75rem; max-width: 26rem;">
                 {seccion === 'rechazar' && <ResumenErrores errores={errores} />}
@@ -615,7 +615,7 @@ Astro.response.status = estado;
               </div>
             </Formulario>
 
-            <details style="margin-top: 1rem;">
+            <details style="margin-top: 1rem;" open={seccion === 'cancelar'}>
               <summary style="cursor: pointer;">Cancelar este egreso</summary>
               <div style="margin-top: 0.75rem;">
                 {seccion === 'cancelar' && <ResumenErrores errores={errores} />}
@@ -820,7 +820,7 @@ Astro.response.status = estado;
 
       {
         egreso.estado !== 'rechazado' && egreso.estado !== 'cancelado' && (
-          <details style="margin-top: 1rem;">
+          <details style="margin-top: 1rem;" open={seccion === 'documento'}>
             <summary style="cursor: pointer;">Adjuntar documento</summary>
             <div style="margin-top: 0.75rem; max-width: 26rem;">
               {seccion === 'documento' && <ResumenErrores errores={errores} />}

@@ -85,7 +85,7 @@ export const esquemaDevolucion = z.object({
 /** Documento suelto: el cálculo de la Gran Tesorería, el comprobante de pago, otro. */
 export const esquemaDocumento = z.object({
   tipo: opcionDe(
-    ['calculo_gran_tesoreria', 'comprobante_pago', 'otro'],
+    ['calculo_gran_tesoreria', 'comprobante_pago', 'recibo_gt', 'otro'],
     'Elige el tipo de documento.',
   ),
   fecha: fechaISO('La fecha'),
