@@ -492,7 +492,10 @@ Astro.response.status = estado;
             )}
 
             {soyVM && faltaFirmaTesorero && (
-              <details style="margin-top: 0.75rem;">
+              <details
+                style="margin-top: 0.75rem;"
+                open={seccion === 'firmar' && errores.motivo_suplencia !== undefined}
+              >
                 <summary style="cursor: pointer;">Firmar por el tesorero (suplencia)</summary>
                 <div style="margin-top: 0.75rem; max-width: 26rem;">
                   <Formulario

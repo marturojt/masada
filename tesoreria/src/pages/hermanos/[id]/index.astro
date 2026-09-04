@@ -390,7 +390,7 @@ Astro.response.status = estado;
         )
       }
 
-      <details style="margin-top: 1rem;">
+      <details style="margin-top: 1rem;" open={seccion === 'grado'}>
         <summary style="cursor: pointer;">Registrar aumento de salario o exaltación</summary>
         <div style="margin-top: 1rem;">
           {seccion === 'grado' && <ResumenErrores errores={errores} />}
@@ -438,7 +438,7 @@ Astro.response.status = estado;
       <h2>{hermano.estatus === 'activo' ? 'Baja del padrón' : 'Reactivación'}</h2>
       {
         hermano.estatus === 'activo' ? (
-          <details>
+          <details open={seccion === 'baja'}>
             <summary style="cursor: pointer;">Dar de baja a este hermano</summary>
             <div style="margin-top: 1rem;">
               <p class="apagado" style="font-size: 0.85rem;">

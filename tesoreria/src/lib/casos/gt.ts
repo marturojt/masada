@@ -254,7 +254,7 @@ export async function capturarObligacion(
   }
   if (datos.tipo === 'tramite' && !datos.hermano_id) {
     throw new ErrorDeNegocio(
-      'Un trámite de grado es de un hermano concreto: indícalo.',
+      'Un trámite (afiliación, iniciación, grado) es de un hermano concreto: indícalo.',
       'hermano_id',
     );
   }

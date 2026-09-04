@@ -238,6 +238,7 @@ const AVISOS: Record<string, string> = {
   usuario: 'Usuario guardado.',
   comprobante: 'Comprobante adjuntado.',
   ajuste: 'Movimiento de ajuste registrado: revisa el neto en la lista de abajo.',
+  dispensa: 'Pendiente cerrado como sin evidencia formal.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>

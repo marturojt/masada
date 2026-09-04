@@ -221,3 +221,45 @@ test('los ajustes acumulados no pueden pasar del movimiento original', async () 
     await ajustar(25000);
   });
 });
+
+test('la dispensa de evidencia es única por registro y exige motivo', async () => {
+  await enPrueba(async ({ cliente, vm }) => {
+    const { rows: concepto } = await cliente.query(
+      "select id from concepto where clave = 'donativo'",
+    );
+    const { rows: mov } = await cliente.query(
+      `insert into movimiento (fecha, ejercicio_anio, periodo, tipo, bolsa, concepto_id,
+         monto_centavos, descripcion, creado_por)
+       values ('2026-08-10', 2026, '2026-08-01', 'ingreso', 'efectivo', $1, 30000,
+               'Donativo sin comprobante', $2) returning id`,
+      [concepto[0].id, vm],
+    );
+
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          `insert into evidencia_dispensa (entidad, entidad_id, motivo, creado_por)
+           values ('movimiento', $1, '   ', $2)`,
+          [mov[0].id, vm],
+        ),
+      /dispensa_motivo_no_vacio/,
+    );
+
+    await cliente.query(
+      `insert into evidencia_dispensa (entidad, entidad_id, motivo, creado_por)
+       values ('movimiento', $1, 'Donativo en efectivo de la tenida, sin recibo', $2)`,
+      [mov[0].id, vm],
+    );
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          `insert into evidencia_dispensa (entidad, entidad_id, motivo, creado_por)
+           values ('movimiento', $1, 'Otra vez', $2)`,
+          [mov[0].id, vm],
+        ),
+      /duplicate key/,
+    );
+  });
+});

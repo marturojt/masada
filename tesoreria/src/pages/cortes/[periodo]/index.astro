@@ -577,7 +577,7 @@ Astro.response.status = estado;
           )}
 
           {soyVM ? (
-            <details>
+            <details open={seccion === 'reabrir'}>
               <summary style="cursor: pointer;">Reabrir este corte</summary>
               <div style="margin-top: 0.75rem; max-width: 30rem;">
                 <p class="apagado" style="font-size: 0.85rem;">

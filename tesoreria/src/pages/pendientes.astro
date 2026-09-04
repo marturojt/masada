@@ -1,0 +1,205 @@
+---
+/*
+ * Panel de pendientes de evidencia: todo lo capturado sin su documento, junto.
+ * Dos salidas por renglón: adjuntar la evidencia (donde ese camino existe) o
+ * cerrarlo como "sin evidencia formal", con motivo que queda en la bitácora.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import { cerrarSinEvidencia } from '@lib/casos/pendientes';
+import { emitirNonce } from '@lib/csrf';
+import { pendientesDeEvidencia, dispensasOtorgadas } from '@lib/datos/pendientes';
+import { formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { idPositivo, opcionDe, texto } from '@lib/esquemas/comunes';
+import { z } from 'zod';
+import { formatoFechaCorta, formatoMomento } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+const esquemaCerrar = z.object({
+  entidad: opcionDe(
+    ['movimiento', 'traspaso', 'aportacion', 'gt_obligacion', 'gt_membresia'],
+    'Ese tipo de pendiente no existe.',
+  ),
+  entidad_id: idPositivo('El pendiente'),
+  motivo: texto('El motivo', 300),
+});
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let conError: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    const r = await validar(entrada, {
+      esquema: esquemaCerrar,
+      proposito: 'evidencia_cerrar',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+      conError = `${entrada.crudos.entidad}-${entrada.crudos.entidad_id}`;
+    } else {
+      try {
+        await cerrarSinEvidencia(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          r.datos.entidad,
+          r.datos.entidad_id,
+          r.datos.motivo,
+        );
+        return Astro.redirect('/pendientes?ok=dispensa', 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { _general: error.message };
+        estado = 422;
+        conError = `${r.datos.entidad}-${r.datos.entidad_id}`;
+      }
+    }
+  }
+}
+
+const [pendientes, dispensas] = await Promise.all([
+  pendientesDeEvidencia(),
+  dispensasOtorgadas(),
+]);
+
+/* Un nonce por renglón: cada formulario de cierre es independiente. */
+const nonces = new Map<string, string>();
+for (const p of pendientes) {
+  nonces.set(`${p.entidad}-${p.entidad_id}`, await emitirNonce(sesion.idHash, 'evidencia_cerrar'));
+}
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Pendientes de evidencia" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>{pendientes.length} pendiente(s) de evidencia</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  {conError === null && <ResumenErrores errores={errores} />}
+
+  <h1>Pendientes de evidencia</h1>
+  <p class="apagado">
+    Todo lo capturado que aún no tiene su documento: comprobantes de ingresos, fichas de
+    traspasos, evidencias de aportaciones en especie y documentos de la Gran Tesorería.
+    Dos salidas por renglón: adjuntar la evidencia, o cerrarlo como
+    <strong> sin evidencia formal</strong> cuando ya se buscó y no existe. El cierre no
+    toca el registro: deja constancia con motivo, en la bitácora, y si el documento
+    aparece después se puede adjuntar de todos modos.
+  </p>
+
+  <section class="tarjeta" style="margin-top: 1.25rem;">
+    <h2>Por atender</h2>
+    {
+      pendientes.length === 0 ? (
+        <p class="apagado">Nada pendiente: todo lo capturado tiene su evidencia o su cierre.</p>
+      ) : (
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Qué es</th>
+                <th scope="col" class="num">Monto</th>
+                <th scope="col">Salidas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendientes.map((p) => {
+                const clave = `${p.entidad}-${p.entidad_id}`;
+                return (
+                  <tr>
+                    <td>{formatoFechaCorta(p.fecha)}</td>
+                    <td>
+                      <a href={p.ver_en}>{p.titulo}</a>
+                      {p.detalle && (
+                        <>
+                          <br />
+                          <span class="apagado" style="font-size: 0.8rem;">{p.detalle}</span>
+                        </>
+                      )}
+                    </td>
+                    <td class="num">
+                      {p.monto_centavos != null ? formatoMXN(p.monto_centavos) : '—'}
+                    </td>
+                    <td>
+                      {p.adjuntar_en && (
+                        <a class="btn btn--ghost" href={p.adjuntar_en} style="margin-right: 0.5rem;">
+                          Adjuntar
+                        </a>
+                      )}
+                      <details open={conError === clave} style="display: inline-block;">
+                        <summary style="cursor: pointer; font-size: 0.85rem;">
+                          Cerrar sin evidencia formal
+                        </summary>
+                        <div style="margin-top: 0.5rem; max-width: 20rem;">
+                          {conError === clave && <ResumenErrores errores={errores} />}
+                          <Formulario csrf={sesion.csrfToken} nonce={nonces.get(clave) ?? ''}>
+                            <input type="hidden" name="entidad" value={p.entidad} />
+                            <input type="hidden" name="entidad_id" value={String(p.entidad_id)} />
+                            <Campo
+                              nombre="motivo"
+                              etiqueta="Motivo"
+                              requerido
+                              ayuda="Por qué no hay evidencia. Queda en la bitácora con tu nombre."
+                            />
+                            <button class="btn btn--ghost" type="submit">
+                              Cerrar sin evidencia
+                            </button>
+                          </Formulario>
+                        </div>
+                      </details>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    dispensas.length > 0 && (
+      <section class="tarjeta" style="margin-top: 1.25rem;">
+        <h2>Cerrados sin evidencia formal</h2>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Cuándo</th>
+                <th scope="col">Qué</th>
+                <th scope="col">Motivo</th>
+                <th scope="col">Quién</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dispensas.map((d) => (
+                <tr>
+                  <td>{formatoMomento(d.creado_en)}</td>
+                  <td>{d.entidad} #{d.entidad_id}</td>
+                  <td>{d.motivo}</td>
+                  <td>{d.creado_nombre}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+</LayoutAdmin>

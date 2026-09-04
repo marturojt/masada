@@ -79,6 +79,7 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 | Egresos | Solicitud, doble firma, entrega, comprobación |
 | Gran Tesorería | Membresías, tarifas GT, obligaciones y pagos, estado a plomo, conciliación |
 | Traspasos | Depósitos del efectivo al banco y retiros, con su ficha |
+| Pendientes | Todo lo capturado sin su documento, para adjuntarlo o cerrarlo con motivo |
 | Cortes | Cierre mensual, saldos encadenados por bolsa, hoja imprimible |
 | Conceptos | Catálogo administrable de ingresos y egresos |
 | Usuarios | Altas, roles, contraseñas y desactivación (solo nivel V∴M∴) |
@@ -215,6 +216,16 @@ sabe si nacieron en Masada o llegaron de otra logia, el valor es
 `regularizacion`, que en pantalla se lee "Miembro de años anteriores". Significa
 exactamente eso: ya era miembro cuando el sistema arrancó y su origen no está
 documentado. Si algún día aparece el dato real, se corrige en su ficha.
+
+### Pendientes de evidencia
+
+Un solo panel con todo lo capturado que aún no tiene su documento: comprobantes
+de ingresos, fichas de traspasos, evidencias de aportaciones en especie y
+documentos de la Gran Tesorería. Dos salidas por renglón: **adjuntar** la
+evidencia (donde ese camino existe), o **cerrar como sin evidencia formal**
+cuando ya se buscó y no existe, con motivo que queda en la bitácora con nombre y
+fecha. El cierre no toca el registro y no estorba: si el documento aparece
+después, se adjunta de todos modos.
 
 ### Aportaciones
 

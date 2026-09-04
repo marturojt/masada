@@ -79,7 +79,7 @@ if (Astro.request.method === 'POST') {
         if (!(error instanceof ErrorDeNegocio)) throw error;
         errores = { [error.campo ?? '_general']: error.message };
         estado = 422;
-        seccion = 'saldo';
+        seccion = 'saldo_aplicar';
       }
     }
   } else if (entrada.accion === 'saldo_devolver') {
@@ -91,7 +91,7 @@ if (Astro.request.method === 'POST') {
     if (!r.ok) {
       errores = r.errores;
       estado = r.estado;
-      seccion = 'saldo';
+      seccion = 'saldo_devolver';
     } else {
       try {
         const creado = await devolverSaldoAFavor(
@@ -104,7 +104,7 @@ if (Astro.request.method === 'POST') {
         if (!(error instanceof ErrorDeNegocio)) throw error;
         errores = { [error.campo ?? '_general']: error.message };
         estado = 422;
-        seccion = 'saldo';
+        seccion = 'saldo_devolver';
       }
     }
   } else if (entrada.accion === 'convertir_promocion') {
@@ -147,7 +147,7 @@ if (Astro.request.method === 'POST') {
     if (!r.ok) {
       errores = r.errores;
       estado = r.estado;
-      seccion = 'saldo';
+      seccion = 'saldo_donar';
     } else {
       try {
         const creado = await convertirSaldoEnDonativo(
@@ -196,6 +196,7 @@ if (Astro.request.method === 'POST') {
     if (!r.ok) {
       errores = r.errores;
       estado = r.estado;
+      seccion = 'exentar';
     } else {
       try {
         await exentarMes(
@@ -207,6 +208,7 @@ if (Astro.request.method === 'POST') {
         if (!(error instanceof ErrorDeNegocio)) throw error;
         errores = { [error.campo ?? '_general']: error.message };
         estado = 422;
+        seccion = 'exentar';
       }
     }
   } else {
@@ -394,7 +396,7 @@ Astro.response.status = estado;
           devolvérselo al hermano como un egreso con sus dos firmas, o convertirlo en
           donativo con su consentimiento. No se arrastra solo a futuros años.
         </p>
-        {seccion === 'saldo' && <ResumenErrores errores={errores} />}
+        {seccion?.startsWith('saldo') && <ResumenErrores errores={errores} />}
         <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
           <Formulario
             csrf={sesion.csrfToken}
@@ -407,7 +409,7 @@ Astro.response.status = estado;
               </button>
             </div>
           </Formulario>
-          <details>
+          <details open={seccion === 'saldo_devolver'}>
             <summary style="cursor: pointer;">Devolver al hermano</summary>
             <div style="margin-top: 0.75rem; max-width: 18rem;">
               <Formulario
@@ -432,7 +434,7 @@ Astro.response.status = estado;
               </Formulario>
             </div>
           </details>
-          <details open={seccion === 'saldo' && errores.motivo !== undefined}>
+          <details open={seccion === 'saldo_donar'}>
             <summary style="cursor: pointer;">Convertir en donativo</summary>
             <div style="margin-top: 0.75rem; max-width: 18rem;">
               <p class="apagado" style="font-size: 0.85rem;">
@@ -484,6 +486,7 @@ Astro.response.status = estado;
 
   <section class="tarjeta" style="margin-top: 1.25rem;">
     <h2>Mes por mes</h2>
+    {seccion === 'exentar' && <ResumenErrores errores={errores} />}
     {
       meses.length === 0 ? (
         <p class="apagado">
@@ -534,7 +537,7 @@ Astro.response.status = estado;
                   {puedeExentar && (
                     <td>
                       {m.saldo_centavos > 0 ? (
-                        <details>
+                        <details open={seccion === 'exentar'}>
                           <summary style="cursor: pointer; font-size: 0.8rem;">Exentar</summary>
                           <div style="min-width: 14rem; padding-top: 0.5rem;">
                             <Formulario

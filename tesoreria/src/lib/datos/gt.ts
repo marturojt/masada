@@ -26,7 +26,7 @@ export const NOMBRE_CONCEPTO_GT: Record<ConceptoGT, string> = {
 export const NOMBRE_TIPO_OBLIGACION: Record<TipoObligacion, string> = {
   ordinaria: 'Ordinaria del mes',
   regularizacion: 'Regularización',
-  tramite: 'Trámite de grado',
+  tramite: 'Trámite (iniciación, afiliación, grado)',
   extraordinaria: 'Extraordinaria',
 };
 

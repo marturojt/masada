@@ -29,6 +29,7 @@ const ETIQUETAS: Record<string, string> = {
 let errores: Record<string, string> = {};
 let valores: Record<string, string> = { naturaleza: 'egreso', orden: '100' };
 let estado = 200;
+let seccion: string | null = null;
 
 if (Astro.request.method === 'POST') {
   const entrada = await leerFormulario(Astro);
@@ -39,6 +40,7 @@ if (Astro.request.method === 'POST') {
   } else {
     const ctx = { sesion, idPeticion: Astro.locals.idPeticion };
     try {
+      seccion = entrada.accion;
       if (entrada.accion === 'nuevo') {
         const r = await validar(entrada, {
           esquema: esquemaConcepto,
@@ -191,7 +193,7 @@ Astro.response.status = estado;
 
   <section class="tarjeta">
     <h2>Agregar concepto</h2>
-    <details>
+    <details open={seccion === 'nuevo'}>
       <summary style="cursor: pointer;">Nuevo concepto</summary>
       <div style="margin-top: 1rem; max-width: 32rem;">
         <Formulario csrf={sesion.csrfToken} nonce={nonceNuevo} accionInterna="nuevo">
