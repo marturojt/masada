@@ -1,25 +1,23 @@
 ---
 /*
- * Ficha de una membresía: los hermanos tal como los reporta la Gran Tesorería
- * y su liga con el padrón interno. Ligar es conciliar, no editar el reporte.
+ * Ficha de una membresía: los hermanos tal como los reporta la Gran Tesorería.
+ * Es respaldo de consulta, lo que GT entiende de Masada en esa fecha: no se
+ * concilia ni se gestiona desde aquí.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
-import Selector from '@componentes/Selector.astro';
-import { agregarRenglonMembresia, ligarRenglonMembresia } from '@lib/casos/gt';
+import { agregarRenglonMembresia } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
 import { obtenerMembresia, renglonesDeMembresia } from '@lib/datos/gt';
-import { hermanosActivos } from '@lib/datos/hermanos';
 import { ErrorDeNegocio } from '@lib/errores';
-import { esquemaLigarRenglon, esquemaRenglonMembresia } from '@lib/esquemas/gt';
+import { esquemaRenglonMembresia } from '@lib/esquemas/gt';
 import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { sonImagenes } from '@lib/archivos';
 import { requerirSesion } from '@lib/sesion';
-import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -33,7 +31,6 @@ const ETIQUETAS: Record<string, string> = {
   grado_reportado: 'Grado reportado',
   estatus_reportado: 'Estatus reportado',
   genera_capita: 'Genera cápita',
-  hermano_id: 'Hermano del padrón',
 };
 
 let errores: Record<string, string> = {};
@@ -62,28 +59,8 @@ if (Astro.request.method === 'POST') {
           valores = r.valores;
           estado = r.estado;
         } else {
-          await agregarRenglonMembresia({ ...ctxBase, nonce: r.nonce }, id, {
-            ...r.datos,
-            hermano_id: r.datos.hermano_id ?? null,
-          });
+          await agregarRenglonMembresia({ ...ctxBase, nonce: r.nonce }, id, r.datos);
           return Astro.redirect(`/gran-tesoreria/membresias/${id}?ok=renglon`, 303);
-        }
-      } else if (entrada.accion === 'ligar') {
-        const r = await validar(entrada, {
-          esquema: esquemaLigarRenglon,
-          proposito: 'gt_ligar',
-          sesion,
-        });
-        if (!r.ok) {
-          errores = r.errores;
-          estado = r.estado;
-        } else {
-          await ligarRenglonMembresia(
-            { ...ctxBase, nonce: r.nonce },
-            r.datos.renglon_id,
-            r.datos.hermano_id ?? null,
-          );
-          return Astro.redirect(`/gran-tesoreria/membresias/${id}?ok=ligado`, 303);
         }
       } else {
         errores = { _general: 'Acción no reconocida.' };
@@ -100,23 +77,11 @@ if (Astro.request.method === 'POST') {
 const membresia = await obtenerMembresia(id);
 if (!membresia) return new Response('No encontrado', { status: 404 });
 
-const [renglones, hermanos] = await Promise.all([renglonesDeMembresia(id), hermanosActivos()]);
+const renglones = await renglonesDeMembresia(id);
 const imagenes = membresia.archivo_id
   ? await sonImagenes([membresia.archivo_id])
   : new Map<number, boolean>();
 const nonceRenglon = await emitirNonce(sesion.idHash, 'gt_renglon');
-
-/* Cada renglón sin ligar lleva su propio formulario, con su propio nonce. */
-const noncesLigar = new Map<number, string>();
-for (const r of renglones.filter((x) => !x.conciliado)) {
-  noncesLigar.set(r.id, await emitirNonce(sesion.idHash, 'gt_ligar'));
-}
-
-const opcionesHermano: Opcion[] = hermanos.map((h) => ({
-  valor: String(h.id),
-  texto: h.nombre_completo,
-  grupo: NOMBRE_GRADO_PLURAL[h.grado],
-}));
 
 Astro.response.status = estado;
 ---
@@ -132,8 +97,7 @@ Astro.response.status = estado;
 
   <h1>Membresía de {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</h1>
   <p class="apagado">
-    {membresia.renglones} hermano(s) reportados, {membresia.con_capita} generan cápita,
-    {membresia.sin_ligar} sin conciliar con el padrón.
+    {membresia.renglones} hermano(s) reportados, {membresia.con_capita} generan cápita.
     {membresia.archivo_id && (
       <VisorImagen
         archivoId={membresia.archivo_id}
@@ -160,7 +124,6 @@ Astro.response.status = estado;
                   <th>Grado</th>
                   <th>Estatus</th>
                   <th>Cápita</th>
-                  <th>Padrón interno</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,28 +134,6 @@ Astro.response.status = estado;
                     <td>{r.grado_reportado ?? ''}</td>
                     <td>{r.estatus_reportado ?? ''}</td>
                     <td>{r.genera_capita ? 'Sí' : 'No'}</td>
-                    <td>
-                      {r.conciliado && r.hermano_id ? (
-                        <a href={`/hermanos/${r.hermano_id}`}>{r.hermano_nombre}</a>
-                      ) : (
-                        <Formulario
-                          csrf={sesion.csrfToken}
-                          nonce={noncesLigar.get(r.id) ?? ''}
-                          accionInterna="ligar"
-                        >
-                          <input type="hidden" name="renglon_id" value={String(r.id)} />
-                          <div style="display: flex; gap: 0.4rem; align-items: end; flex-wrap: wrap;">
-                            <Selector
-                              nombre="hermano_id"
-                              etiqueta="Ligar con"
-                              opciones={opcionesHermano}
-                              vacio="Elegir hermano"
-                            />
-                            <button class="btn btn--ghost" type="submit">Ligar</button>
-                          </div>
-                        </Formulario>
-                      )}
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -206,7 +147,8 @@ Astro.response.status = estado;
       <h2>Agregar hermano reportado</h2>
       <p class="apagado">
         Captura el renglón tal como viene en el documento de la Gran Tesorería, aunque
-        el nombre no coincida con el padrón. La liga se hace después.
+        el nombre no coincida con el padrón: es el respaldo de lo que GT entiende de
+        Masada, no se concilia.
       </p>
       <details open={seccion === 'renglon'}>
         <summary>Capturar renglón</summary>
@@ -248,14 +190,6 @@ Astro.response.status = estado;
             </label>
             <span class="campo__ayuda">Desmárcalo si GT lo reporta pero no cobra por él.</span>
           </div>
-          <Selector
-            nombre="hermano_id"
-            etiqueta={ETIQUETAS.hermano_id!}
-            opciones={opcionesHermano}
-            valor={valores.hermano_id}
-            error={seccion === 'renglon' ? errores.hermano_id : undefined}
-            vacio="Ligar después"
-          />
           <button class="btn btn--primary" type="submit">Agregar renglón</button>
         </Formulario>
       </details>

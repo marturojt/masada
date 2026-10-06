@@ -1,0 +1,142 @@
+---
+/*
+ * Beneficiarios como se escribieron en los egresos. Cuando uno mismo aparece de
+ * dos maneras, se unifica de una vez en todos sus egresos. Solo nivel V∴M∴.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { unificarBeneficiario } from '@lib/casos/egresos';
+import { emitirNonce } from '@lib/csrf';
+import { beneficiariosUsados } from '@lib/datos/egresos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaUnificarBeneficiario } from '@lib/esquemas/egreso';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirVM } from '@lib/sesion';
+
+const sesion = requerirVM(Astro);
+if (sesion instanceof Response) return sesion;
+
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = { de: Astro.url.searchParams.get('de') ?? '' };
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaUnificarBeneficiario,
+    proposito: 'egreso_beneficiarios',
+    sesion,
+  });
+
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      await unificarBeneficiario(
+        { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
+        resultado.datos.de,
+        resultado.datos.a,
+      );
+      return Astro.redirect('/egresos/beneficiarios?ok=beneficiario', 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const beneficiarios = await beneficiariosUsados();
+const nonce = await emitirNonce(sesion.idHash, 'egreso_beneficiarios');
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Beneficiarios" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/egresos">← Egresos</a></span>
+    <span>{beneficiarios.length} nombre(s) distintos</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+
+  <h1>Beneficiarios</h1>
+  <p class="apagado" style="max-width: 44rem;">
+    Así quedaron escritos en los egresos. Si uno mismo aparece de dos maneras, elige el
+    nombre que sobra y escribe el correcto: se cambia en todos sus egresos de una vez, y la
+    bitácora guarda qué folios cambiaron. Los pagos a la Gran Tesorería que se generen
+    después usan el nombre del último pago GT.
+  </p>
+
+  <div class="pila">
+    <section class="tarjeta">
+      <h2>Unificar</h2>
+      <ResumenErrores errores={errores} />
+      <div style="max-width: 28rem;">
+        <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+          <Selector
+            nombre="de"
+            etiqueta="Nombre que sobra"
+            opciones={beneficiarios.map((b) => ({
+              valor: b.beneficiario,
+              texto: `${b.beneficiario} (${b.egresos})`,
+            }))}
+            valor={valores.de}
+            error={errores.de}
+            requerido
+          />
+          <Campo
+            nombre="a"
+            etiqueta="Nombre correcto"
+            valor={valores.a}
+            error={errores.a}
+            lista="beneficiarios-usados"
+            ayuda="Elige uno existente de la lista o escríbelo nuevo."
+            requerido
+          />
+          <datalist id="beneficiarios-usados">
+            {beneficiarios.map((b) => <option value={b.beneficiario} />)}
+          </datalist>
+          <div class="formulario__acciones">
+            <button class="btn btn--primary" type="submit">Unificar</button>
+          </div>
+        </Formulario>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Como están escritos</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Beneficiario</th>
+              <th scope="col" class="num">Egresos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              beneficiarios.map((b) => (
+                <tr>
+                  <td>
+                    <a href={`/egresos/beneficiarios?de=${encodeURIComponent(b.beneficiario)}`}>
+                      {b.beneficiario}
+                    </a>
+                  </td>
+                  <td class="num">{b.egresos}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</LayoutAdmin>

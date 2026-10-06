@@ -26,6 +26,8 @@ interface Props {
   /** Estilo de monto: alineado a la derecha y con cifras tabulares. */
   monto?: boolean;
   autoenfoque?: boolean;
+  /** Id de un datalist con sugerencias: ayuda a no escribir el mismo nombre de dos maneras. */
+  lista?: string;
 }
 
 const {
@@ -48,6 +50,7 @@ const {
   filas = 4,
   monto = false,
   autoenfoque = false,
+  lista,
 } = Astro.props;
 
 const idCampo = `campo-${nombre}`;
@@ -92,6 +95,7 @@ const valorTexto = valor == null ? '' : String(valor);
         max={max}
         step={paso}
         autofocus={autoenfoque}
+        list={lista}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={descrito || undefined}
       />

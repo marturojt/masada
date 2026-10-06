@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   bolsa,
   fechaISO,
+  fechaISOOpcional,
   idOpcional,
   idPositivo,
   montoEnCentavos,
@@ -100,4 +101,29 @@ export const esquemaMotivo = z.object({
 /** Cierre de la comprobación. */
 export const esquemaCierreComprobacion = z.object({
   fecha: fechaISO('La fecha'),
+});
+
+/*
+ * Corrección de captura: los datos que se pudieron capturar mal, nunca los
+ * montos. Las fechas de entrega y comprobación solo viajan si el egreso las tiene.
+ */
+export const esquemaCorreccion = z.object({
+  concepto_id: idOpcional('El concepto'),
+  beneficiario: texto('El beneficiario', 150),
+  descripcion: texto('La descripción', 400),
+  fecha_solicitud: fechaISO('La fecha de solicitud'),
+  fecha_entrega: fechaISOOpcional('La fecha de entrega'),
+  fecha_comprobacion: fechaISOOpcional('La fecha de comprobación'),
+  motivo_correccion: textoOpcional('El motivo de la corrección', 300),
+});
+
+/** Motivo de una suplencia: en blanco lo limpia. */
+export const esquemaMotivoSuplencia = z.object({
+  motivo_suplencia: textoOpcional('El motivo de la suplencia', 300),
+});
+
+/** Unificar un beneficiario escrito de varias maneras. */
+export const esquemaUnificarBeneficiario = z.object({
+  de: texto('El beneficiario a cambiar', 150),
+  a: texto('El nombre correcto', 150),
 });

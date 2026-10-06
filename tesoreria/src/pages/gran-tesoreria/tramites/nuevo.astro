@@ -14,11 +14,12 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { capturarObligacion } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
-import { NOMBRE_CLASE_TRAMITE, estadoAplomo } from '@lib/datos/gt';
+import { NOMBRE_CLASE_TRAMITE, estadoAplomo, tarifasGTVigentes } from '@lib/datos/gt';
+import { formatoMXN } from '@lib/dinero';
 import { hermanosActivos } from '@lib/datos/hermanos';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaTramite } from '@lib/esquemas/gt';
-import { hoyISO, nombrePeriodo } from '@lib/fechas';
+import { formatoFechaCorta, hoyISO, nombrePeriodo } from '@lib/fechas';
 import { procesarFormulario } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
@@ -35,7 +36,17 @@ const ETIQUETAS: Record<string, string> = {
   observaciones: 'Observaciones',
 };
 
-const [hermanos, aplomo] = await Promise.all([hermanosActivos(), estadoAplomo()]);
+const [hermanos, aplomo, tarifas] = await Promise.all([
+  hermanosActivos(),
+  estadoAplomo(),
+  tarifasGTVigentes(),
+]);
+
+/* Lo que la ley cobra por trámite, a la vista para comparar con lo que pidió la GT. */
+const tarifasTramite = tarifas.filter((t) =>
+  ['movimientos', 'regularizacion', 'reconocimientos'].includes(t.grupo),
+);
+const desdeLey = tarifasTramite[0]?.vigencia_desde ?? null;
 
 let errores: Record<string, string> = {};
 let valores: Record<string, string> = {
@@ -166,7 +177,31 @@ Astro.response.status = estado;
       modoTeclado="decimal"
       monto
       requerido
+      ayuda="Lo que cobró en la ventanilla. La tabla de abajo trae los montos de la ley como referencia."
     />
+    {
+      tarifasTramite.length > 0 && (
+        <details style="margin-bottom: 1rem;">
+          <summary style="cursor: pointer;">Montos de la Ley de Ingresos</summary>
+          <table class="tabla" style="margin-top: 0.5rem; font-size: 0.85rem;">
+            <tbody>
+              {tarifasTramite.map((t) => (
+                <tr>
+                  <td>{t.nombre}</td>
+                  <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {desdeLey && (
+            <p class="apagado" style="font-size: 0.8rem;">
+              Vigentes desde el {formatoFechaCorta(desdeLey)}. Para un trámite anterior, los
+              montos de entonces están en el <a href="/gran-tesoreria/tarifas">historial de tarifas</a>.
+            </p>
+          )}
+        </details>
+      )
+    }
     <Campo
       nombre="calculo"
       etiqueta={ETIQUETAS.calculo!}

@@ -13,11 +13,22 @@ import {
   textoOpcional,
 } from './comunes';
 
+/*
+ * Tarifa GT: o actualiza una que ya existe (clave elegida) o da de alta una
+ * nueva (grupo y nombre). El caso de uso decide cuál con lo que llegue.
+ */
 export const esquemaTarifaGT = z.object({
-  concepto: opcionDe(['capita', 'templo', 'locker', 'otro'], 'Elige el concepto.'),
-  descripcion: textoOpcional('La descripción', 120),
+  clave: textoOpcional('La tarifa', 60),
+  grupo: opcionDe(
+    ['capitas', 'movimientos', 'regularizacion', 'talleres', 'lockers', 'auditorio',
+     'reconocimientos', 'otro'],
+    'Elige el grupo.',
+  ).optional(),
+  nombre: textoOpcional('El nombre', 120),
+  unidad: textoOpcional('La unidad', 60),
   monto: montoEnCentavos('El monto'),
   vigente_desde: fechaISO('La fecha de vigencia'),
+  fundamento: textoOpcional('El fundamento', 200),
 });
 
 export const esquemaMembresia = z.object({
@@ -33,12 +44,6 @@ export const esquemaRenglonMembresia = z.object({
   grado_reportado: textoOpcional('El grado reportado', 40),
   estatus_reportado: textoOpcional('El estatus reportado', 40),
   genera_capita: z.preprocess((v) => v === 'on' || v === 'true', z.boolean()),
-  hermano_id: idOpcional('El hermano'),
-});
-
-export const esquemaLigarRenglon = z.object({
-  renglon_id: idPositivo('El renglón'),
-  hermano_id: idOpcional('El hermano'),
 });
 
 export const esquemaObligacion = z.object({
@@ -50,8 +55,6 @@ export const esquemaObligacion = z.object({
   periodo_hasta: periodoISO('El periodo final'),
   fecha_documento: fechaISO('La fecha del documento'),
   monto_reportado: montoEnCentavos('El monto reportado por la Gran Tesorería'),
-  monto_esperado: montoEnCentavosOpcional('El monto esperado'),
-  membresia_id: idOpcional('La membresía'),
   hermano_id: idOpcional('El hermano'),
   observaciones: notas(800),
 });

@@ -12,7 +12,7 @@ import { consumirNonce } from '../csrf';
 import { enTransaccion, unaFila } from '../db';
 import { conceptoPorClave } from '../datos/conceptos';
 import { insertarEgreso } from '../datos/egresos';
-import { insertarTarifaGT, type ConceptoGT, type TipoObligacion } from '../datos/gt';
+import { insertarTarifaGT, type GrupoTarifaGT, type TipoObligacion } from '../datos/gt';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
 import { hoyISO } from '../fechas';
@@ -32,31 +32,94 @@ function comoErrorDeNegocio(error: unknown, campo?: string): never {
 
 // ── Tarifas GT ───────────────────────────────────────────────────────────────
 
+/** Clave estable a partir del nombre: "Renta de templo pequeño" da renta_de_templo_pequeno. */
+const claveDeNombre = (nombre: string): string =>
+  nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+
+/**
+ * Captura una tarifa GT. Si la clave ya existe, la nueva la sustituye desde su
+ * fecha y conserva su nombre y grupo; si no, nace una tarifa nueva. Una
+ * vigencia pasada se acepta solo con fundamento (el decreto que la fijó): las
+ * tarifas son referencia y no recalculan nada de lo ya capturado.
+ */
 export async function capturarTarifaGT(
   ctx: Contexto,
   datos: {
-    concepto: ConceptoGT;
-    descripcion?: string | undefined;
+    clave?: string | undefined;
+    grupo?: GrupoTarifaGT | undefined;
+    nombre?: string | undefined;
+    unidad?: string | undefined;
     monto: number;
     vigente_desde: string;
+    fundamento?: string | undefined;
   },
 ): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
 
-  if (datos.vigente_desde < hoyISO()) {
+  if (datos.vigente_desde < hoyISO() && !datos.fundamento) {
     throw new ErrorDeNegocio(
-      'Las tarifas no aplican en retroactivo: la vigencia empieza hoy o después.',
-      'vigente_desde',
+      'Una vigencia que ya empezó necesita su fundamento, por ejemplo el decreto de la Ley de Ingresos.',
+      'fundamento',
     );
   }
 
   await enTransaccion(async (tx) => {
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_tarifa');
+
+    let tarifa: { clave: string; grupo: GrupoTarifaGT; nombre: string; unidad: string | null };
+    if (datos.clave) {
+      const previa = await tx.unaFila<{ grupo: GrupoTarifaGT; nombre: string; unidad: string | null }>(
+        `select grupo, nombre, unidad from gt_tarifa
+          where clave = $1 order by vigencia_desde desc, id desc limit 1`,
+        [datos.clave],
+      );
+      if (!previa) throw new ErrorDeNegocio('Esa tarifa no existe.', 'clave');
+      tarifa = {
+        clave: datos.clave,
+        grupo: previa.grupo,
+        nombre: previa.nombre,
+        unidad: datos.unidad ?? previa.unidad,
+      };
+      const repetida = await tx.unaFila<{ id: number }>(
+        'select id from gt_tarifa where clave = $1 and vigencia_desde = $2',
+        [datos.clave, datos.vigente_desde],
+      );
+      if (repetida) {
+        throw new ErrorDeNegocio(
+          'Esa tarifa ya tiene un monto con esa misma fecha de vigencia.',
+          'vigente_desde',
+        );
+      }
+    } else {
+      if (!datos.grupo) throw new ErrorDeNegocio('Elige el grupo de la tarifa nueva.', 'grupo');
+      if (!datos.nombre) throw new ErrorDeNegocio('Escribe el nombre de la tarifa nueva.', 'nombre');
+      const clave = claveDeNombre(datos.nombre);
+      if (!clave) throw new ErrorDeNegocio('El nombre necesita letras o números.', 'nombre');
+      /* Misma clave o mismo nombre (sin acentos ni mayúsculas): es la misma tarifa. */
+      const todas = await tx.consulta<{ clave: string; nombre: string }>(
+        'select distinct clave, nombre from gt_tarifa',
+      );
+      const existe = todas.find((t) => t.clave === clave || claveDeNombre(t.nombre) === clave);
+      if (existe) {
+        throw new ErrorDeNegocio(
+          `Ya hay una tarifa "${existe.nombre}": elígela arriba para darle monto nuevo.`,
+          'nombre',
+        );
+      }
+      tarifa = { clave, grupo: datos.grupo, nombre: datos.nombre, unidad: datos.unidad ?? null };
+    }
+
     const id = await insertarTarifaGT(
       tx,
       {
-        concepto: datos.concepto,
-        descripcion: datos.descripcion,
+        ...tarifa,
+        fundamento: datos.fundamento,
         montoCentavos: datos.monto,
         vigenciaDesde: datos.vigente_desde,
       },
@@ -68,7 +131,13 @@ export async function capturarTarifaGT(
       accion: 'gt_tarifa_capturada',
       entidad: 'gt_tarifa',
       entidadId: id,
-      detalle: { concepto: datos.concepto, monto: formatoMXN(datos.monto) },
+      detalle: {
+        clave: tarifa.clave,
+        nombre: tarifa.nombre,
+        monto: formatoMXN(datos.monto),
+        vigente_desde: datos.vigente_desde,
+        fundamento: datos.fundamento ?? null,
+      },
     });
   }, usuarioId);
 }
@@ -121,7 +190,10 @@ export async function crearMembresia(
   }, usuarioId);
 }
 
-/** Renglón tal como lo reporta la Gran Tesorería. La liga con el padrón llega después. */
+/**
+ * Renglón tal como lo reporta la Gran Tesorería. La membresía es respaldo de
+ * consulta: no se liga con el padrón ni cambia nada del hermano.
+ */
 export async function agregarRenglonMembresia(
   ctx: Contexto,
   membresiaId: number,
@@ -131,7 +203,6 @@ export async function agregarRenglonMembresia(
     grado_reportado?: string | undefined;
     estatus_reportado?: string | undefined;
     genera_capita: boolean;
-    hermano_id: number | null;
   },
 ): Promise<void> {
   const usuarioId = ctx.sesion.usuario.id;
@@ -140,94 +211,28 @@ export async function agregarRenglonMembresia(
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_renglon');
     await tx.consulta(
       `insert into gt_membresia_hermano
-         (membresia_id, hermano_id, nombre_reportado, clave_mason_reportada,
-          grado_reportado, estatus_reportado, genera_capita, conciliado, creado_por)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         (membresia_id, nombre_reportado, clave_mason_reportada, grado_reportado,
+          estatus_reportado, genera_capita, creado_por)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
       [
         membresiaId,
-        datos.hermano_id,
         datos.nombre_reportado,
         datos.clave_mason ?? null,
         datos.grado_reportado ?? null,
         datos.estatus_reportado ?? null,
         datos.genera_capita,
-        datos.hermano_id !== null,
         usuarioId,
       ],
     );
-    if (datos.hermano_id !== null) {
-      await sincronizarEstatusGT(tx, datos.hermano_id, membresiaId, usuarioId);
-    }
     await registrarEn(tx, {
       usuarioId,
       idPeticion: ctx.idPeticion,
       accion: 'gt_membresia_renglon',
       entidad: 'gt_membresia',
       entidadId: membresiaId,
-      detalle: { nombre: datos.nombre_reportado, ligado: datos.hermano_id !== null },
+      detalle: { nombre: datos.nombre_reportado },
     });
   }, usuarioId);
-}
-
-/** Liga un renglón reportado con un hermano del padrón. Es conciliación, no edición. */
-export async function ligarRenglonMembresia(
-  ctx: Contexto,
-  renglonId: number,
-  hermanoId: number | null,
-): Promise<void> {
-  const usuarioId = ctx.sesion.usuario.id;
-
-  await enTransaccion(async (tx) => {
-    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_ligar');
-    const fila = await tx.unaFila<{ membresia_id: number; nombre_reportado: string }>(
-      `update gt_membresia_hermano
-          set hermano_id = $2, conciliado = ($2 is not null)
-        where id = $1
-        returning membresia_id, nombre_reportado`,
-      [renglonId, hermanoId],
-    );
-    if (!fila) throw new ErrorDeNegocio('Ese renglón ya no existe.');
-
-    if (hermanoId !== null) {
-      await sincronizarEstatusGT(tx, hermanoId, fila.membresia_id, usuarioId);
-    }
-
-    await registrarEn(tx, {
-      usuarioId,
-      idPeticion: ctx.idPeticion,
-      accion: 'gt_membresia_ligada',
-      entidad: 'gt_membresia_hermano',
-      entidadId: renglonId,
-      detalle: { nombre: fila.nombre_reportado, hermano_id: hermanoId },
-    });
-  }, usuarioId);
-}
-
-/*
- * Aparecer en una membresía es la evidencia de que GT reconoce al hermano: el
- * estatus manual se sincroniza al ligar, sin tocar el padrón interno.
- */
-async function sincronizarEstatusGT(
-  tx: Parameters<Parameters<typeof enTransaccion>[0]>[0],
-  hermanoId: number,
-  membresiaId: number,
-  usuarioId: number,
-): Promise<void> {
-  await tx.consulta(
-    `insert into hermano_gran_tesoreria
-       (hermano_id, estatus, fecha_registro, observaciones, creado_por, actualizado_por)
-     select $1, 'activo', m.fecha_documento,
-            'Ligado desde la membresía del ' || to_char(m.periodo_referencia, 'YYYY-MM'),
-            $3, $3
-       from gt_membresia m where m.id = $2
-     on conflict (hermano_id) do update
-       set estatus = 'activo',
-           fecha_registro = coalesce(hermano_gran_tesoreria.fecha_registro,
-                                     excluded.fecha_registro),
-           observaciones = excluded.observaciones,
-           actualizado_por = $3`,
-    [hermanoId, membresiaId, usuarioId],
-  );
 }
 
 // ── Obligaciones ─────────────────────────────────────────────────────────────
@@ -443,9 +448,10 @@ export async function generarEgresoDePago(
       id: number;
       folio: string;
       tipo: string;
+      fecha_documento: string;
       saldo: number;
     }>(
-      `select o.id, o.folio, o.tipo,
+      `select o.id, o.folio, o.tipo, o.fecha_documento::text,
               (o.monto_reportado_centavos
                 - coalesce((select sum(a.monto_centavos) from gt_pago_aplicacion a
                              where a.obligacion_id = o.id), 0))::int as saldo
@@ -479,12 +485,32 @@ export async function generarEgresoDePago(
     const total = obligaciones.reduce((s, o) => s + o.saldo, 0);
     if (total <= 0) throw new ErrorDeNegocio('Las obligaciones elegidas ya no tienen saldo.');
 
+    /*
+     * La solicitud lleva la fecha del documento más reciente de la GT, no la del
+     * día en que se captura: al capturar meses atrasados, el egreso queda en su
+     * fecha real. Si esa fecha no es de este año, manda el día de hoy.
+     */
+    const hoy = hoyISO();
+    const ultimaFecha = obligaciones.reduce((m, o) => (o.fecha_documento > m ? o.fecha_documento : m), '');
+    const fechaSolicitud =
+      ultimaFecha && ultimaFecha <= hoy && ultimaFecha.slice(0, 4) === hoy.slice(0, 4)
+        ? ultimaFecha
+        : hoy;
+
+    /* El beneficiario es el que ya se usa en los pagos GT, por si se unificó el nombre. */
+    const previo = await tx.unaFila<{ beneficiario: string }>(
+      `select e.beneficiario from egreso e
+         join concepto c on c.id = e.concepto_id
+        where c.tipo_especial = 'gran_tesoreria'
+        order by e.id desc limit 1`,
+    );
+
     const creado = await insertarEgreso(
       tx,
       {
-        fecha_solicitud: hoyISO(),
+        fecha_solicitud: fechaSolicitud,
         concepto_id: concepto.id,
-        beneficiario: 'M∴R∴G∴L∴ Valle de México',
+        beneficiario: previo?.beneficiario ?? 'M∴R∴G∴L∴ Valle de México',
         descripcion: `Pago a la Gran Tesorería: ${obligaciones.map((o) => o.folio).join(', ')}`,
         hermano_id: null,
         monto_solicitado_centavos: total,

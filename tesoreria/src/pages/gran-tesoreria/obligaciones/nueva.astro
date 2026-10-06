@@ -1,8 +1,7 @@
 ---
 /*
  * Captura de una obligación ante la Gran Tesorería: el documento que ella emite
- * con lo exigible. El monto esperado (membresía por tarifas) se precalcula como
- * referencia; una diferencia se muestra, no bloquea.
+ * con lo exigible. Se paga lo que GT reporta, sin cálculo interno.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
@@ -11,13 +10,8 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { capturarObligacion } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
-import {
-  NOMBRE_TIPO_OBLIGACION,
-  calculoEsperado,
-  estadoAplomo,
-  membresiaActual,
-} from '@lib/datos/gt';
-import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { NOMBRE_TIPO_OBLIGACION, estadoAplomo, tarifasGTVigentes } from '@lib/datos/gt';
+import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaObligacion } from '@lib/esquemas/gt';
 import { hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
@@ -33,19 +27,15 @@ const ETIQUETAS: Record<string, string> = {
   periodo_hasta: 'Ampara hasta',
   fecha_documento: 'Fecha del documento',
   monto_reportado: 'Monto reportado por GT',
-  monto_esperado: 'Monto esperado',
-  membresia_id: 'Membresía',
   hermano_id: 'Hermano (solo trámites)',
   calculo: 'Documento del cálculo',
   observaciones: 'Observaciones',
 };
 
-const [esperadoRows, membresia, aplomo] = await Promise.all([
-  calculoEsperado(),
-  membresiaActual(),
-  estadoAplomo(),
-]);
-const totalEsperado = esperadoRows.reduce((s, e) => s + e.subtotal_centavos, 0);
+const [aplomo, tarifas] = await Promise.all([estadoAplomo(), tarifasGTVigentes()]);
+const tarifaDe = (clave: string) => tarifas.find((t) => t.clave === clave);
+const capita = tarifaDe('capita');
+const regularizacion = tarifaDe('regularizacion');
 
 let errores: Record<string, string> = {};
 let valores: Record<string, string> = {
@@ -53,8 +43,6 @@ let valores: Record<string, string> = {
   periodo_desde: periodoActual(),
   periodo_hasta: periodoActual(),
   fecha_documento: hoyISO(),
-  monto_esperado: totalEsperado > 0 ? aPesosTexto(totalEsperado) : '',
-  membresia_id: membresia ? String(membresia.id) : '',
 };
 let estado = 200;
 
@@ -99,16 +87,12 @@ Astro.response.status = estado;
 <LayoutAdmin titulo="Capturar obligación GT" sesion={sesion} angosto>
   <div class="barra__contexto" slot="contexto">
     <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
-    {membresia && (
-      <span>Membresía vigente: {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</span>
-    )}
   </div>
 
   <h1>Capturar obligación</h1>
   <p class="apagado">
-    Lo exigible es lo que la Gran Tesorería reporta en su documento. El esperado interno
-    (membresía por tarifas) va como referencia: si difieren, se registra la diferencia y
-    se paga lo reportado. Las iniciaciones, afiliaciones, grados y demás trámites de un
+    Lo exigible es lo que la Gran Tesorería reporta en su documento, y eso es lo que se
+    paga. Las iniciaciones, afiliaciones, grados y demás trámites de un
     hermano se capturan en <a href="/gran-tesoreria/tramites/nuevo">su propia pantalla</a>.
   </p>
 
@@ -173,21 +157,14 @@ Astro.response.status = estado;
       modoTeclado="decimal"
       monto
       requerido
+      ayuda={[
+        capita && `Cápita vigente: ${formatoMXN(capita.monto_centavos)} por hermano al mes.`,
+        regularizacion && `Regularización: ${formatoMXN(regularizacion.monto_centavos)} por hermano.`,
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined}
     />
 
-    <Campo
-      nombre="monto_esperado"
-      etiqueta={ETIQUETAS.monto_esperado!}
-      valor={valores.monto_esperado}
-      error={errores.monto_esperado}
-      modoTeclado="decimal"
-      monto
-      ayuda={totalEsperado > 0
-        ? `Precalculado con la membresía y tarifas vigentes: ${formatoMXN(totalEsperado)}. Ajústalo si esta obligación ampara otra cosa.`
-        : 'Opcional. Sin membresía o tarifas capturadas no hay cálculo interno.'}
-    />
-
-    <input type="hidden" name="membresia_id" value={valores.membresia_id} />
 
     <Campo
       nombre="calculo"

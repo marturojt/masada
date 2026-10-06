@@ -78,7 +78,7 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 | Ingresos | Cuotas de grado del candidato, donativos |
 | Aportaciones | Aportaciones extraordinarias: monetarias con recibo y en especie con constancia |
 | Egresos | Solicitud, doble firma, entrega, comprobación |
-| Gran Tesorería | Membresías, tarifas GT, obligaciones y pagos, estado a plomo, conciliación |
+| Gran Tesorería | Obligaciones, trámites y pagos, estado a plomo, tarifas de la Ley de Ingresos, membresías como consulta |
 | Traspasos | Depósitos del efectivo al banco y retiros, con su ficha |
 | Pendientes | Todo lo capturado sin su documento, para adjuntarlo o cerrarlo con motivo |
 | Cortes | Cierre mensual, saldos encadenados por bolsa, hoja imprimible |
@@ -162,25 +162,47 @@ Un egreso pasa por: **registrado** → **autorizado** (dos firmas) → **pagado*
 - El **pago a la Gran Tesorería** no se captura como egreso suelto: nace de una
   obligación en el módulo Gran Tesorería (abajo), que genera el egreso con sus
   dos firmas. Al registrar la entrega, el pago GT y su aplicación a la obligación
-  se materializan solos.
+  se materializan solos. Ese egreso nace con la fecha del documento GT más
+  reciente (no la del día en que se captura) y aparece en Egresos con su folio
+  GTP- en cuanto se entrega. Lo que GT ya cobró y aún no tiene egreso se lista
+  arriba en Egresos, para generarlo desde Gran Tesorería.
+- **Corrección de captura** (nivel V∴M∴, desde la ficha del egreso): concepto,
+  beneficiario, descripción y fechas de solicitud, entrega y comprobación. Nunca
+  montos. La fecha de entrega arrastra al movimiento del libro y al pago GT, y
+  choca si su mes ya tiene corte cerrado. El concepto de un pago GT no cambia. En
+  la base, un egreso cerrado solo acepta estos cambios dentro de una transacción
+  declarada como corrección (migración 025). El antes y el después quedan en la
+  bitácora.
+- **Beneficiarios** (Egresos → Beneficiarios, nivel V∴M∴): un mismo nombre
+  escrito de dos maneras se unifica en todos sus egresos de una vez. Al capturar,
+  el campo sugiere los nombres que ya existen.
+- El **motivo de una suplencia** se edita o se limpia desde la ficha. Limpiarlo
+  no borra el hecho: la firma sigue constando como suplencia, con quién y cuándo
+  retiró el motivo, y el texto anterior en la bitácora.
 
 ### Gran Tesorería
 
-Módulo propio, porque son tres realidades administrativas distintas: el padrón
-interno lo gobierna la logia, la Gran Secretaría formaliza la pertenencia y la
-Gran Tesorería determina el cobro. Lo que cada organismo sabe de un hermano se
-registra en su ficha y las diferencias se ven en la **conciliación de padrones**,
-que informa y nunca bloquea.
+Módulo propio: la Gran Tesorería determina el cobro y la logia paga lo que ella
+reporta. Conciliar padrones (interno, Gran Secretaría, Gran Tesorería) es asunto
+de la secretaría y no vive aquí; lo que cada organismo sabe de un hermano queda
+en su ficha como consulta.
 
 - **Membresías**: el documento con el que GT dice a quién reconoce y por quién
-  cobra. Se captura tal como llega, renglón por renglón, y después se liga cada
-  renglón con el padrón; ligar actualiza solo el estatus del hermano ante GT.
-- **Tarifas GT** (cápita, templo, locker): sirven para el cálculo esperado. Solo
-  aplican hacia adelante, nunca en retroactivo.
+  cobra. Es respaldo de consulta, el histórico de lo que GT entiende de Masada:
+  se captura tal como llega, renglón por renglón, y no se liga ni se concilia
+  con el padrón.
+- **Tarifas GT**: las de la Ley de Ingresos de la Gran Logia, columna de logias
+  del edificio sede (la de Masada): cápita, movimientos de grado, regularización
+  y afiliación, talleres, lockers, auditorio y reconocimientos. Cada tarifa
+  tiene clave, unidad y fundamento (el decreto); la vigente es la última de su
+  clave y la anterior queda en el historial. La Ley 2026-2027 (Decreto
+  201/2026, vigente desde el 21 de septiembre de 2026) viene cargada desde la
+  migración 026. Son referencia para capturar: no calculan nada. Una vigencia
+  ya iniciada se acepta con su fundamento.
 - **Obligaciones**: lo exigible es lo que GT reporta en su documento (folios GT-
-  ordinarias, REG- regularizaciones). El esperado interno solo concilia: una
-  diferencia se muestra, no bloquea. Una regularización es una obligación nueva,
-  jamás toca meses ya cerrados.
+  ordinarias, REG- regularizaciones), y eso se paga; no hay cálculo interno que
+  lo contradiga. Una regularización es una obligación nueva, jamás toca meses
+  ya cerrados.
 - **Trámites**: pantalla propia, como pasa en la ventanilla: una fecha de
   solicitud, un hermano, una clase (iniciación, afiliación, aumento de salario,
   exaltación, u otro trámite administrativo con su nombre, como una carta de

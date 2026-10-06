@@ -28,9 +28,11 @@ import {
 import { obligacionesLigadasAEgreso } from '../datos/gt';
 import { insertarMovimiento } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
+import { hoyISO } from '../fechas';
 import { ErrorDeNegocio } from '../errores';
 import type {
   esquemaComprobacion,
+  esquemaCorreccion,
   esquemaDevolucion,
   esquemaDocumento,
   esquemaEgreso,
@@ -782,5 +784,294 @@ export async function agregarDocumento(
       entidadId: id,
       detalle: { folio: egreso.folio, tipo: datos.tipo },
     });
+  }, usuarioId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Corrección de captura
+// ─────────────────────────────────────────────────────────────────────────────
+
+/*
+ * El primer año se captura en paralelo a los exceles y hay errores de captura.
+ * Estas correcciones los arreglan sin tocar montos: lo que cambia es cómo se
+ * llamó, cuándo pasó y a qué concepto va. Son del nivel V∴M∴ y dejan en la
+ * bitácora el antes y el después. En la base, un egreso cerrado solo acepta
+ * estos cambios si la transacción se declara corrección (migración 025).
+ */
+
+const declararCorreccion = (tx: Tx): Promise<unknown> =>
+  tx.consulta(`select set_config('tesoreria.correccion', 'on', true)`);
+
+function exigirVM(sesion: Sesion): void {
+  if (!esVM(sesion)) {
+    throw new ErrorDeNegocio('Las correcciones de captura las hace el Venerable Maestro.');
+  }
+}
+
+export async function corregirEgreso(
+  ctx: Contexto,
+  id: number,
+  datos: z.infer<typeof esquemaCorreccion>,
+): Promise<void> {
+  exigirVM(ctx.sesion);
+  const usuarioId = ctx.sesion.usuario.id;
+  const hoy = hoyISO();
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'egreso_correccion');
+
+    const egreso = await tx.unaFila<{
+      folio: string;
+      estado: EstadoEgreso;
+      ejercicio_anio: number;
+      concepto_id: number;
+      beneficiario: string;
+      descripcion: string;
+      hermano_id: number | null;
+      fecha_solicitud: string;
+      fecha_entrega: string | null;
+      fecha_comprobacion: string | null;
+    }>(
+      `select folio, estado, ejercicio_anio, concepto_id, beneficiario, descripcion,
+              hermano_id, fecha_solicitud::text, fecha_entrega::text,
+              fecha_comprobacion::text
+         from egreso where id = $1 for update`,
+      [id],
+    );
+    if (!egreso) throw new ErrorDeNegocio('Ese egreso ya no existe.');
+
+    /* Lo que el egreso no tiene, no se inventa: sin entrega no hay fecha de entrega. */
+    const nuevo = {
+      concepto_id: datos.concepto_id ?? egreso.concepto_id,
+      beneficiario: datos.beneficiario,
+      descripcion: datos.descripcion,
+      fecha_solicitud: datos.fecha_solicitud,
+      fecha_entrega: egreso.fecha_entrega ? (datos.fecha_entrega ?? egreso.fecha_entrega) : null,
+      fecha_comprobacion: egreso.fecha_comprobacion
+        ? (datos.fecha_comprobacion ?? egreso.fecha_comprobacion)
+        : null,
+    };
+
+    const anio = String(egreso.ejercicio_anio);
+    const fechas: [keyof typeof nuevo, string | null, string][] = [
+      ['fecha_solicitud', nuevo.fecha_solicitud, 'La fecha de solicitud'],
+      ['fecha_entrega', nuevo.fecha_entrega, 'La fecha de entrega'],
+      ['fecha_comprobacion', nuevo.fecha_comprobacion, 'La fecha de comprobación'],
+    ];
+    for (const [campo, fecha, etiqueta] of fechas) {
+      if (fecha === null) continue;
+      if (fecha > hoy) throw new ErrorDeNegocio(`${etiqueta} no puede ser futura.`, campo);
+      if (fecha.slice(0, 4) !== anio) {
+        throw new ErrorDeNegocio(
+          `${etiqueta} tiene que caer en ${anio}, el ejercicio del folio ${egreso.folio}.`,
+          campo,
+        );
+      }
+    }
+    if (nuevo.fecha_entrega && nuevo.fecha_entrega < nuevo.fecha_solicitud) {
+      throw new ErrorDeNegocio(
+        'La entrega no puede ser anterior a la solicitud.',
+        'fecha_entrega',
+      );
+    }
+    if (
+      nuevo.fecha_comprobacion &&
+      nuevo.fecha_entrega &&
+      nuevo.fecha_comprobacion < nuevo.fecha_entrega
+    ) {
+      throw new ErrorDeNegocio(
+        'La comprobación no puede ser anterior a la entrega.',
+        'fecha_comprobacion',
+      );
+    }
+
+    if (nuevo.concepto_id !== egreso.concepto_id) {
+      const ligadas = await obligacionesLigadasAEgreso(tx, id);
+      const actual = await obtenerConcepto(egreso.concepto_id);
+      if (ligadas.length > 0 || actual?.tipo_especial === 'gran_tesoreria') {
+        throw new ErrorDeNegocio(
+          'Este egreso paga a la Gran Tesorería: su concepto va ligado a las obligaciones y no se cambia.',
+          'concepto_id',
+        );
+      }
+      const concepto = await obtenerConcepto(nuevo.concepto_id);
+      if (!concepto || !concepto.activo || concepto.naturaleza !== 'egreso') {
+        throw new ErrorDeNegocio('Elige un concepto de egreso activo.', 'concepto_id');
+      }
+      if (concepto.tipo_especial === 'gran_tesoreria') {
+        throw new ErrorDeNegocio(
+          'Los pagos a la Gran Tesorería nacen de una obligación, no de un cambio de concepto.',
+          'concepto_id',
+        );
+      }
+      if (concepto.requiere_hermano && egreso.hermano_id === null) {
+        throw new ErrorDeNegocio(
+          `"${concepto.nombre}" exige un hermano y este egreso no lo tiene.`,
+          'concepto_id',
+        );
+      }
+    }
+
+    const antes: Record<string, unknown> = {};
+    const despues: Record<string, unknown> = {};
+    for (const campo of Object.keys(nuevo) as (keyof typeof nuevo)[]) {
+      if (nuevo[campo] !== egreso[campo]) {
+        antes[campo] = egreso[campo];
+        despues[campo] = nuevo[campo];
+      }
+    }
+    if (Object.keys(despues).length === 0) {
+      throw new ErrorDeNegocio('No hay nada distinto que guardar.');
+    }
+
+    await declararCorreccion(tx);
+    try {
+      await tx.consulta(
+        `update egreso
+            set concepto_id = $2, beneficiario = $3, descripcion = $4,
+                fecha_solicitud = $5, fecha_entrega = $6, fecha_comprobacion = $7,
+                actualizado_por = $8
+          where id = $1`,
+        [
+          id,
+          nuevo.concepto_id,
+          nuevo.beneficiario,
+          nuevo.descripcion,
+          nuevo.fecha_solicitud,
+          nuevo.fecha_entrega,
+          nuevo.fecha_comprobacion,
+          usuarioId,
+        ],
+      );
+
+      /*
+       * La salida del libro sigue al egreso: misma fecha de entrega, mismo
+       * concepto y la descripción con su folio. Si el mes ya tiene corte
+       * cerrado, la base lo impide y el mensaje lo explica.
+       */
+      if (nuevo.fecha_entrega) {
+        const movido = await tx.unaFila<{ id: number }>(
+          `update movimiento
+              set fecha = $2, periodo = date_trunc('month', $2::date)::date,
+                  concepto_id = $3, descripcion = $4, actualizado_por = $5
+            where egreso_id = $1 and tipo = 'egreso'
+            returning id`,
+          [id, nuevo.fecha_entrega, nuevo.concepto_id, `${egreso.folio} · ${nuevo.descripcion}`, usuarioId],
+        );
+        if (movido) {
+          await tx.consulta('update gt_pago set fecha_pago = $2 where movimiento_id = $1', [
+            movido.id,
+            nuevo.fecha_entrega,
+          ]);
+        }
+      }
+    } catch (error) {
+      comoErrorDeNegocio(error);
+    }
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'egreso_corregido',
+      entidad: 'egreso',
+      entidadId: id,
+      detalle: {
+        folio: egreso.folio,
+        antes,
+        despues,
+        motivo: datos.motivo_correccion ?? null,
+      },
+    });
+  }, usuarioId);
+}
+
+/** Edita el motivo de la suplencia del tesorero; en blanco lo limpia, con constancia. */
+export async function corregirMotivoSuplencia(
+  ctx: Contexto,
+  id: number,
+  motivo: string | undefined,
+): Promise<void> {
+  exigirVM(ctx.sesion);
+  const usuarioId = ctx.sesion.usuario.id;
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'egreso_suplencia');
+
+    const firma = await tx.unaFila<{ id: number; folio: string; motivo_suplencia: string | null }>(
+      `select f.id, e.folio, f.motivo_suplencia
+         from egreso_firma f
+         join egreso e on e.id = f.egreso_id
+        where f.egreso_id = $1 and f.rol_requerido = 'tesorero' and f.es_suplencia
+        for update of f`,
+      [id],
+    );
+    if (!firma) throw new ErrorDeNegocio('Este egreso no tiene suplencia del tesorero.');
+    if ((firma.motivo_suplencia ?? undefined) === motivo) {
+      throw new ErrorDeNegocio('El motivo ya dice eso.', 'motivo_suplencia');
+    }
+
+    if (motivo === undefined) {
+      await tx.consulta(
+        `update egreso_firma
+            set motivo_suplencia = null, motivo_limpiado_por = $2, motivo_limpiado_en = now()
+          where id = $1`,
+        [firma.id, usuarioId],
+      );
+    } else {
+      await tx.consulta(
+        `update egreso_firma
+            set motivo_suplencia = $2, motivo_limpiado_por = null, motivo_limpiado_en = null
+          where id = $1`,
+        [firma.id, motivo],
+      );
+    }
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: motivo === undefined ? 'suplencia_motivo_limpiado' : 'suplencia_motivo_editado',
+      entidad: 'egreso',
+      entidadId: id,
+      detalle: { folio: firma.folio, antes: firma.motivo_suplencia, despues: motivo ?? null },
+    });
+  }, usuarioId);
+}
+
+/**
+ * Un mismo beneficiario escrito de dos maneras ("M∴R∴G∴L∴ Valle de México" y
+ * "Gran Logia Valle de México") se unifica en todos sus egresos de una vez.
+ */
+export async function unificarBeneficiario(
+  ctx: Contexto,
+  de: string,
+  a: string,
+): Promise<number> {
+  exigirVM(ctx.sesion);
+  const usuarioId = ctx.sesion.usuario.id;
+  if (de === a) throw new ErrorDeNegocio('Los dos nombres son iguales.', 'a');
+
+  return enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'egreso_beneficiarios');
+    await declararCorreccion(tx);
+
+    const cambiados = await tx.consulta<{ folio: string }>(
+      `update egreso set beneficiario = $2, actualizado_por = $3
+        where beneficiario = $1
+        returning folio`,
+      [de, a, usuarioId],
+    );
+    if (cambiados.length === 0) {
+      throw new ErrorDeNegocio('Ya no hay egresos con ese beneficiario.', 'de');
+    }
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'beneficiario_unificado',
+      entidad: 'egreso',
+      detalle: { de, a, folios: cambiados.map((c) => c.folio) },
+    });
+
+    return cambiados.length;
   }, usuarioId);
 }

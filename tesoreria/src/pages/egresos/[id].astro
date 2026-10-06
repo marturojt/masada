@@ -14,6 +14,8 @@ import {
   agregarDocumento,
   cancelarEgreso,
   cerrarComprobacion,
+  corregirEgreso,
+  corregirMotivoSuplencia,
   firmarEgreso,
   rechazarEgreso,
   registrarDevolucion,
@@ -25,6 +27,7 @@ import {
   NOMBRE_DOCUMENTO,
   NOMBRE_ESTADO_EGRESO,
   NOMBRE_TIPO_PAGO_GT,
+  beneficiariosUsados,
   documentosDe,
   firmasDe,
   granTesoreriaDe,
@@ -35,12 +38,15 @@ import { ErrorDeNegocio } from '@lib/errores';
 import {
   esquemaCierreComprobacion,
   esquemaComprobacion,
+  esquemaCorreccion,
   esquemaDevolucion,
   esquemaDocumento,
   esquemaEntrega,
   esquemaFirma,
   esquemaMotivo,
+  esquemaMotivoSuplencia,
 } from '@lib/esquemas/egreso';
+import { listarConceptos } from '@lib/datos/conceptos';
 import { NOMBRE_TIPO_OBLIGACION, obligacionesDeEgreso } from '@lib/datos/gt';
 import { formatoFechaCorta, formatoMomento, hoyISO, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
@@ -181,6 +187,42 @@ if (Astro.request.method === 'POST') {
           break;
         }
 
+        case 'corregir': {
+          const r = await validar(entrada, {
+            esquema: esquemaCorreccion,
+            proposito: 'egreso_correccion',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await corregirEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+            return Astro.redirect(`/egresos/${id}?ok=corregido`, 303);
+          }
+          break;
+        }
+
+        case 'suplencia': {
+          const r = await validar(entrada, {
+            esquema: esquemaMotivoSuplencia,
+            proposito: 'egreso_suplencia',
+            sesion,
+          });
+          if (!r.ok) {
+            errores = r.errores;
+            estado = r.estado;
+          } else {
+            await corregirMotivoSuplencia(
+              { ...ctxBase, nonce: r.nonce },
+              id,
+              r.datos.motivo_suplencia,
+            );
+            return Astro.redirect(`/egresos/${id}?ok=suplencia`, 303);
+          }
+          break;
+        }
+
         case 'rechazar':
         case 'cancelar': {
           const esRechazo = entrada.accion === 'rechazar';
@@ -222,6 +264,21 @@ const [firmas, documentos, granTesoreria, obligacionesGT] = await Promise.all([
   egreso.tipo_especial === 'gran_tesoreria' ? obligacionesDeEgreso(id) : Promise.resolve([]),
 ]);
 
+/* La corrección de captura es del nivel V∴M∴: solo a él se le arma el formulario. */
+const esPagoGT = egreso.tipo_especial === 'gran_tesoreria' || obligacionesGT.length > 0;
+const [conceptosEgreso, beneficiarios] = soyVM
+  ? await Promise.all([
+      listarConceptos({ naturaleza: 'egreso', soloSeleccionables: true }),
+      beneficiariosUsados(),
+    ])
+  : [[], []];
+const opcionesConcepto: Opcion[] = conceptosEgreso
+  .filter((c) => c.tipo_especial !== 'gran_tesoreria' || c.id === egreso.concepto_id)
+  .map((c) => ({ valor: String(c.id), texto: c.nombre }));
+if (!opcionesConcepto.some((o) => o.valor === String(egreso.concepto_id))) {
+  opcionesConcepto.unshift({ valor: String(egreso.concepto_id), texto: egreso.concepto_nombre });
+}
+
 const imagenes = await sonImagenes(
   documentos.map((d) => d.archivo_id).filter((a): a is number => a !== null),
 );
@@ -237,6 +294,8 @@ const nonces = {
   documento: await emitirNonce(sesion.idHash, 'egreso_documento'),
   rechazo: await emitirNonce(sesion.idHash, 'egreso_rechazo'),
   cancelacion: await emitirNonce(sesion.idHash, 'egreso_cancelacion'),
+  correccion: soyVM ? await emitirNonce(sesion.idHash, 'egreso_correccion') : '',
+  suplencia: soyVM ? await emitirNonce(sesion.idHash, 'egreso_suplencia') : '',
 };
 
 const firmaDe = (rol: 'tesorero' | 'venerable_maestro') =>
@@ -300,9 +359,15 @@ Astro.response.status = estado;
         <table class="tabla">
           <tbody>
             <tr>
-              <th scope="row">Fecha</th>
+              <th scope="row">Fecha de solicitud</th>
               <td>{formatoFechaCorta(egreso.fecha_solicitud)}</td>
             </tr>
+            {egreso.fecha_comprobacion && (
+              <tr>
+                <th scope="row">Comprobado el</th>
+                <td>{formatoFechaCorta(egreso.fecha_comprobacion)}</td>
+              </tr>
+            )}
             <tr>
               <th scope="row">Concepto</th>
               <td>{egreso.concepto_nombre}</td>
@@ -463,7 +528,8 @@ Astro.response.status = estado;
                               </span>
                               <br />
                               <span class="apagado" style="font-size: 0.8rem;">
-                                {f.motivo_suplencia}
+                                {f.motivo_suplencia ??
+                                  (f.motivo_limpiado ? 'Motivo retirado como corrección de captura' : '')}
                               </span>
                             </>
                           )}
@@ -480,6 +546,33 @@ Astro.response.status = estado;
           </tbody>
         </table>
       </div>
+
+      {
+        soyVM && firmaDe('tesorero')?.es_suplencia && (
+          <details style="margin-top: 0.75rem;" open={seccion === 'suplencia'}>
+            <summary style="cursor: pointer;">Editar o limpiar el motivo de la suplencia</summary>
+            <div style="margin-top: 0.75rem; max-width: 26rem;">
+              {seccion === 'suplencia' && <ResumenErrores errores={errores} />}
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonces.suplencia}
+                accionInterna="suplencia"
+              >
+                <Campo
+                  nombre="motivo_suplencia"
+                  etiqueta="Motivo de la suplencia"
+                  valor={firmaDe('tesorero')?.motivo_suplencia ?? ''}
+                  error={errores.motivo_suplencia}
+                  ayuda="Déjalo en blanco para limpiarlo. La firma sigue constando como suplencia y el texto anterior queda en la bitácora."
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">Guardar motivo</button>
+                </div>
+              </Formulario>
+            </div>
+          </details>
+        )
+      }
 
       {
         egreso.estado === 'registrado' && (
@@ -881,5 +974,107 @@ Astro.response.status = estado;
         )
       }
     </section>
+
+    {
+      soyVM && (
+        <section class="tarjeta">
+          <details open={seccion === 'corregir'}>
+            <summary style="cursor: pointer;">
+              <h2 style="display: inline; margin: 0;">Corregir la captura</h2>
+            </summary>
+            <p class="apagado" style="font-size: 0.85rem; margin-top: 0.75rem;">
+              Para errores de captura: concepto, beneficiario, descripción y fechas. Los
+              montos no se tocan. La salida del libro de caja sigue a la fecha de entrega,
+              salvo que su mes ya tenga corte cerrado. El antes y el después quedan en la
+              bitácora.
+            </p>
+            {seccion === 'corregir' && <ResumenErrores errores={errores} />}
+            <div style="max-width: 28rem;">
+              <Formulario
+                csrf={sesion.csrfToken}
+                nonce={nonces.correccion}
+                accionInterna="corregir"
+              >
+                {esPagoGT ? (
+                  <p style="font-size: 0.9rem;">
+                    Concepto: {egreso.concepto_nombre}. Va ligado a las obligaciones de la Gran
+                    Tesorería y no se cambia.
+                  </p>
+                ) : (
+                  <Selector
+                    nombre="concepto_id"
+                    etiqueta="Concepto"
+                    opciones={opcionesConcepto}
+                    valor={String(egreso.concepto_id)}
+                    error={errores.concepto_id}
+                    requerido
+                  />
+                )}
+                <Campo
+                  nombre="beneficiario"
+                  etiqueta="Beneficiario"
+                  valor={egreso.beneficiario}
+                  error={errores.beneficiario}
+                  lista="beneficiarios-usados"
+                  requerido
+                />
+                <datalist id="beneficiarios-usados">
+                  {beneficiarios.map((b) => <option value={b.beneficiario} />)}
+                </datalist>
+                <Campo
+                  nombre="descripcion"
+                  etiqueta="Descripción"
+                  valor={egreso.descripcion}
+                  error={errores.descripcion}
+                  requerido
+                />
+                <Campo
+                  nombre="fecha_solicitud"
+                  etiqueta="Fecha de solicitud"
+                  tipo="date"
+                  valor={egreso.fecha_solicitud}
+                  error={errores.fecha_solicitud}
+                  requerido
+                />
+                {egreso.fecha_entrega && (
+                  <Campo
+                    nombre="fecha_entrega"
+                    etiqueta="Fecha de entrega"
+                    tipo="date"
+                    valor={egreso.fecha_entrega}
+                    error={errores.fecha_entrega}
+                    ayuda="Es la fecha en que salió el dinero: cambia también el movimiento del libro y, si es pago GT, la del pago."
+                    requerido
+                  />
+                )}
+                {egreso.fecha_comprobacion && (
+                  <Campo
+                    nombre="fecha_comprobacion"
+                    etiqueta="Fecha de comprobación"
+                    tipo="date"
+                    valor={egreso.fecha_comprobacion}
+                    error={errores.fecha_comprobacion}
+                    requerido
+                  />
+                )}
+                <Campo
+                  nombre="motivo_correccion"
+                  etiqueta="Motivo de la corrección"
+                  error={errores.motivo_correccion}
+                  ayuda="Opcional. Por ejemplo: captura en paralelo al excel, fecha real del pago."
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">Guardar corrección</button>
+                </div>
+              </Formulario>
+              <p class="apagado" style="font-size: 0.85rem;">
+                Si un beneficiario está escrito de dos maneras en varios egresos, se unifica de
+                una vez en <a href="/egresos/beneficiarios">Beneficiarios</a>.
+              </p>
+            </div>
+          </details>
+        </section>
+      )
+    }
   </div>
 </LayoutAdmin>

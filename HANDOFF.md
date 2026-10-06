@@ -55,6 +55,9 @@ del cliente).
   materializa al entregar (GTP-), estado a plomo derivado y conciliación de los
   tres padrones (interno, Gran Secretaría, Gran Tesorería), que informa y no
   bloquea. Lo interno y lo de GT están desacoplados: nada se reserva solo.
+  (Pendiente de desplegar, migración 026: la conciliación de padrones se retira,
+  las membresías quedan como respaldo de consulta y las tarifas pasan a ser el
+  catálogo de la Ley de Ingresos 2026-2027, ya cargado.)
 - **Aportaciones**: la monetaria es ingreso normal con recibo; la de especie deja
   constancia imprimible (APO-) y jamás toca el libro de caja.
 - **Registros externos por hermano**: en la ficha, lo que la Gran Secretaría y la
@@ -125,8 +128,11 @@ conviene confirmar o corregir:
    efectivo "efectivo". Si un pago fue con tarjeta u otro medio, se corrige a mano.
 5. **Conceptos gl_***: los conceptos viejos de Gran Logia quedaron desactivados;
    el histórico los sigue mostrando.
-6. **Renglones de membresía**: se capturan tal como GT los reporta y no se editan;
-   lo único que cambia después es su liga con el padrón.
+6. **Renglones de membresía**: se capturan tal como GT los reporta y no se editan
+   ni se ligan con el padrón: la membresía es respaldo de consulta.
+7. **Tarifas anteriores a la Ley 2026-2027**: el sistema trae cargada la ley
+   vigente desde el 21 de septiembre de 2026. Las de antes, si se quieren en el
+   historial, se capturan en Tarifas GT con su fecha y su fundamento.
 
 ---
 
@@ -162,6 +168,17 @@ queda como ambiente de desarrollo.
 - [ ] **Desplegar `ce831cc`** (visor de comprobantes + tablero con gráficas):
       Arturo tiene el mensaje para el agente. Exige `npm ci` por la dependencia
       nueva `heic-convert`; sin migraciones. Producción quedó en `63dd376`.
+- [ ] **Desplegar la corrección de captura de egresos** (migración 025): corregir
+      concepto, beneficiario, descripción, fechas y motivo de suplencia desde la
+      ficha; unificar beneficiarios; obligaciones GT sin egreso visibles en
+      Egresos. Exige `npm run migrar` en el despliegue. Es una puerta abierta a
+      propósito para el año de captura en paralelo; cerrarla después (por
+      ejemplo, solo en meses sin corte, o solo el primer ejercicio).
+- [ ] **Desplegar la Ley de Ingresos GT** (migración 026): tarifas por clave con
+      la Ley 2026-2027 cargada (edificio sede), membresías solo de consulta, sin
+      conciliación ni cálculo esperado. Exige `npm run migrar`. Si producción ya
+      tenía tarifas capturadas (templo, locker, otro), quedan con clave propia y
+      siguen vigentes junto a las de la ley: revisarlas en Tarifas GT.
 - [ ] (Backlog) **Corregir periodos de una obligación GT desde su ficha** (solo
       periodos, nunca montos, con motivo): hoy esa corrección requirió
       intervención por servidor y el guardián de la base ya la permite.

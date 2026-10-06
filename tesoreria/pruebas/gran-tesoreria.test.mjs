@@ -255,8 +255,8 @@ test('una regularización pendiente cuenta aparte y no rompe lo ordinario', asyn
 test('las tarifas GT no se editan: se capturan nuevas', async () => {
   await enPrueba(async ({ cliente, tesorero }) => {
     const { rows } = await cliente.query(
-      `insert into gt_tarifa (concepto, monto_centavos, vigencia_desde, creado_por)
-       values ('capita', 20000, current_date, $1) returning id`,
+      `insert into gt_tarifa (concepto, grupo, clave, nombre, monto_centavos, vigencia_desde, creado_por)
+       values ('capita', 'capitas', 'capita', 'Cápita', 20000, current_date, $1) returning id`,
       [tesorero],
     );
     await debeFallar(
@@ -326,5 +326,34 @@ test('la clase de trámite es solo de trámites, y "otro" exige su nombre', asyn
       "select cubierto from v_gt_periodos_cubiertos where periodo = '2026-08-01'",
     );
     assert.equal(cubierto[0].cubierto, false);
+  });
+});
+
+test('la ley 2026-2027 queda cargada y la tarifa vigente es la última de cada clave', async () => {
+  await enPrueba(async ({ cliente, tesorero }) => {
+    const { rows: ley } = await cliente.query(
+      "select monto_centavos from gt_tarifa where clave = 'capita' and vigencia_desde = '2026-09-21'",
+    );
+    assert.equal(ley[0].monto_centavos, 25000);
+
+    await cliente.query(
+      `insert into gt_tarifa (concepto, grupo, clave, nombre, monto_centavos, vigencia_desde, creado_por)
+       values ('capita', 'capitas', 'capita', 'Cápita', 27500, current_date, $1)`,
+      [tesorero],
+    );
+    const { rows } = await cliente.query(
+      "select monto_centavos from v_gt_tarifa_vigente where clave = 'capita'",
+    );
+    assert.equal(rows[0].monto_centavos, 27500);
+
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          `insert into gt_tarifa (concepto, grupo, clave, nombre, monto_centavos, vigencia_desde)
+           values ('otro', 'inventado', 'x', 'X', 100, current_date)`,
+        ),
+      /gt_tarifa_grupo_valido|check constraint/i,
+    );
   });
 });

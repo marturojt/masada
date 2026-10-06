@@ -245,3 +245,67 @@ test('un egreso de grado exige indicar el hermano', async () => {
     );
   });
 });
+
+test('un egreso cerrado solo corrige beneficiario como corrección de captura, y nunca montos', async () => {
+  await enPrueba(async ({ cliente, tesorero }) => {
+    const egreso = await nuevoEgreso(cliente, tesorero, { porComprobar: false });
+    await cliente.query(
+      "update egreso set estado = 'rechazado', motivo_rechazo = 'Prueba' where id = $1",
+      [egreso.id],
+    );
+
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query("update egreso set beneficiario = 'Otro' where id = $1", [egreso.id]),
+      /corrección de captura/i,
+    );
+
+    await cliente.query(`select set_config('tesoreria.correccion', 'on', true)`);
+    await cliente.query("update egreso set beneficiario = 'Otro' where id = $1", [egreso.id]);
+    const { rows } = await cliente.query('select beneficiario from egreso where id = $1', [
+      egreso.id,
+    ]);
+    assert.equal(rows[0].beneficiario, 'Otro');
+
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          'update egreso set monto_solicitado_centavos = 1000 where id = $1',
+          [egreso.id],
+        ),
+      /montos ya no se editan/i,
+    );
+  });
+});
+
+test('el motivo de una suplencia se limpia solo con constancia de quién lo limpió', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    const egreso = await nuevoEgreso(cliente, tesorero);
+    await firmar(cliente, egreso.id, 'tesorero', vm, 'venerable_maestro', 'Captura en paralelo');
+
+    await debeFallar(
+      cliente,
+      () =>
+        cliente.query(
+          "update egreso_firma set motivo_suplencia = null where egreso_id = $1 and rol_requerido = 'tesorero'",
+          [egreso.id],
+        ),
+      /firma_suplencia_coherente|check constraint/i,
+    );
+
+    await cliente.query(
+      `update egreso_firma
+          set motivo_suplencia = null, motivo_limpiado_por = $2, motivo_limpiado_en = now()
+        where egreso_id = $1 and rol_requerido = 'tesorero'`,
+      [egreso.id, vm],
+    );
+    const { rows } = await cliente.query(
+      "select es_suplencia, motivo_suplencia from egreso_firma where egreso_id = $1 and rol_requerido = 'tesorero'",
+      [egreso.id],
+    );
+    assert.equal(rows[0].es_suplencia, true);
+    assert.equal(rows[0].motivo_suplencia, null);
+  });
+});

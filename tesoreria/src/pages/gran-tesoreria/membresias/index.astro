@@ -1,7 +1,8 @@
 ---
 /*
  * Membresías: los documentos con los que la Gran Tesorería reporta a quién
- * reconoce. Son fotografías administrativas, no el padrón interno.
+ * reconoce. Son respaldo de consulta, el histórico de lo que GT entiende de
+ * Masada: no se concilian ni modifican el padrón.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
@@ -78,8 +79,8 @@ Astro.response.status = estado;
   <h1>Membresías</h1>
   <p class="apagado">
     Cada membresía es el documento con el que la Gran Tesorería dice a quién reconoce
-    y por quién cobra. La vigente es la más reciente. No modifica el padrón interno:
-    las diferencias se ven en la conciliación.
+    y por quién cobra: el histórico de lo que GT entiende de Masada. Se guarda como
+    respaldo para consultarlo. No modifica el padrón ni se concilia desde aquí.
   </p>
 
   <div class="pila" style="margin-top: 1.25rem;">
@@ -97,7 +98,6 @@ Astro.response.status = estado;
                   <th>Fecha del documento</th>
                   <th class="num">Hermanos reportados</th>
                   <th class="num">Generan cápita</th>
-                  <th class="num">Sin conciliar</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,18 +107,11 @@ Astro.response.status = estado;
                       <a href={`/gran-tesoreria/membresias/${m.id}`}>
                         {nombrePeriodo(m.periodo_referencia.slice(0, 7))}
                       </a>
-                      {i === 0 && <span class="insignia insignia--ok" style="margin-left: 0.5rem;">Vigente</span>}
+                      {i === 0 && <span class="insignia" style="margin-left: 0.5rem;">Más reciente</span>}
                     </td>
                     <td>{formatoFechaCorta(m.fecha_documento)}</td>
                     <td class="num">{m.renglones}</td>
                     <td class="num">{m.con_capita}</td>
-                    <td class="num">
-                      {m.sin_ligar > 0 ? (
-                        <span class="insignia insignia--pendiente">{m.sin_ligar}</span>
-                      ) : (
-                        '0'
-                      )}
-                    </td>
                   </tr>
                 ))}
               </tbody>

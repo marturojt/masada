@@ -1,14 +1,13 @@
 /*
- * Dominio de la Gran Tesorería: membresías (fotografías documentales), tarifas
- * versionadas, obligaciones con su desglose, pagos y aplicaciones.
+ * Dominio de la Gran Tesorería: membresías (respaldo de consulta), tarifas de
+ * su Ley de Ingresos, obligaciones con su desglose, pagos y aplicaciones.
  *
- * Regla del dominio: el cálculo interno (membresía por tarifas) es para
- * conciliar; el monto exigible es siempre el que reporta la Gran Tesorería.
+ * Regla del dominio: el monto exigible es siempre el que reporta la Gran
+ * Tesorería. Las tarifas son referencia para capturarlo, no lo calculan.
  */
 import { consulta, unaFila, type Tx } from '../db';
 import type { Bolsa } from '../tipos';
 
-export type ConceptoGT = 'capita' | 'templo' | 'locker' | 'otro';
 export type TipoObligacion = 'ordinaria' | 'regularizacion' | 'tramite' | 'extraordinaria';
 export type EstatusObligacion =
   | 'pendiente_pago'
@@ -16,11 +15,26 @@ export type EstatusObligacion =
   | 'pagada'
   | 'cancelada';
 
-export const NOMBRE_CONCEPTO_GT: Record<ConceptoGT, string> = {
-  capita: 'Cápita',
-  templo: 'Templo',
-  locker: 'Locker',
-  otro: 'Otro',
+export type GrupoTarifaGT =
+  | 'capitas'
+  | 'movimientos'
+  | 'regularizacion'
+  | 'talleres'
+  | 'lockers'
+  | 'auditorio'
+  | 'reconocimientos'
+  | 'otro';
+
+/** En el orden en que los presenta la Ley de Ingresos. */
+export const NOMBRE_GRUPO_TARIFA_GT: Record<GrupoTarifaGT, string> = {
+  capitas: 'Cápitas',
+  movimientos: 'Movimientos',
+  regularizacion: 'Regularización y afiliación',
+  talleres: 'Talleres',
+  lockers: 'Lockers',
+  auditorio: 'Auditorio',
+  reconocimientos: 'Reconocimientos',
+  otro: 'Otros',
 };
 
 export type ClaseTramite =
@@ -55,39 +69,86 @@ export const NOMBRE_ESTATUS_OBLIGACION: Record<EstatusObligacion, string> = {
 // ── Tarifas ──────────────────────────────────────────────────────────────────
 
 export interface TarifaGT {
-  concepto: ConceptoGT;
-  descripcion: string | null;
+  clave: string;
+  grupo: GrupoTarifaGT;
+  nombre: string;
+  unidad: string | null;
+  fundamento: string | null;
   monto_centavos: number;
   vigencia_desde: string;
-  vigencia_hasta: string | null;
 }
 
-export const tarifasGTVigentes = (): Promise<TarifaGT[]> =>
-  consulta<TarifaGT>('select * from v_gt_tarifa_vigente');
+/* Por grupo, y dentro del grupo en el orden en que la tarifa apareció por primera vez. */
+const ORDEN_GRUPO = `array_position(array['capitas', 'movimientos', 'regularizacion',
+  'talleres', 'lockers', 'auditorio', 'reconocimientos', 'otro'], grupo),
+  (select min(x.id) from gt_tarifa x where x.clave = clave_orden)`;
 
-export const historialTarifasGT = (): Promise<(TarifaGT & { id: number; creado_nombre: string | null })[]> =>
+export const tarifasGTVigentes = (): Promise<TarifaGT[]> =>
+  consulta<TarifaGT>(
+    `select clave, grupo, nombre, unidad, fundamento, monto_centavos,
+            vigencia_desde::text
+       from v_gt_tarifa_vigente v
+      cross join lateral (select v.clave as clave_orden) o
+      order by ${ORDEN_GRUPO}`,
+  );
+
+/**
+ * Todas las tarifas que ha habido. Una tarifa deja de valer cuando llega otra
+ * de la misma clave: su "hasta" se deduce de la siguiente, no se captura.
+ */
+export const historialTarifasGT = (): Promise<
+  (TarifaGT & { id: number; hasta: string | null; creado_nombre: string | null })[]
+> =>
   consulta(
-    `select t.id, t.concepto, t.descripcion, t.monto_centavos,
-            t.vigencia_desde::text, t.vigencia_hasta::text, u.nombre as creado_nombre
+    `select t.id, t.clave, t.grupo, t.nombre, t.unidad, t.fundamento, t.monto_centavos,
+            t.vigencia_desde::text,
+            coalesce(t.vigencia_hasta,
+                     lead(t.vigencia_desde) over (partition by t.clave
+                                                   order by t.vigencia_desde, t.id)
+                       - 1)::text as hasta,
+            u.nombre as creado_nombre
        from gt_tarifa t
        left join usuario u on u.id = t.creado_por
-      order by t.concepto, t.vigencia_desde desc, t.id desc`,
+       cross join lateral (select t.clave as clave_orden) o
+      order by ${ORDEN_GRUPO}, t.vigencia_desde desc, t.id desc`,
   );
+
+/** El concepto viejo (capita, templo, locker, otro) se deduce del grupo. */
+const CONCEPTO_DE_GRUPO: Partial<Record<GrupoTarifaGT, string>> = {
+  capitas: 'capita',
+  talleres: 'templo',
+  lockers: 'locker',
+};
 
 export async function insertarTarifaGT(
   tx: Tx,
   datos: {
-    concepto: ConceptoGT;
-    descripcion?: string | undefined;
+    clave: string;
+    grupo: GrupoTarifaGT;
+    nombre: string;
+    unidad?: string | null | undefined;
+    fundamento?: string | null | undefined;
     montoCentavos: number;
     vigenciaDesde: string;
   },
   usuarioId: number,
 ): Promise<number> {
   const fila = await tx.laFila<{ id: number }>(
-    `insert into gt_tarifa (concepto, descripcion, monto_centavos, vigencia_desde, creado_por)
-     values ($1, $2, $3, $4, $5) returning id`,
-    [datos.concepto, datos.descripcion ?? null, datos.montoCentavos, datos.vigenciaDesde, usuarioId],
+    `insert into gt_tarifa
+       (concepto, grupo, clave, nombre, unidad, fundamento, monto_centavos,
+        vigencia_desde, creado_por)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+    [
+      CONCEPTO_DE_GRUPO[datos.grupo] ?? 'otro',
+      datos.grupo,
+      datos.clave,
+      datos.nombre,
+      datos.unidad ?? null,
+      datos.fundamento ?? null,
+      datos.montoCentavos,
+      datos.vigenciaDesde,
+      usuarioId,
+    ],
   );
   return fila.id;
 }
@@ -316,17 +377,6 @@ export const estadoAplomo = (): Promise<EstadoAplomo> =>
       },
   );
 
-export interface CalculoEsperado {
-  concepto: ConceptoGT;
-  descripcion: string | null;
-  cantidad: number;
-  tarifa_centavos: number;
-  subtotal_centavos: number;
-}
-
-export const calculoEsperado = (): Promise<CalculoEsperado[]> =>
-  consulta<CalculoEsperado>('select * from v_gt_calculo_esperado');
-
 export const periodosCubiertos = (
   anio: number,
 ): Promise<{ periodo: string; cubierto: boolean; pagado_centavos: number }[]> =>
@@ -374,46 +424,7 @@ export const obligacionesDeEgreso = (
     [egresoId],
   );
 
-// ── Conciliación de padrones ─────────────────────────────────────────────────
-
-export type EstadoConciliacion =
-  | 'conciliado'
-  | 'pendiente_gt'
-  | 'pendiente_formalizacion'
-  | 'inconsistencia'
-  | 'sin_diferencias';
-
-export const NOMBRE_ESTADO_CONCILIACION: Record<EstadoConciliacion, string> = {
-  conciliado: 'Conciliado',
-  pendiente_gt: 'Pendiente ante GT',
-  pendiente_formalizacion: 'Pendiente de formalizar',
-  inconsistencia: 'Inconsistencia',
-  sin_diferencias: 'Sin diferencias',
-};
-
-export interface ConciliacionPadron {
-  hermano_id: number;
-  nombre_completo: string;
-  interno: boolean;
-  estatus_gs: string;
-  estatus_gt: string;
-  en_gran_secretaria: boolean;
-  en_gran_tesoreria: boolean;
-  estado: EstadoConciliacion;
-  gs_fecha_registro: string | null;
-  gt_fecha_registro: string | null;
-  gs_observaciones: string | null;
-  gt_observaciones: string | null;
-}
-
-export const conciliacionPadrones = (): Promise<ConciliacionPadron[]> =>
-  consulta<ConciliacionPadron>(
-    `select hermano_id, nombre_completo, interno, estatus_gs, estatus_gt,
-            en_gran_secretaria, en_gran_tesoreria, estado,
-            gs_fecha_registro::text, gt_fecha_registro::text,
-            gs_observaciones, gt_observaciones
-       from v_conciliacion_padrones`,
-  );
+// ── Registros externos por hermano ──────────────────────────────────────────
 
 export interface RegistroExterno {
   estatus: 'pendiente' | 'activo' | 'baja' | 'desconocido';

@@ -231,7 +231,6 @@ const AVISOS: Record<string, string> = {
   cancelada: 'Obligación cancelada.',
   membresia: 'Membresía registrada.',
   renglon: 'Renglón agregado a la membresía.',
-  ligado: 'Renglón conciliado con el padrón.',
   tarifa: 'Tarifa capturada.',
   aportacion: 'Aportación registrada.',
   registro: 'Registro externo actualizado.',
@@ -239,6 +238,9 @@ const AVISOS: Record<string, string> = {
   comprobante: 'Comprobante adjuntado.',
   ajuste: 'Movimiento de ajuste registrado: revisa el neto en la lista de abajo.',
   dispensa: 'Pendiente cerrado como sin evidencia formal.',
+  corregido: 'Corrección de captura guardada.',
+  suplencia: 'Motivo de la suplencia actualizado.',
+  beneficiario: 'Beneficiario unificado en todos sus egresos.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>

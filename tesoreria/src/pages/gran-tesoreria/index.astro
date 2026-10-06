@@ -1,10 +1,10 @@
 ---
 /*
- * Centro del dominio Gran Tesorería: el estatus a plomo, el cálculo esperado
- * contra la membresía, las obligaciones y los pagos.
+ * Centro del dominio Gran Tesorería: el estatus a plomo, las tarifas de su Ley
+ * de Ingresos, las obligaciones y los pagos.
  *
- * Regla del dominio: el cálculo interno sirve para conciliar; lo exigible es lo
- * que reporta la Gran Tesorería. Una diferencia se muestra, nunca bloquea.
+ * Regla del dominio: lo exigible es lo que reporta la Gran Tesorería. Las
+ * tarifas son referencia para capturarlo, no lo calculan.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Formulario from '@componentes/Formulario.astro';
@@ -15,12 +15,12 @@ import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejerci
 import {
   NOMBRE_ESTATUS_OBLIGACION,
   NOMBRE_TIPO_OBLIGACION,
-  calculoEsperado,
+  NOMBRE_GRUPO_TARIFA_GT,
   estadoAplomo,
   listarObligaciones,
   listarPagosGT,
-  membresiaActual,
   periodosCubiertos,
+  tarifasGTVigentes,
 } from '@lib/datos/gt';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
@@ -77,10 +77,9 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [aplomo, esperado, membresia, obligaciones, pagos, cubiertos] = await Promise.all([
+const [aplomo, tarifas, obligaciones, pagos, cubiertos] = await Promise.all([
   estadoAplomo(),
-  calculoEsperado(),
-  membresiaActual(),
+  tarifasGTVigentes(),
   listarObligaciones(anio),
   listarPagosGT(anio),
   periodosCubiertos(anio),
@@ -89,7 +88,9 @@ const [aplomo, esperado, membresia, obligaciones, pagos, cubiertos] = await Prom
 const pendientes = obligaciones.filter(
   (o) => o.estatus === 'pendiente_pago' || o.estatus === 'parcialmente_pagada',
 );
-const totalEsperado = esperado.reduce((s, e) => s + e.subtotal_centavos, 0);
+/* De la ley vigente, lo que se paga cada mes: la cápita por hermano. */
+const capita = tarifas.find((t) => t.clave === 'capita');
+const ley = tarifas.find((t) => t.fundamento)?.fundamento ?? null;
 const nonceGenerar = await emitirNonce(sesion.idHash, 'gt_generar_egreso');
 
 const CLASE_ESTATUS: Record<string, string> = {
@@ -126,7 +127,6 @@ Astro.response.status = estado;
       <a class="btn btn--primary" href="/gran-tesoreria/tramites/nuevo">Capturar trámite</a>
       <a class="btn btn--ghost" href="/gran-tesoreria/membresias">Membresías</a>
       <a class="btn btn--ghost" href="/gran-tesoreria/tarifas">Tarifas GT</a>
-      <a class="btn btn--ghost" href="/gran-tesoreria/conciliacion">Conciliación</a>
     </div>
   </div>
 
@@ -159,44 +159,33 @@ Astro.response.status = estado;
       </section>
 
       <section class="tarjeta">
-        <h2>Cálculo esperado</h2>
+        <h2>Tarifas vigentes</h2>
         {
-          membresia === null ? (
+          tarifas.length === 0 ? (
             <p class="apagado" style="margin: 0;">
-              Sin membresía capturada. <a href="/gran-tesoreria/membresias">Captura la primera</a>
-              {' '}para poder conciliar.
-            </p>
-          ) : esperado.length === 0 ? (
-            <p class="apagado" style="margin: 0;">
-              Sin tarifas GT vigentes. <a href="/gran-tesoreria/tarifas">Captúralas</a> para
-              calcular el esperado.
+              Sin tarifas capturadas. <a href="/gran-tesoreria/tarifas">Captúralas</a> desde la
+              Ley de Ingresos de la Gran Logia.
             </p>
           ) : (
             <>
-              <table class="tabla">
-                <tbody>
-                  {esperado.map((e) => (
-                    <tr>
-                      <th scope="row">
-                        {e.concepto === 'capita'
-                          ? `Cápitas (${e.cantidad} hermanos)`
-                          : (e.descripcion ?? e.concepto)}
-                      </th>
-                      <td class="num">{formatoMXN(e.subtotal_centavos)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td>Total esperado</td>
-                    <td class="num">{formatoMXN(totalEsperado)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+              <p style="margin: 0;">
+                {capita ? (
+                  <>
+                    Cápita: <strong>{formatoMXN(capita.monto_centavos)}</strong>{' '}
+                    {capita.unidad ?? ''}, desde el {formatoFechaCorta(capita.vigencia_desde)}.
+                  </>
+                ) : (
+                  'Sin tarifa de cápita vigente.'
+                )}
+              </p>
+              <p class="apagado" style="font-size: 0.85rem; margin: 0.5rem 0 0;">
+                {tarifas.length} tarifas en{' '}
+                {[...new Set(tarifas.map((t) => NOMBRE_GRUPO_TARIFA_GT[t.grupo].toLowerCase()))].join(', ')}.
+                {ley && <> {ley}.</>}{' '}
+                <a href="/gran-tesoreria/tarifas">Ver todas</a>
+              </p>
               <p class="apagado" style="font-size: 0.78rem; margin: 0.5rem 0 0;">
-                Con la membresía del {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}
-                {' '}({membresia.con_capita} generan cápita). El exigible es siempre el que
-                reporte la Gran Tesorería.
+                Son referencia: lo exigible es lo que reporte la Gran Tesorería.
               </p>
             </>
           )
@@ -279,7 +268,6 @@ Astro.response.status = estado;
                   <th scope="col">Tipo</th>
                   <th scope="col">Ampara</th>
                   <th scope="col" class="num">Reportado</th>
-                  <th scope="col" class="num">Esperado</th>
                   <th scope="col" class="num">Pagado</th>
                   <th scope="col">Estatus</th>
                 </tr>
@@ -297,23 +285,6 @@ Astro.response.status = estado;
                         : `${nombrePeriodoCorto(o.periodo_desde.slice(0, 7))} a ${nombrePeriodoCorto(o.periodo_hasta.slice(0, 7))}`}
                     </td>
                     <td class="num">{formatoMXN(o.monto_reportado_centavos)}</td>
-                    <td class="num">
-                      {o.monto_esperado_centavos !== null ? (
-                        <>
-                          {formatoMXN(o.monto_esperado_centavos)}
-                          {o.monto_esperado_centavos !== o.monto_reportado_centavos && (
-                            <>
-                              {' '}
-                              <span class="insignia insignia--pendiente">
-                                {formatoMXN(Math.abs(o.monto_reportado_centavos - o.monto_esperado_centavos))} dif.
-                              </span>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
                     <td class="num">{formatoMXN(o.pagado_centavos)}</td>
                     <td>
                       <span class:list={['insignia', CLASE_ESTATUS[o.estatus]]}>

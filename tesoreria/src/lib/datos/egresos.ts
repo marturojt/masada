@@ -59,6 +59,8 @@ export interface EgresoFila {
   motivo_cancelacion: string | null;
   notas: string | null;
   firmas: number;
+  /** Folio GTP- si el egreso pagó a la Gran Tesorería y ya se entregó. */
+  pago_gt_folio: string | null;
 }
 
 const COLUMNAS = `e.id, e.folio, e.fecha_solicitud, e.ejercicio_anio, e.concepto_id,
@@ -68,7 +70,9 @@ const COLUMNAS = `e.id, e.folio, e.fecha_solicitud, e.ejercicio_anio, e.concepto
        e.monto_comprobado_centavos, e.monto_devuelto_centavos, e.requiere_comprobacion,
        e.estado, e.fecha_autorizacion::text, e.fecha_entrega, e.fecha_comprobacion,
        e.motivo_rechazo, e.motivo_cancelacion, e.notas,
-       (select count(*)::int from egreso_firma f where f.egreso_id = e.id) as firmas`;
+       (select count(*)::int from egreso_firma f where f.egreso_id = e.id) as firmas,
+       (select p.folio from movimiento m join gt_pago p on p.movimiento_id = m.id
+         where m.egreso_id = e.id and m.tipo = 'egreso') as pago_gt_folio`;
 
 const DESDE = `from egreso e
        join concepto c on c.id = e.concepto_id
@@ -162,13 +166,15 @@ export interface Firma {
   rol_firmante: Rol;
   es_suplencia: boolean;
   motivo_suplencia: string | null;
+  motivo_limpiado: boolean;
   firmado_en: string;
 }
 
 export const firmasDe = (egresoId: number): Promise<Firma[]> =>
   consulta<Firma>(
     `select f.rol_requerido, f.firmado_por, u.nombre as firmante_nombre, f.rol_firmante,
-            f.es_suplencia, f.motivo_suplencia, f.firmado_en::text
+            f.es_suplencia, f.motivo_suplencia,
+            (f.motivo_limpiado_por is not null) as motivo_limpiado, f.firmado_en::text
        from egreso_firma f
        join usuario u on u.id = f.firmado_por
       where f.egreso_id = $1
@@ -368,4 +374,45 @@ export const resumenEgresos = (
       group by estado
       order by estado`,
     [anio],
+  );
+
+/** Cada beneficiario como se escribió, con cuántos egresos lo usan. */
+export const beneficiariosUsados = (): Promise<{ beneficiario: string; egresos: number }[]> =>
+  consulta(
+    `select beneficiario, count(*)::int as egresos
+       from egreso
+      group by beneficiario
+      order by lower(beneficiario), beneficiario`,
+  );
+
+export interface ObligacionSinEgreso {
+  id: number;
+  folio: string;
+  tipo: string;
+  fecha_documento: string;
+  hermano_nombre: string | null;
+  tramite_descripcion: string | null;
+  saldo_centavos: number;
+}
+
+/**
+ * Lo que la Gran Tesorería ya cobró y todavía no tiene egreso en trámite: aún
+ * no ha salido dinero, pero va a salir. Se muestra en Egresos para que nada
+ * se quede fuera de la vista.
+ */
+export const obligacionesSinEgreso = (): Promise<ObligacionSinEgreso[]> =>
+  consulta<ObligacionSinEgreso>(
+    `select o.id, o.folio, o.tipo, o.fecha_documento::text,
+            h.nombre_completo as hermano_nombre, o.tramite_descripcion,
+            (o.monto_reportado_centavos
+              - coalesce((select sum(a.monto_centavos) from gt_pago_aplicacion a
+                           where a.obligacion_id = o.id), 0))::int as saldo_centavos
+       from gt_obligacion o
+       left join hermano h on h.id = o.hermano_id
+      where o.estatus in ('pendiente_pago', 'parcialmente_pagada')
+        and not exists (
+          select 1 from egreso_gt_obligacion l
+            join egreso e on e.id = l.egreso_id
+           where l.obligacion_id = o.id and e.estado in ('registrado', 'autorizado'))
+      order by o.fecha_documento, o.id`,
   );

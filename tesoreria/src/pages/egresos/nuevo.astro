@@ -14,6 +14,7 @@ import Selector from '@componentes/Selector.astro';
 import { crearEgreso } from '@lib/casos/egresos';
 import { emitirNonce } from '@lib/csrf';
 import { listarConceptos } from '@lib/datos/conceptos';
+import { beneficiariosUsados } from '@lib/datos/egresos';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
 import { hermanosActivos } from '@lib/datos/hermanos';
 import { ErrorDeNegocio } from '@lib/errores';
@@ -30,6 +31,7 @@ const todos = await listarConceptos({ naturaleza: 'egreso', soloSeleccionables: 
 /* La Gran Tesorería va por su propia pantalla. */
 const conceptos = todos.filter((c) => c.tipo_especial !== 'gran_tesoreria');
 const hermanos = await hermanosActivos();
+const beneficiarios = await beneficiariosUsados();
 
 const ETIQUETAS: Record<string, string> = {
   fecha_solicitud: 'Fecha',
@@ -131,9 +133,13 @@ Astro.response.status = estado;
       etiqueta={ETIQUETAS.beneficiario!}
       valor={valores.beneficiario}
       error={errores.beneficiario}
-      ayuda="A quién se le paga: proveedor, hermano, Gran Logia."
+      ayuda="A quién se le paga: proveedor, hermano, Gran Logia. Si ya existe, elígelo de la lista para no escribirlo de otra manera."
+      lista="beneficiarios-usados"
       requerido
     />
+    <datalist id="beneficiarios-usados">
+      {beneficiarios.map((b) => <option value={b.beneficiario} />)}
+    </datalist>
 
     <Campo
       nombre="descripcion"

@@ -1,11 +1,16 @@
 ---
-/* Egresos del ejercicio, con lo pendiente de firmar y de comprobar arriba. */
+/*
+ * Egresos del ejercicio, con lo pendiente de firmar y de comprobar arriba. Los
+ * pagos a la Gran Tesorería son egresos como cualquier otro y aparecen aquí; lo
+ * que GT ya cobró y aún no tiene egreso se muestra aparte, para que nada se pierda.
+ */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import {
   CLASE_ESTADO_EGRESO,
   NOMBRE_ESTADO_EGRESO,
   listarEgresos,
+  obligacionesSinEgreso,
   pendientesDeComprobar,
   resumenEgresos,
   type EstadoEgreso,
@@ -13,7 +18,8 @@ import {
 import { formatoMXN } from '@lib/dinero';
 import { formatoFechaCorta } from '@lib/fechas';
 import { avisoDe } from '@lib/formulario';
-import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_TIPO_OBLIGACION } from '@lib/datos/gt';
+import { esVM, requerirSesion } from '@lib/sesion';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -37,10 +43,11 @@ const estado = ESTADOS.includes(estadoCrudo as EstadoEgreso)
   ? (estadoCrudo as EstadoEgreso)
   : undefined;
 
-const [egresos, resumen, porComprobar] = await Promise.all([
+const [egresos, resumen, porComprobar, sinEgreso] = await Promise.all([
   listarEgresos(estado ? { anio, estado } : { anio }),
   resumenEgresos(anio),
   pendientesDeComprobar(),
+  obligacionesSinEgreso(),
 ]);
 
 const salido = resumen
@@ -75,6 +82,7 @@ const conFiltro = (valor?: string): string => {
     <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
       <a class="btn btn--primary" href="/egresos/nuevo">Nuevo egreso</a>
       <a class="btn btn--ghost" href="/gran-tesoreria">Gran Tesorería</a>
+      {esVM(sesion) && <a class="btn btn--ghost" href="/egresos/beneficiarios">Beneficiarios</a>}
     </div>
   </div>
 
@@ -120,6 +128,50 @@ const conFiltro = (valor?: string): string => {
     )
   }
 
+  {
+    sinEgreso.length > 0 && (
+      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+        <h2>Gran Tesorería, falta generar su egreso</h2>
+        <p class="apagado" style="font-size: 0.85rem;">
+          Obligaciones y trámites que la Gran Tesorería ya cobró y que todavía no tienen
+          egreso. No ha salido dinero: el egreso se genera en Gran Tesorería, eligiendo
+          las obligaciones, y después lleva sus dos firmas y su entrega como cualquier otro.
+        </p>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Folio GT</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Qué es</th>
+                <th scope="col" class="num">Por pagar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sinEgreso.map((o) => (
+                <tr>
+                  <td>
+                    <a href={`/gran-tesoreria/obligaciones/${o.id}`}>{o.folio}</a>
+                  </td>
+                  <td>{formatoFechaCorta(o.fecha_documento)}</td>
+                  <td>
+                    {NOMBRE_TIPO_OBLIGACION[o.tipo as keyof typeof NOMBRE_TIPO_OBLIGACION] ?? o.tipo}
+                    {o.tramite_descripcion && <> · {o.tramite_descripcion}</>}
+                    {o.hermano_nombre && <> · {o.hermano_nombre}</>}
+                  </td>
+                  <td class="num">{formatoMXN(o.saldo_centavos)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p style="margin: 0.75rem 0 0;">
+          <a class="btn btn--ghost" href="/gran-tesoreria">Generar el egreso en Gran Tesorería</a>
+        </p>
+      </section>
+    )
+  }
+
   <p class="apagado" style="font-size: 0.85rem;">
     Filtrar:{' '}
     <a href={conFiltro()} style={!estado ? 'color: var(--gold); font-weight: 600;' : undefined}>
@@ -154,7 +206,8 @@ const conFiltro = (valor?: string): string => {
           <thead>
             <tr>
               <th scope="col">Folio</th>
-              <th scope="col">Fecha</th>
+              <th scope="col">Solicitado</th>
+              <th scope="col">Entregado</th>
               <th scope="col">Concepto</th>
               <th scope="col">Beneficiario</th>
               <th scope="col" class="num">Monto</th>
@@ -169,7 +222,16 @@ const conFiltro = (valor?: string): string => {
                   <a href={`/egresos/${e.id}`}>{e.folio}</a>
                 </td>
                 <td>{formatoFechaCorta(e.fecha_solicitud)}</td>
-                <td>{e.concepto_nombre}</td>
+                <td>{e.fecha_entrega ? formatoFechaCorta(e.fecha_entrega) : '—'}</td>
+                <td>
+                  {e.concepto_nombre}
+                  {e.pago_gt_folio && (
+                    <>
+                      {' '}
+                      <span class="insignia">{e.pago_gt_folio}</span>
+                    </>
+                  )}
+                </td>
                 <td>{e.beneficiario}</td>
                 <td class="num">
                   {formatoMXN(

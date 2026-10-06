@@ -144,10 +144,6 @@ const [nonceDetalle, nonceGenerar, nonceCancelar] = await Promise.all([
 
 const viva = obligacion.estatus === 'pendiente_pago' || obligacion.estatus === 'parcialmente_pagada';
 const totalDetalle = detalle.reduce((s, d) => s + d.subtotal_centavos, 0);
-const diferencia =
-  obligacion.monto_esperado_centavos != null
-    ? obligacion.monto_reportado_centavos - obligacion.monto_esperado_centavos
-    : null;
 
 const NOMBRE_CONCEPTO_DETALLE: Record<string, string> = {
   capita: 'Cápita',
@@ -235,21 +231,6 @@ Astro.response.status = estado;
             <th>Monto reportado por GT</th>
             <td class="num">{formatoMXN(obligacion.monto_reportado_centavos)}</td>
           </tr>
-          {
-            obligacion.monto_esperado_centavos != null && (
-              <tr>
-                <th>Esperado interno</th>
-                <td class="num">
-                  {formatoMXN(obligacion.monto_esperado_centavos)}
-                  {diferencia !== null && diferencia !== 0 && (
-                    <span class="insignia insignia--pendiente" style="margin-left: 0.5rem;">
-                      {diferencia > 0 ? '+' : ''}{formatoMXN(diferencia)} vs esperado
-                    </span>
-                  )}
-                </td>
-              </tr>
-            )
-          }
           <tr>
             <th>Pagado</th>
             <td class="num">{formatoMXN(obligacion.pagado_centavos)}</td>

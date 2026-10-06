@@ -1,8 +1,9 @@
 ---
 /*
- * Tarifas de la Gran Tesorería: lo que ella cobra por hermano (cápita, templo,
- * locker). Sirven para el cálculo esperado; lo exigible sigue siendo lo que GT
- * reporta. Solo aplican hacia adelante, nunca en retroactivo.
+ * Tarifas de la Gran Tesorería, tal como las fija su Ley de Ingresos: cápitas,
+ * movimientos, regularización, talleres, lockers, auditorio y reconocimientos,
+ * en la columna de las logias del edificio sede. Son referencia para capturar
+ * lo que GT cobra; lo exigible sigue siendo lo que GT reporta.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
@@ -11,7 +12,13 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { capturarTarifaGT } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
-import { NOMBRE_CONCEPTO_GT, historialTarifasGT, tarifasGTVigentes } from '@lib/datos/gt';
+import {
+  NOMBRE_GRUPO_TARIFA_GT,
+  historialTarifasGT,
+  tarifasGTVigentes,
+  type GrupoTarifaGT,
+  type TarifaGT,
+} from '@lib/datos/gt';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaTarifaGT } from '@lib/esquemas/gt';
@@ -24,14 +31,20 @@ const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 
 const ETIQUETAS: Record<string, string> = {
-  concepto: 'Concepto',
-  descripcion: 'Descripción',
-  monto: 'Monto mensual por hermano',
+  clave: 'Tarifa',
+  grupo: 'Grupo',
+  nombre: 'Nombre',
+  unidad: 'Unidad',
+  monto: 'Monto',
   vigente_desde: 'Vigente desde',
+  fundamento: 'Fundamento',
 };
 
 let errores: Record<string, string> = {};
-let valores: Record<string, string> = { vigente_desde: hoyISO() };
+let valores: Record<string, string> = {
+  vigente_desde: hoyISO(),
+  clave: Astro.url.searchParams.get('clave') ?? '',
+};
 let estado = 200;
 
 if (Astro.request.method === 'POST') {
@@ -63,100 +76,158 @@ if (Astro.request.method === 'POST') {
 const [vigentes, historial] = await Promise.all([tarifasGTVigentes(), historialTarifasGT()]);
 const nonce = await emitirNonce(sesion.idHash, 'gt_tarifa');
 
-const opcionesConcepto: Opcion[] = Object.entries(NOMBRE_CONCEPTO_GT).map(([valor, texto]) => ({
-  valor,
-  texto,
+/* Las vigentes agrupadas como en la ley, en su orden. */
+const grupos = (Object.keys(NOMBRE_GRUPO_TARIFA_GT) as GrupoTarifaGT[])
+  .map((g) => ({ grupo: g, tarifas: vigentes.filter((t) => t.grupo === g) }))
+  .filter((g) => g.tarifas.length > 0);
+
+const fundamentos = [...new Set(vigentes.map((t) => t.fundamento).filter(Boolean))];
+
+/* Cada clave una vez, con su nombre más reciente, para elegir a cuál darle monto nuevo. */
+const claves = [...new Map(historial.map((t) => [t.clave, t])).values()];
+const opcionesClave: Opcion[] = claves.map((t: TarifaGT) => ({
+  valor: t.clave,
+  texto: t.nombre,
+  grupo: NOMBRE_GRUPO_TARIFA_GT[t.grupo],
 }));
+const opcionesGrupo: Opcion[] = (Object.entries(NOMBRE_GRUPO_TARIFA_GT) as [string, string][]).map(
+  ([valor, texto]) => ({ valor, texto }),
+);
 
 Astro.response.status = estado;
 ---
 
-<LayoutAdmin titulo="Tarifas GT" sesion={sesion} angosto>
+<LayoutAdmin titulo="Tarifas GT" sesion={sesion}>
   <div class="barra__contexto" slot="contexto">
     <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
+    <span>Logias en edificio sede</span>
   </div>
 
   {aviso && <div class="aviso">{aviso}</div>}
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Tarifas de la Gran Tesorería</h1>
-  <p class="apagado">
-    Con estas tarifas y la membresía vigente se arma el cálculo esperado. Una tarifa
-    nueva aplica de su fecha en adelante; las anteriores no se tocan, para que los
-    cálculos viejos sigan cuadrando.
+  <p class="apagado" style="max-width: 46rem;">
+    Las que fija la Ley de Ingresos de la Gran Logia para las logias del edificio sede.
+    Son referencia para capturar lo que la Gran Tesorería cobra: lo exigible es siempre
+    lo que ella reporta. Cuando una ley nueva cambia un monto, se captura con su fecha y
+    su fundamento, y el anterior queda en el historial.
+    {fundamentos.length > 0 && <> Vigentes según: {fundamentos.join('; ')}.</>}
   </p>
 
   <div class="pila" style="margin-top: 1.25rem;">
-    <section class="tarjeta">
-      <h2>Vigentes hoy</h2>
-      {
-        vigentes.length === 0 ? (
-          <p class="apagado">Sin tarifas capturadas. El cálculo esperado quedará vacío hasta capturarlas.</p>
-        ) : (
-          <table class="tabla">
-            <thead>
-              <tr>
-                <th>Concepto</th>
-                <th class="num">Monto mensual</th>
-                <th>Vigente desde</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vigentes.map((t) => (
+    {
+      grupos.length === 0 ? (
+        <section class="tarjeta">
+          <p class="apagado" style="margin: 0;">Sin tarifas vigentes capturadas.</p>
+        </section>
+      ) : (
+        <section class="tarjeta">
+          <h2>Vigentes hoy</h2>
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
                 <tr>
-                  <td>
-                    {NOMBRE_CONCEPTO_GT[t.concepto]}
-                    {t.descripcion && <span class="apagado"> · {t.descripcion}</span>}
-                  </td>
-                  <td class="num">{formatoMXN(t.monto_centavos)}</td>
-                  <td>{formatoFechaCorta(t.vigencia_desde)}</td>
+                  <th scope="col">Concepto</th>
+                  <th scope="col">Unidad</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Desde</th>
                 </tr>
+              </thead>
+              {grupos.map((g) => (
+                <tbody>
+                  <tr>
+                    <th scope="colgroup" colspan="4" style="padding-top: 0.9rem;">
+                      {NOMBRE_GRUPO_TARIFA_GT[g.grupo]}
+                    </th>
+                  </tr>
+                  {g.tarifas.map((t) => (
+                    <tr>
+                      <td>
+                        <a href={`/gran-tesoreria/tarifas?clave=${t.clave}#capturar`}>{t.nombre}</a>
+                      </td>
+                      <td class="apagado">{t.unidad ?? ''}</td>
+                      <td class="num">{formatoMXN(t.monto_centavos)}</td>
+                      <td>{formatoFechaCorta(t.vigencia_desde)}</td>
+                    </tr>
+                  ))}
+                </tbody>
               ))}
-            </tbody>
-          </table>
-        )
-      }
-    </section>
+            </table>
+          </div>
+        </section>
+      )
+    }
 
-    <section class="tarjeta">
-      <h2>Capturar tarifa</h2>
-      <Formulario csrf={sesion.csrfToken} nonce={nonce}>
-        <Selector
-          nombre="concepto"
-          etiqueta={ETIQUETAS.concepto!}
-          opciones={opcionesConcepto}
-          valor={valores.concepto}
-          error={errores.concepto}
-          requerido
-        />
-        <Campo
-          nombre="descripcion"
-          etiqueta={ETIQUETAS.descripcion!}
-          valor={valores.descripcion}
-          error={errores.descripcion}
-          ayuda="Obligatoria solo si el concepto es Otro, para saber qué es."
-        />
-        <Campo
-          nombre="monto"
-          etiqueta={ETIQUETAS.monto!}
-          valor={valores.monto}
-          error={errores.monto}
-          modoTeclado="decimal"
-          monto
-          requerido
-        />
-        <Campo
-          nombre="vigente_desde"
-          etiqueta={ETIQUETAS.vigente_desde!}
-          tipo="date"
-          valor={valores.vigente_desde}
-          error={errores.vigente_desde}
-          min={hoyISO()}
-          requerido
-          ayuda="Hoy o una fecha futura. Las tarifas no aplican en retroactivo."
-        />
-        <button class="btn btn--primary" type="submit">Capturar tarifa</button>
-      </Formulario>
+    <section class="tarjeta" id="capturar">
+      <h2>Capturar monto</h2>
+      <p class="apagado" style="font-size: 0.85rem;">
+        Para cambiar el monto de una tarifa, elígela. Para una que no existe, deja la tarifa
+        en blanco y llena grupo y nombre. Una vigencia que ya empezó pide su fundamento,
+        por ejemplo el decreto de la ley.
+      </p>
+      <div style="max-width: 28rem;">
+        <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+          <Selector
+            nombre="clave"
+            etiqueta={ETIQUETAS.clave!}
+            opciones={opcionesClave}
+            valor={valores.clave}
+            error={errores.clave}
+            vacio="Tarifa nueva"
+          />
+          <Selector
+            nombre="grupo"
+            etiqueta={ETIQUETAS.grupo!}
+            opciones={opcionesGrupo}
+            valor={valores.grupo}
+            error={errores.grupo}
+            vacio="Solo para una tarifa nueva"
+          />
+          <Campo
+            nombre="nombre"
+            etiqueta={ETIQUETAS.nombre!}
+            valor={valores.nombre}
+            error={errores.nombre}
+            ayuda="Solo para una tarifa nueva."
+          />
+          <Campo
+            nombre="unidad"
+            etiqueta={ETIQUETAS.unidad!}
+            valor={valores.unidad}
+            error={errores.unidad}
+            marcador="por hermano, por mes"
+            ayuda="Opcional. En blanco conserva la de la tarifa elegida."
+          />
+          <Campo
+            nombre="monto"
+            etiqueta={ETIQUETAS.monto!}
+            valor={valores.monto}
+            error={errores.monto}
+            modoTeclado="decimal"
+            monto
+            requerido
+          />
+          <Campo
+            nombre="vigente_desde"
+            etiqueta={ETIQUETAS.vigente_desde!}
+            tipo="date"
+            valor={valores.vigente_desde}
+            error={errores.vigente_desde}
+            requerido
+          />
+          <Campo
+            nombre="fundamento"
+            etiqueta={ETIQUETAS.fundamento!}
+            valor={valores.fundamento}
+            error={errores.fundamento}
+            marcador="Ley de Ingresos 2027-2028, Decreto ..."
+          />
+          <div class="formulario__acciones">
+            <button class="btn btn--primary" type="submit">Capturar</button>
+          </div>
+        </Formulario>
+      </div>
     </section>
 
     <section class="tarjeta">
@@ -169,24 +240,26 @@ Astro.response.status = estado;
             <table class="tabla">
               <thead>
                 <tr>
-                  <th>Concepto</th>
-                  <th class="num">Monto</th>
-                  <th>Desde</th>
-                  <th>Hasta</th>
-                  <th>Capturó</th>
+                  <th scope="col">Concepto</th>
+                  <th scope="col" class="num">Monto</th>
+                  <th scope="col">Desde</th>
+                  <th scope="col">Hasta</th>
+                  <th scope="col">Fundamento</th>
+                  <th scope="col">Capturó</th>
                 </tr>
               </thead>
               <tbody>
                 {historial.map((t) => (
                   <tr>
                     <td>
-                      {NOMBRE_CONCEPTO_GT[t.concepto]}
-                      {t.descripcion && <span class="apagado"> · {t.descripcion}</span>}
+                      {t.nombre}
+                      <span class="apagado"> · {NOMBRE_GRUPO_TARIFA_GT[t.grupo]}</span>
                     </td>
                     <td class="num">{formatoMXN(t.monto_centavos)}</td>
                     <td>{formatoFechaCorta(t.vigencia_desde)}</td>
-                    <td>{t.vigencia_hasta ? formatoFechaCorta(t.vigencia_hasta) : 'Vigente'}</td>
-                    <td>{t.creado_nombre ?? ''}</td>
+                    <td>{t.hasta ? formatoFechaCorta(t.hasta) : 'Vigente'}</td>
+                    <td class="apagado">{t.fundamento ?? ''}</td>
+                    <td class="apagado">{t.creado_nombre ?? 'Carga de la ley'}</td>
                   </tr>
                 ))}
               </tbody>
