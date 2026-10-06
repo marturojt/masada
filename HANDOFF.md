@@ -1,6 +1,6 @@
 # Handoff — R∴L∴S∴ Masada No. 324
 
-Documento para retomar el trabajo. Última actualización: **5 de octubre de 2026**.
+Documento para retomar el trabajo. Última actualización: **6 de octubre de 2026**.
 
 > Lee primero el `README.md` de la raíz para el sitio público y
 > `tesoreria/README.md` para el sistema de tesorería. Este documento cubre el
@@ -15,7 +15,7 @@ El repositorio tiene dos proyectos:
 | Proyecto | Estado |
 |---|---|
 | Sitio público (raíz) | En producción, sin cambios de contenido desde el commit `2df2824` |
-| Tesorería (`tesoreria/`) | **En producción: https://tesoreria.masada324.org**. El código va en `main` hasta `ce831cc`; ese último commit (visor de comprobantes y tablero con gráficas) está **pendiente de desplegar**: Arturo tiene el mensaje listo para el agente de despliegue, y ese despliegue exige `npm ci` por la dependencia nueva `heic-convert` |
+| Tesorería (`tesoreria/`) | **En producción: https://tesoreria.masada324.org**. Producción coincide con `main` en `bea099e`, última migración 026, desplegada el 5 de octubre de 2026 con respaldo previo (`tesoreria-20261005-1846.dump`) |
 
 ### Sitio público
 
@@ -49,15 +49,22 @@ del cliente).
 - **Egresos**: registrado, autorizado con dos firmas, entregado y comprobado.
   El V∴M∴ puede suplir la firma del tesorero dejando constancia. Comprobante de
   imagen obligatorio en los pagados. Gastos por comprobar con recibos y devolución.
-- **Gran Tesorería**: dominio propio. Membresías capturadas como llegan y ligadas
-  al padrón, tarifas GT sin retroactivo, obligaciones con lo que GT reporta (GT- y
+  La lista muestra fecha de entrega, el folio GTP- de los pagos a GT y las
+  obligaciones GT que aún no tienen egreso.
+- **Corrección de captura** (migración 025, nivel V∴M∴): desde la ficha del
+  egreso se corrigen concepto, beneficiario, descripción y fechas, nunca montos;
+  la fecha de entrega arrastra al movimiento y al pago GTP-. El motivo de una
+  suplencia se edita o se limpia con constancia. Los beneficiarios escritos de
+  dos maneras se unifican en Egresos → Beneficiarios. Todo en bitácora con
+  antes y después.
+- **Gran Tesorería**: dominio propio. Obligaciones con lo que GT reporta (GT- y
   REG-), pago que nace de la obligación, viaja en un egreso con dos firmas y se
-  materializa al entregar (GTP-), estado a plomo derivado y conciliación de los
-  tres padrones (interno, Gran Secretaría, Gran Tesorería), que informa y no
-  bloquea. Lo interno y lo de GT están desacoplados: nada se reserva solo.
-  (Pendiente de desplegar, migración 026: la conciliación de padrones se retira,
-  las membresías quedan como respaldo de consulta y las tarifas pasan a ser el
-  catálogo de la Ley de Ingresos 2026-2027, ya cargado.)
+  materializa al entregar (GTP-), estado a plomo derivado. El egreso generado
+  nace con la fecha del documento GT. Las tarifas son el catálogo de la Ley de
+  Ingresos (migración 026, Ley 2026-2027 cargada, edificio sede), como
+  referencia y sin cálculo esperado. Las membresías son respaldo de consulta,
+  sin liga con el padrón. La conciliación de padrones se retiró: es asunto de
+  la secretaría. Lo interno y lo de GT están desacoplados: nada se reserva solo.
 - **Aportaciones**: la monetaria es ingreso normal con recibo; la de especie deja
   constancia imprimible (APO-) y jamás toca el libro de caja.
 - **Registros externos por hermano**: en la ficha, lo que la Gran Secretaría y la
@@ -108,10 +115,10 @@ del cliente).
   con huella, y hoja imprimible.
 - **Exportación** del cuadro logial al sitio público, con solo nombre, grado y cargo.
 
-Verificado de punta a punta: 61 pruebas automatizadas en verde (`npm run prueba`)
-y un recorrido completo por HTTP en una base aparte (obligación → egreso con dos
-firmas → entrega → pago GT aplicado; aportaciones con recibo y constancia;
-conciliación). El respaldo se probó restaurándolo en una base aparte.
+Verificado: 82 pruebas automatizadas en verde (`npm run prueba`), en local y en
+el servidor antes de migrar, y un recorrido completo por HTTP en una base aparte
+(obligación → egreso con dos firmas → entrega → pago GT aplicado; aportaciones
+con recibo y constancia). El respaldo se probó restaurándolo en una base aparte.
 
 ### Decisiones que quedan a ratificación del V∴M∴
 
@@ -153,6 +160,18 @@ operativos, todos de interfaz:
    situación no había ninguno cerrado).
 4. **Confirmar el saldo de apertura** de 2026 en Herramientas, si aún está en
    cero.
+5. **Revisar lo desplegado el 5 de octubre con sesión** (el agente no lo probó
+   con sesión): tablero, Egresos, Egresos → Beneficiarios, Tarifas GT, y que
+   `/gran-tesoreria/conciliacion` dé "No encontrado".
+6. **La tarifa GT que ya existía**: antes de la 026 había una sola fila en
+   `gt_tarifa`. Está en el historial de Tarifas GT, sin fundamento. Si era la
+   cápita, ya la sustituye la ley; si era templo, locker u otro, sigue vigente
+   junto a las de la ley y hay que decidir si se cierra.
+7. **Corregir las fechas de los egresos de GT** capturados con la fecha del día
+   de captura: desde su ficha, "Corregir la captura". Unificar los dos nombres
+   de la Gran Logia en Beneficiarios.
+8. **Tarifas anteriores a la Ley 2026-2027**, si se quieren en el historial:
+   Arturo pasará los montos.
 
 ### Nota sobre la base local
 
@@ -165,20 +184,14 @@ queda como ambiente de desarrollo.
 
 ## Pendientes de código
 
-- [ ] **Desplegar `ce831cc`** (visor de comprobantes + tablero con gráficas):
-      Arturo tiene el mensaje para el agente. Exige `npm ci` por la dependencia
-      nueva `heic-convert`; sin migraciones. Producción quedó en `63dd376`.
-- [ ] **Desplegar la corrección de captura de egresos** (migración 025): corregir
-      concepto, beneficiario, descripción, fechas y motivo de suplencia desde la
-      ficha; unificar beneficiarios; obligaciones GT sin egreso visibles en
-      Egresos. Exige `npm run migrar` en el despliegue. Es una puerta abierta a
-      propósito para el año de captura en paralelo; cerrarla después (por
-      ejemplo, solo en meses sin corte, o solo el primer ejercicio).
-- [ ] **Desplegar la Ley de Ingresos GT** (migración 026): tarifas por clave con
-      la Ley 2026-2027 cargada (edificio sede), membresías solo de consulta, sin
-      conciliación ni cálculo esperado. Exige `npm run migrar`. Si producción ya
-      tenía tarifas capturadas (templo, locker, otro), quedan con clave propia y
-      siguen vigentes junto a las de la ley: revisarlas en Tarifas GT.
+- [x] **Desplegar `ce831cc`, la corrección de captura (025) y la Ley de
+      Ingresos GT (026)**. Hecho el 5 de octubre de 2026: producción en
+      `bea099e`, migración 026, 82/82 pruebas en el servidor, respaldo previo.
+- [ ] **Cerrar la puerta de la corrección de captura** cuando termine el año de
+      captura en paralelo (por ejemplo, solo en meses sin corte, o solo el
+      primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.
+- [ ] **Comentarios de Arturo sobre las pestañas**: se atendieron el 6 (egresos)
+      y el 7 (Gran Tesorería). Seguir con los que siguen.
 - [ ] (Backlog) **Corregir periodos de una obligación GT desde su ficha** (solo
       periodos, nunca montos, con motivo): hoy esa corrección requirió
       intervención por servidor y el guardián de la base ya la permite.
