@@ -1,6 +1,6 @@
 # Handoff — R∴L∴S∴ Masada No. 324
 
-Documento para retomar el trabajo. Última actualización: **24 de agosto de 2026**.
+Documento para retomar el trabajo. Última actualización: **5 de octubre de 2026**.
 
 > Lee primero el `README.md` de la raíz para el sitio público y
 > `tesoreria/README.md` para el sistema de tesorería. Este documento cubre el
@@ -15,7 +15,7 @@ El repositorio tiene dos proyectos:
 | Proyecto | Estado |
 |---|---|
 | Sitio público (raíz) | En producción, sin cambios de contenido desde el commit `2df2824` |
-| Tesorería (`tesoreria/`) | **En producción: https://tesoreria.masada324.org** desde el 24 de agosto de 2026 |
+| Tesorería (`tesoreria/`) | **En producción: https://tesoreria.masada324.org**. El código va en `main` hasta `ce831cc`; ese último commit (visor de comprobantes y tablero con gráficas) está **pendiente de desplegar**: Arturo tiene el mensaje listo para el agente de despliegue, y ese despliegue exige `npm ci` por la dependencia nueva `heic-convert` |
 
 ### Sitio público
 
@@ -69,6 +69,30 @@ del cliente).
   nivel V∴M∴. Los usuarios se desactivan, nunca se borran. En 2026 la cuenta del
   V∴M∴ (Arturo) cubre ambos papeles; en el cambio de año se le cambia el rol a
   super_admin y el V∴M∴ entrante recibe el suyo, en ese orden.
+- **Trámites GT con su pantalla** (iniciación, afiliación, aumento, exaltación u
+  otro trámite administrativo con nombre, como una carta de regularidad): una
+  fecha de solicitud, un hermano, lo cobrado; no amparan meses ni cuentan para el
+  a plomo. Las dos promociones reales son opciones explícitas (5,000 un pago,
+  5,500 dos pagos, tarifas del ejercicio) y una promoción con pagos se puede
+  **convertir a mensual** (lo pagado la salda, el resto se condona, nacen
+  mensualidades desde el mes acordado); la reasignación normal con promoción
+  pagada está bloqueada en la base.
+- **Adeudos honestos**: lo que se muestra es lo VENCIDO (meses anteriores al mes
+  en curso); lo que falta del año va aparte como "por vencer". Los ajustes tienen
+  tope acumulado en la base, candado antirrepetición de 30 minutos, y un
+  movimiento corregido muestra el original tachado, el neto en negritas y la
+  insignia Corregido; el recibo ampara el neto.
+- **Panel de Pendientes**: todo lo capturado sin su documento, con adjuntar o
+  cierre "sin evidencia formal" con motivo en bitácora.
+- **Tablero tipo dashboard**: indicadores (caja, cápitas vencidas, semáforo GT,
+  evidencias, cortes) y gráficas SVG del servidor (flujo mensual, saldo al
+  cierre, avance de cápitas), sin JavaScript.
+- **Visor de comprobantes**: imágenes en overlay CSS sin JavaScript y HEIC
+  convertido a JPEG al vuelo con caché (.visor.jpg); el original nunca se toca.
+- **Cápitas con historia**: la modalidad de cada hermano explica su caso al
+  pasar el cursor (promoción con quién la autorizó, el plan convertido de Miller
+  con su insignia Plan ajustado), y un mes vencido con pago parcial se pinta
+  ámbar, no rojo.
 - **Carga masiva por CSV** (Herramientas): plantilla con el padrón actual para
   actualizar o dar de alta hermanos en lote, y captura de ingresos y egresos
   desde archivo, con ensayo previo y todo o nada. Las cápitas aplican con el
@@ -106,39 +130,23 @@ conviene confirmar o corregir:
 
 ---
 
-## Lo que falta para empezar a usarla en producción
+## Estado de la operación (octubre 2026)
 
-El sistema ya corre en https://tesoreria.masada324.org con el padrón importado
-del cuadro publicado (12 hermanos, 9 cargos, 4 past masters). Lo que sigue lo
-hacen los usuarios en la interfaz, no requiere código:
+Arturo ya capturó el año en producción: padrón completo (28 hermanos), cápitas
+con sus modalidades (incluidos los casos especiales: promociones de uno y dos
+pagos, y la conversión de Miller), ingresos con recibos, obligaciones y pagos a
+la Gran Tesorería (al corriente en lo ordinario), y los dos ajustes del
+incidente de captura, ya corregidos y con recibos en neto. Pendientes
+operativos, todos de interfaz:
 
-1. **Cambiar la contraseña del V∴M∴.** La cuenta `arturo.jimenez@grupocsi.com`
-   se sembró con una contraseña temporal generada en el servidor; hay que
-   cambiarla al primer acceso (en Herramientas, o con `npm run contrasena` en el
-   VPS).
-2. **Crear la cuenta del Tesorero.** Quedó pendiente por falta de su correo.
-   En el VPS: `npm run sembrar -- --agregar` (con el Node 22 de `/opt`; el
-   comando exacto está en `serverAdmin/tesoreria-masada-despliegue.md`).
-3. **Capturar el saldo de apertura de 2026** en Herramientas, separado en banco
-   y efectivo. De ahí se encadenan todos los saldos de los cortes.
-4. **Completar el padrón**: los 12 hermanos vienen con nombre, grado y cargo.
-   Falta la fecha real de ingreso de cada uno (quedaron como regularización al
-   31 de diciembre de 2025, con una nota que lo dice) y las fechas de iniciación
-   y el contacto.
-5. **Asignar la modalidad de cápita** de cada hermano para 2026.
-6. **Capturar lo que va del año**: ingresos, egresos, obligaciones y pagos de la
-   Gran Tesorería, con sus comprobantes. Para el grueso conviene la **carga
-   masiva por CSV** de Herramientas: se descarga la plantilla, se llena en Excel
-   y se ensaya antes de aplicar; las evidencias se adjuntan después a mano.
-7. **Cerrar los meses** ya terminados, en orden.
-
-### Datos que el sistema todavía no conoce
-
-- Saldo de apertura de 2026.
-- Montos de las cuotas de grado que el candidato paga a la logia (iniciación,
-  aumento de salario, exaltación). Se capturan al registrar cada ingreso.
-- Fechas de iniciación y afiliación de cada hermano, y su contacto.
-- Tarifas de la Gran Tesorería y su membresía vigente, para el cálculo esperado.
+1. **Crear la cuenta del Tesorero** (ya se puede sin SSH: Herramientas →
+   Administrar usuarios). El único usuario sigue siendo el V∴M∴.
+2. **Atender el panel de Pendientes**: los comprobantes que falten se adjuntan,
+   y lo que no tenga respaldo se cierra como "sin evidencia formal" con motivo.
+3. **Cerrar los cortes** de los meses terminados, en orden (al último corte de
+   situación no había ninguno cerrado).
+4. **Confirmar el saldo de apertura** de 2026 en Herramientas, si aún está en
+   cero.
 
 ### Nota sobre la base local
 
@@ -151,6 +159,12 @@ queda como ambiente de desarrollo.
 
 ## Pendientes de código
 
+- [ ] **Desplegar `ce831cc`** (visor de comprobantes + tablero con gráficas):
+      Arturo tiene el mensaje para el agente. Exige `npm ci` por la dependencia
+      nueva `heic-convert`; sin migraciones. Producción quedó en `63dd376`.
+- [ ] (Backlog) **Corregir periodos de una obligación GT desde su ficha** (solo
+      periodos, nunca montos, con motivo): hoy esa corrección requirió
+      intervención por servidor y el guardián de la base ya la permite.
 - [x] **Desplegar la tesorería** en https://tesoreria.masada324.org. Hecho el
       24 de agosto de 2026. El procedimiento y lo que el despliegue real destapó
       están en `tesoreria/README.md`, sección "Despliegue"; la operación del

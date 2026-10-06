@@ -72,6 +72,7 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 
 | Sección | Para qué |
 |---|---|
+| Tablero | Indicadores y gráficas: caja, flujo mensual, saldo al cierre, avance de cápitas |
 | Hermanos | Padrón, grados, cargos del cuadro, altas y bajas |
 | Cápitas | Modalidad de cada hermano, pagos, quién está al corriente, exenciones |
 | Ingresos | Cuotas de grado del candidato, donativos |
@@ -130,6 +131,13 @@ El adeudo que muestran la matriz, el estado por hermano, la cartera y el estado
 de cuenta es lo **vencido**: los meses anteriores al mes en curso con saldo. Lo
 que falta del año aparece aparte como "por vencer", porque nadie debe los meses
 que no han llegado.
+
+En la matriz y el estado por hermano, la **modalidad cuenta su historia al pasar
+el cursor** (quién autorizó una promoción y con qué motivo, o qué pasó en un plan
+convertido, que además lleva su insignia "Plan ajustado"), y un mes vencido con
+pago parcial se pinta ámbar, no rojo: hay pago, falta parte. Las gráficas del
+tablero son SVG dibujado en el servidor, sin JavaScript, con paleta validada
+para el tema oscuro.
 
 Si un hermano paga de más, el sobrante queda visible como **saldo a favor** con
 tres salidas, ninguna automática: aplicarlo a meses pendientes, devolvérselo como
