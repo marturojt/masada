@@ -1,5 +1,6 @@
 ---
 /* Tabla de movimientos del libro de caja, con total al pie. */
+import VisorImagen from './VisorImagen.astro';
 import type { MovimientoFila } from '@lib/datos/movimientos';
 import { formatoCifra } from '@lib/dinero';
 import { NOMBRE_BOLSA } from '@lib/tipos';
@@ -18,6 +19,8 @@ interface Props {
   conAdjuntar?: boolean;
   /** Ajustes acumulados por movimiento: pinta el neto junto al monto. */
   ajustados?: Map<number, number>;
+  /** Qué archivos son imagen: los abre el visor en vez de la página completa. */
+  imagenes?: Map<number, boolean>;
   /**
    * false cuando el total debe ser el bruto del periodo (el corte mensual:
    * los ajustes restan en SU mes, no en el del movimiento corregido).
@@ -31,6 +34,7 @@ const {
   titulo,
   folios,
   ajustados,
+  imagenes,
   netearTotal = true,
   conAdjuntar = false,
   conHermano = true,
@@ -93,22 +97,33 @@ const hayAjustes = totalAjustado > 0;
               <td>{NOMBRE_BOLSA[m.bolsa]}</td>
               <td>{m.descripcion}</td>
               <td class="num">
-                {conSigno && m.tipo === 'egreso' ? '−' : ''}
-                {formatoCifra(m.monto_centavos)}
-                {(ajustados?.get(m.id) ?? 0) > 0 && (
+                {(ajustados?.get(m.id) ?? 0) > 0 ? (
                   <>
+                    {/* Hubo corrección: el original tachado, el neto al frente. */}
+                    <s class="apagado" style="font-size: 0.82rem;">
+                      {formatoCifra(m.monto_centavos)}
+                    </s>
                     <br />
-                    <span class="insignia insignia--pendiente">
-                      neto {formatoCifra(m.monto_centavos - (ajustados?.get(m.id) ?? 0))}
-                    </span>
+                    <strong>
+                      {conSigno && m.tipo === 'egreso' ? '−' : ''}
+                      {formatoCifra(m.monto_centavos - (ajustados?.get(m.id) ?? 0))}
+                    </strong>
+                    <br />
+                    <span class="insignia insignia--pendiente">Corregido, neto</span>
+                  </>
+                ) : (
+                  <>
+                    {conSigno && m.tipo === 'egreso' ? '−' : ''}
+                    {formatoCifra(m.monto_centavos)}
                   </>
                 )}
               </td>
               <td>
                 {m.archivo_id ? (
-                  <a href={`/comprobantes/${m.archivo_id}`} rel="noopener">
-                    Ver
-                  </a>
+                  <VisorImagen
+                    archivoId={m.archivo_id}
+                    esImagen={imagenes?.get(m.archivo_id) ?? false}
+                  />
                 ) : conAdjuntar && m.tipo === 'ingreso' && !m.es_ajuste ? (
                   <a href={`/ingresos/${m.id}/comprobante`}>Adjuntar</a>
                 ) : (

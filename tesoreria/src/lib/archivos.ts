@@ -251,3 +251,13 @@ export async function borrarArchivo(tx: Tx, fila: FilaArchivo): Promise<void> {
     await unlink(absoluta).catch(() => {});
   }
 }
+
+/** Cuáles de estos archivos son imagen, para decidir visor o enlace directo. */
+export async function sonImagenes(ids: number[]): Promise<Map<number, boolean>> {
+  if (ids.length === 0) return new Map();
+  const filas = await consulta<{ id: number; es_imagen: boolean }>(
+    `select id, (mime like 'image/%') as es_imagen from archivo where id = any($1::bigint[])`,
+    [ids],
+  );
+  return new Map(filas.map((f) => [f.id, f.es_imagen]));
+}

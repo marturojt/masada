@@ -19,6 +19,7 @@ import {
   reaperturasDe,
 } from '@lib/datos/cortes';
 import { estadoAplomo } from '@lib/datos/gt';
+import { sonImagenes } from '@lib/archivos';
 import { ajustadosDeVarios, listarMovimientos, totalesPorConcepto } from '@lib/datos/movimientos';
 import { pendientesDeComprobar } from '@lib/datos/egresos';
 import { formatoMXN } from '@lib/dinero';
@@ -129,6 +130,9 @@ const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo] =
   ]);
 
 const reaperturas = guardado ? await reaperturasDe(guardado.id) : [];
+const imagenes = await sonImagenes(
+  movimientos.map((m) => m.archivo_id).filter((a): a is number => a !== null),
+);
 const ajustados = new Map(
   (await ajustadosDeVarios(movimientos.map((m) => m.id))).map((a) => [
     a.movimiento_origen_id,
@@ -416,6 +420,7 @@ Astro.response.status = estado;
         titulo={`${movimientos.length} movimiento(s)`}
         conSigno
         ajustados={ajustados}
+        imagenes={imagenes}
         netearTotal={false}
         vacio="Sin movimientos en este mes."
       />

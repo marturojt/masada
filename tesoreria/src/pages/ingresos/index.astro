@@ -7,6 +7,7 @@
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import TablaMovimientos from '@componentes/TablaMovimientos.astro';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { sonImagenes } from '@lib/archivos';
 import { ajustadosDeVarios, foliosDeRecibo, listarMovimientos } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
 import { avisoDe } from '@lib/formulario';
@@ -37,6 +38,10 @@ const ajustados = new Map(
     a.ajustado,
   ]),
 );
+const imagenes = await sonImagenes(
+  movimientos.map((m) => m.archivo_id).filter((a): a is number => a !== null),
+);
+
 const netoDe = (m: { id: number; monto_centavos: number }): number =>
   m.monto_centavos - (ajustados.get(m.id) ?? 0);
 
@@ -99,6 +104,7 @@ const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0
   <TablaMovimientos
     conAdjuntar
     ajustados={ajustados}
+    imagenes={imagenes}
     movimientos={movimientos}
     titulo={`${movimientos.length} movimiento(s) de ingreso en ${anio}`}
     folios={folios}

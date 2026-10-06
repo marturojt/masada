@@ -1,11 +1,13 @@
 ---
 /* Panel de cápitas del ejercicio: quién está al corriente y quién debe. */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { historiaDelPlan } from '@lib/capitas-historia';
 import MatrizCapitas from '@componentes/MatrizCapitas.astro';
 import {
   NOMBRE_MODALIDAD,
   adeudosDelAnio,
   estadosDeCuenta,
+  planesVigentes,
   resumenCapitas,
   sinPlan,
 } from '@lib/datos/capitas';
@@ -22,13 +24,15 @@ const ejercicios = await listarEjercicios();
 const vigente = await ejercicioVigente();
 const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
 
-const [adeudos, estados, resumen, faltantes] = await Promise.all([
+const [adeudos, estados, resumen, faltantes, planes] = await Promise.all([
   adeudosDelAnio(anio),
   estadosDeCuenta(anio),
   resumenCapitas(anio),
   sinPlan(anio),
+  planesVigentes(anio),
 ]);
 
+const mapaPlanes = new Map(planes.map((p) => [p.hermano_id, p]));
 const conAdeudo = estados.filter((e) => e.vencido_centavos > 0);
 const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
 ---
@@ -83,7 +87,7 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
       </div>
     ) : (
       <>
-        <MatrizCapitas anio={anio} adeudos={adeudos} estados={estados} />
+        <MatrizCapitas anio={anio} adeudos={adeudos} estados={estados} planes={mapaPlanes} />
 
         <section class="tarjeta" style="margin-top: 1.5rem;">
           <h2>Estado por hermano</h2>
@@ -109,7 +113,9 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                     </td>
                     <td>
                       {e.modalidad ? (
-                        NOMBRE_MODALIDAD[e.modalidad]
+                        <span class="con-historia" title={historiaDelPlan(mapaPlanes.get(e.hermano_id))}>
+                          {NOMBRE_MODALIDAD[e.modalidad]}
+                        </span>
                       ) : (
                         <span class="apagado">Sin asignar</span>
                       )}

@@ -1,0 +1,37 @@
+---
+/*
+ * Enlace a un comprobante que, si es imagen, se abre en un visor encima de la
+ * página en lugar de ocuparla completa. Sin JavaScript: el visor es un overlay
+ * que se muestra con :target y se cierra apuntando a un ancla que no existe.
+ * Un PDF (o un archivo que no sabemos si es imagen) va al enlace normal.
+ */
+interface Props {
+  archivoId: number;
+  texto?: string;
+  esImagen: boolean;
+}
+
+const { archivoId, texto = 'Ver', esImagen } = Astro.props;
+const idVisor = `visor-${archivoId}`;
+---
+
+{
+  !esImagen ? (
+    <a href={`/comprobantes/${archivoId}`} rel="noopener">{texto}</a>
+  ) : (
+    <>
+      <a href={`#${idVisor}`}>{texto}</a>
+      <div class="visor" id={idVisor} role="dialog" aria-label="Comprobante">
+        <a class="visor__fondo" href="#cerrado" aria-label="Cerrar"></a>
+        <figure class="visor__cuadro">
+          {/* loading=lazy: oculto no tiene caja, así que no se descarga hasta abrirlo. */}
+          <img src={`/comprobantes/${archivoId}/imagen`} loading="lazy" alt="Comprobante" />
+          <figcaption class="visor__pie">
+            <a href={`/comprobantes/${archivoId}`} rel="noopener">Abrir el original</a>
+            <a class="btn btn--ghost" href="#cerrado">Cerrar</a>
+          </figcaption>
+        </figure>
+      </div>
+    </>
+  )
+}

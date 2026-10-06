@@ -4,11 +4,15 @@
  * cerrar, cómo van las cápitas y qué egresos esperan firma o comprobación.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import GraficaFlujoMensual from '@componentes/graficas/GraficaFlujoMensual.astro';
+import GraficaSaldo from '@componentes/graficas/GraficaSaldo.astro';
+import { estadoAplomo } from '@lib/datos/gt';
+import { pendientesDeEvidencia } from '@lib/datos/pendientes';
 import { resumenCapitas, sinPlan } from '@lib/datos/capitas';
 import { cortesDelAnio, primerMesAbierto } from '@lib/datos/cortes';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
 import { listarEgresos, pendientesDeComprobar } from '@lib/datos/egresos';
-import { saldoDeCaja } from '@lib/datos/movimientos';
+import { flujoPorMes, saldoDeCaja } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
 import { formatoFechaCorta, formatoFechaLarga, hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
 import { avisoDe } from '@lib/formulario';
@@ -21,7 +25,7 @@ const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 const ejercicio = await ejercicioVigente();
 const anio = ejercicio.anio;
 
-const [caja, capitas, faltantes, pendientes, porComprobar, cortes, mesAbierto] =
+const [caja, capitas, faltantes, pendientes, porComprobar, cortes, mesAbierto, flujo, aplomo, evidencias] =
   await Promise.all([
     saldoDeCaja(anio),
     resumenCapitas(anio),
@@ -30,7 +34,18 @@ const [caja, capitas, faltantes, pendientes, porComprobar, cortes, mesAbierto] =
     pendientesDeComprobar(),
     cortesDelAnio(anio),
     primerMesAbierto(anio),
+    flujoPorMes(anio),
+    estadoAplomo(),
+    pendientesDeEvidencia(),
   ]);
+
+/* La barra de avance de cápitas: cobrado, vencido y lo que falta del año. */
+const capEsperado = Math.max(1, capitas?.esperado ?? 0);
+const avance = {
+  cobrado: ((capitas?.pagado ?? 0) / capEsperado) * 100,
+  vencido: ((capitas?.vencido ?? 0) / capEsperado) * 100,
+  porVencer: ((capitas?.por_vencer ?? 0) / capEsperado) * 100,
+};
 
 const porFirmar = pendientes.filter((e) => e.estado === 'registrado');
 const porEntregar = pendientes.filter((e) => e.estado === 'autorizado');
@@ -90,50 +105,97 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
   }
 
   <div class="pila" style="margin-top: 1.25rem;">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1.25rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem;">
       <section class="tarjeta">
         <h2>Caja</h2>
         <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
           {formatoMXN(caja.saldo)}
         </p>
-        <p style="margin: 0.4rem 0 0; font-size: 0.9rem;">
-          Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}
-        </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          Apertura {formatoMXN(caja.apertura)} + ingresos {formatoMXN(caja.ingresos)} −
-          egresos {formatoMXN(caja.egresos)}
+          Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}
         </p>
       </section>
 
       <section class="tarjeta">
-        <h2>Cápitas {anio}</h2>
-        <p style="margin: 0;">
-          <span class="insignia insignia--ok">{capitas?.al_corriente ?? 0} al corriente</span>
-          {' '}
-          {(capitas?.con_adeudo ?? 0) > 0 && (
-            <span class="insignia insignia--alerta">{capitas?.con_adeudo} con adeudo</span>
+        <h2>Cápitas vencidas</h2>
+        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
+          {formatoMXN(capitas?.vencido ?? 0)}
+        </p>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
+          {capitas?.con_adeudo ?? 0} hermano(s) deben meses · <a href="/capitas">ver</a>
+        </p>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Gran Tesorería</h2>
+        <p style="margin: 0.2rem 0 0;">
+          {aplomo.ordinario_a_plomo ? (
+            <span class="insignia insignia--ok">A plomo</span>
+          ) : (
+            <span class="insignia insignia--alerta">{aplomo.meses_pendientes} mes(es) pendientes</span>
           )}
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.5rem 0 0;">
-          Cobrado {formatoMXN(capitas?.pagado ?? 0)} de {formatoMXN(capitas?.esperado ?? 0)}
-          {(capitas?.adeudo ?? 0) > 0 && <> · por cobrar {formatoMXN(capitas?.adeudo ?? 0)}</>}
+          {aplomo.cubierto_hasta
+            ? `Cubierto hasta ${nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}`
+            : 'Sin obligaciones pagadas'} · <a href="/gran-tesoreria">ver</a>
         </p>
-        <p style="margin: 0.6rem 0 0;">
-          <a href="/capitas">Ver cápitas</a>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Evidencias</h2>
+        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
+          {evidencias.length}
+        </p>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
+          documento(s) por adjuntar · <a href="/pendientes">atender</a>
         </p>
       </section>
 
       <section class="tarjeta">
         <h2>Cortes</h2>
-        <p style="margin: 0;" class="cifra">{cerrados} de 12 meses cerrados</p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.4rem 0 0;">
-          {mesAbierto ? `Sigue ${nombrePeriodo(mesAbierto)}` : 'Ejercicio completo'}
+        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
+          {cerrados} <span style="font-size: 1rem;">de 12</span>
         </p>
-        <p style="margin: 0.6rem 0 0;">
-          <a href="/cortes">Ver cortes</a>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
+          {mesAbierto ? `Sigue ${nombrePeriodo(mesAbierto)}` : 'Ejercicio completo'} ·{' '}
+          <a href="/cortes">ver</a>
         </p>
       </section>
     </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1.25rem;">
+      <section class="tarjeta">
+        <GraficaFlujoMensual flujo={flujo} />
+      </section>
+      <section class="tarjeta">
+        <GraficaSaldo flujo={flujo} apertura={caja.apertura} anio={anio} />
+      </section>
+    </div>
+
+    <section class="tarjeta">
+      <h2>Cápitas {anio}</h2>
+      <div class="avance" role="img" aria-label={`Cobrado ${formatoMXN(capitas?.pagado ?? 0)}, vencido ${formatoMXN(capitas?.vencido ?? 0)}, por vencer ${formatoMXN(capitas?.por_vencer ?? 0)}`}>
+        {avance.cobrado > 0 && (
+          <span class="avance__cobrado" style={`width: ${avance.cobrado}%;`} title={`Cobrado ${formatoMXN(capitas?.pagado ?? 0)}`}></span>
+        )}
+        {avance.vencido > 0 && (
+          <span class="avance__vencido" style={`width: ${avance.vencido}%;`} title={`Vencido ${formatoMXN(capitas?.vencido ?? 0)}`}></span>
+        )}
+        {avance.porVencer > 0 && (
+          <span class="avance__porvencer" style={`width: ${avance.porVencer}%;`} title={`Por vencer ${formatoMXN(capitas?.por_vencer ?? 0)}`}></span>
+        )}
+      </div>
+      <p class="apagado" style="font-size: 0.85rem; margin: 0.5rem 0 0;">
+        <span class="grafica__muestra" style="background: var(--md-sys-color-tertiary);"></span>
+        Cobrado {formatoMXN(capitas?.pagado ?? 0)}{' '}
+        <span class="grafica__muestra" style="background: var(--md-sys-color-error); margin-left: 0.8rem;"></span>
+        Vencido {formatoMXN(capitas?.vencido ?? 0)}{' '}
+        <span class="grafica__muestra" style="background: rgba(240,234,214,0.18); margin-left: 0.8rem;"></span>
+        Por vencer {formatoMXN(capitas?.por_vencer ?? 0)} · de {formatoMXN(capitas?.esperado ?? 0)} esperados ·{' '}
+        <span class="insignia insignia--ok">{capitas?.al_corriente ?? 0} al corriente</span>
+      </p>
+    </section>
 
     {
       (porFirmar.length > 0 || porEntregar.length > 0 || porComprobar.length > 0) && (

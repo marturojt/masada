@@ -1,0 +1,102 @@
+---
+/*
+ * Línea del saldo de caja acumulado mes a mes: apertura más lo que entró menos
+ * lo que salió, al cierre de cada mes transcurrido. SVG del servidor, tooltip
+ * nativo por punto, una sola serie en el oro del tema.
+ */
+import type { FlujoMes } from '@lib/datos/movimientos';
+import { formatoMXN } from '@lib/dinero';
+import { MESES, MESES_CORTOS, mesActual, anioActual } from '@lib/fechas';
+
+interface Props {
+  flujo: FlujoMes[];
+  apertura: number;
+  anio: number;
+}
+
+const { flujo, apertura, anio } = Astro.props;
+
+/* Solo los meses ya transcurridos del año en curso; un año pasado va completo. */
+const ultimoMes = anio < anioActual() ? 12 : anio > anioActual() ? 0 : mesActual();
+
+let acumulado = apertura;
+const puntos = flujo
+  .filter((f) => f.mes <= ultimoMes)
+  .map((f) => {
+    acumulado += f.ingresos - f.egresos;
+    return { mes: f.mes, saldo: acumulado };
+  });
+
+const ANCHO = 680;
+const ALTO = 230;
+const MARGEN = { arriba: 12, abajo: 26, izquierda: 56, derecha: 14 };
+const zona = {
+  w: ANCHO - MARGEN.izquierda - MARGEN.derecha,
+  h: ALTO - MARGEN.arriba - MARGEN.abajo,
+};
+
+const valores = [apertura, ...puntos.map((p) => p.saldo)];
+const maximo = Math.max(1, ...valores);
+const pasoCrudo = maximo / 4;
+const magnitud = 10 ** Math.floor(Math.log10(pasoCrudo));
+const paso = Math.ceil(pasoCrudo / magnitud) * magnitud;
+const techo = paso * 4;
+
+const y = (v: number) => MARGEN.arriba + zona.h - (v / techo) * zona.h;
+const x = (mes: number) => MARGEN.izquierda + ((mes - 0.5) / 12) * zona.w;
+
+const trazo = puntos.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.mes)} ${y(p.saldo)}`).join(' ');
+const area =
+  puntos.length > 0
+    ? `${trazo} L ${x(puntos[puntos.length - 1]!.mes)} ${y(0)} L ${x(puntos[0]!.mes)} ${y(0)} Z`
+    : '';
+
+const cifra = (v: number) => formatoMXN(v).replace('.00', '');
+const lineas = [1, 2, 3].map((n) => n * paso);
+---
+
+<figure class="grafica">
+  <figcaption class="grafica__titulo">Saldo de caja al cierre de cada mes</figcaption>
+  <svg
+    viewBox={`0 0 ${ANCHO} ${ALTO}`}
+    role="img"
+    aria-label="Línea del saldo de caja acumulado por mes"
+  >
+    {lineas.map((v) => (
+      <>
+        <line
+          x1={MARGEN.izquierda}
+          x2={ANCHO - MARGEN.derecha}
+          y1={y(v)}
+          y2={y(v)}
+          class="grafica__rejilla"
+        />
+        <text x={MARGEN.izquierda - 6} y={y(v) + 3} text-anchor="end" class="grafica__eje">
+          {cifra(v)}
+        </text>
+      </>
+    ))}
+    <line
+      x1={MARGEN.izquierda}
+      x2={ANCHO - MARGEN.derecha}
+      y1={y(0)}
+      y2={y(0)}
+      class="grafica__base"
+    />
+
+    {area && <path d={area} class="grafica__area" />}
+    {trazo && <path d={trazo} class="grafica__linea" />}
+
+    {puntos.map((p) => (
+      <circle cx={x(p.mes)} cy={y(p.saldo)} r="4.5" class="grafica__punto">
+        <title>{`${MESES[p.mes - 1]}: saldo ${formatoMXN(p.saldo)}`}</title>
+      </circle>
+    ))}
+
+    {flujo.map((f, i) => (
+      <text x={x(f.mes)} y={ALTO - 8} text-anchor="middle" class="grafica__eje">
+        {MESES_CORTOS[i]}
+      </text>
+    ))}
+  </svg>
+</figure>

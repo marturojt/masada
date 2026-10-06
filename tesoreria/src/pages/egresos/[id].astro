@@ -4,6 +4,7 @@
  * Una sola página atiende todas las acciones, distinguidas por el campo _accion.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -43,6 +44,7 @@ import {
 import { NOMBRE_TIPO_OBLIGACION, obligacionesDeEgreso } from '@lib/datos/gt';
 import { formatoFechaCorta, formatoMomento, hoyISO, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { sonImagenes } from '@lib/archivos';
 import { esVM, requerirSesion } from '@lib/sesion';
 import { NOMBRE_ROL, type Opcion } from '@lib/tipos';
 
@@ -219,6 +221,10 @@ const [firmas, documentos, granTesoreria, obligacionesGT] = await Promise.all([
   egreso.tipo_especial === 'gran_tesoreria' ? granTesoreriaDe(id) : Promise.resolve(null),
   egreso.tipo_especial === 'gran_tesoreria' ? obligacionesDeEgreso(id) : Promise.resolve([]),
 ]);
+
+const imagenes = await sonImagenes(
+  documentos.map((d) => d.archivo_id).filter((a): a is number => a !== null),
+);
 
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 
@@ -807,7 +813,11 @@ Astro.response.status = estado;
                     <td>{d.descripcion ?? ''}</td>
                     <td>
                       {d.archivo_id ? (
-                        <a href={`/comprobantes/${d.archivo_id}`}>{d.archivo_nombre}</a>
+                        <VisorImagen
+                          archivoId={d.archivo_id}
+                          texto={d.archivo_nombre ?? 'Ver'}
+                          esImagen={imagenes.get(d.archivo_id) ?? false}
+                        />
                       ) : (
                         <span class="apagado">—</span>
                       )}

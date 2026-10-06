@@ -5,6 +5,7 @@
  * Una sola página atiende todas las acciones, distinguidas por _accion.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -32,6 +33,7 @@ import { esquemaMotivo } from '@lib/esquemas/egreso';
 import { esquemaDetalleObligacion } from '@lib/esquemas/gt';
 import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { sonImagenes } from '@lib/archivos';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
 
@@ -129,6 +131,10 @@ const [detalle, aplicaciones, aplomo, hermanos] = await Promise.all([
   estadoAplomo(),
   hermanosActivos(),
 ]);
+
+const imagenes = obligacion.documento_calculo_id
+  ? await sonImagenes([obligacion.documento_calculo_id])
+  : new Map<number, boolean>();
 
 const [nonceDetalle, nonceGenerar, nonceCancelar] = await Promise.all([
   emitirNonce(sesion.idHash, 'gt_detalle'),
@@ -267,7 +273,11 @@ Astro.response.status = estado;
               <tr>
                 <th>Documento del cálculo</th>
                 <td>
-                  <a href={`/comprobantes/${obligacion.documento_calculo_id}`}>Ver documento</a>
+                  <VisorImagen
+                    archivoId={obligacion.documento_calculo_id!}
+                    texto="Ver documento"
+                    esImagen={imagenes.get(obligacion.documento_calculo_id!) ?? false}
+                  />
                 </td>
               </tr>
             )

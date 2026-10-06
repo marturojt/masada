@@ -7,13 +7,17 @@ import type { AdeudoMes, EstadoCuenta } from '@lib/datos/capitas';
 import { formatoCifra } from '@lib/dinero';
 import { MESES_CORTOS, nombrePeriodo } from '@lib/fechas';
 
+import { historiaDelPlan, type PlanConHistoria } from '@lib/capitas-historia';
+
 interface Props {
   anio: number;
   adeudos: AdeudoMes[];
+  /** Historia del plan por hermano, para el tooltip de la modalidad. */
+  planes?: Map<number, PlanConHistoria>;
   estados: EstadoCuenta[];
 }
 
-const { anio, adeudos, estados } = Astro.props;
+const { anio, adeudos, estados, planes } = Astro.props;
 
 /* hermano -> mes (1..12) -> cargo del mes */
 const porHermano = new Map<number, Map<number, AdeudoMes>>();
@@ -35,7 +39,7 @@ const SIMBOLO: Record<string, string> = {
 const CLASE: Record<string, string> = {
   cubierto: 'celda--cubierto',
   parcial: 'celda--parcial',
-  vencido_parcial: 'celda--vencido',
+  vencido_parcial: 'celda--parcial',
   vencido: 'celda--vencido',
   pendiente: 'celda--pendiente',
 };
@@ -84,7 +88,23 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
                 {e.modalidad === 'promocion' && (
                   <>
                     {' '}
-                    <span class="insignia insignia--pendiente">Promoción</span>
+                    <span
+                      class="insignia insignia--pendiente con-historia"
+                      title={historiaDelPlan(planes?.get(e.hermano_id))}
+                    >
+                      Promoción
+                    </span>
+                  </>
+                )}
+                {e.modalidad !== 'promocion' && planes?.get(e.hermano_id)?.reemplazo_de && (
+                  <>
+                    {' '}
+                    <span
+                      class="insignia con-historia"
+                      title={historiaDelPlan(planes?.get(e.hermano_id))}
+                    >
+                      Plan ajustado
+                    </span>
                   </>
                 )}
               </td>

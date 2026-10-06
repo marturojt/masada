@@ -57,7 +57,10 @@ try {
     for (const entrada of entradas) {
       const ruta = join(dir, entrada.name);
       if (entrada.isDirectory()) await recorrer(ruta);
-      else if (entrada.name !== '.gitkeep') enDisco.push(ruta);
+      /* Los .visor.jpg son derivados de caché del visor (el original HEIC es
+         el probatorio): no son huérfanos y se regeneran solos si se borran. */
+      else if (entrada.name !== '.gitkeep' && !entrada.name.endsWith('.visor.jpg'))
+        enDisco.push(ruta);
     }
   }
   await recorrer(raiz);

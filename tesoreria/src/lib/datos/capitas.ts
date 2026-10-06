@@ -355,3 +355,31 @@ export const cargosConSaldoAbiertos = (
       order by a.periodo`,
     [hermanoId],
   );
+
+/** Los planes vigentes del año con su historia, para los tooltips de la matriz. */
+export interface PlanConHistoria extends PlanVigente {
+  hermano_id: number;
+  monto_mensual_centavos: number;
+  /** Modalidad del plan al que reemplazó, si este nació de un cambio. */
+  reemplazo_de: Modalidad | null;
+  /** Lo condonado en los cargos del hermano este año (exenciones y conversiones). */
+  condonado_centavos: number;
+}
+
+export const planesVigentes = (anio: number): Promise<PlanConHistoria[]> =>
+  consulta<PlanConHistoria>(
+    `select p.hermano_id, p.id, p.modalidad, p.mes_desde, p.mes_hasta,
+            p.monto_mensual_centavos, p.monto_total_centavos,
+            p.autorizado_por, u.nombre as autorizado_nombre, p.autorizado_en::text,
+            p.motivo, anterior.modalidad as reemplazo_de,
+            coalesce((select sum(co.monto_centavos)::int
+                        from capita_condonacion co
+                        join capita_cargo cc on cc.id = co.capita_cargo_id
+                       where cc.hermano_id = p.hermano_id
+                         and cc.ejercicio_anio = p.ejercicio_anio), 0) as condonado_centavos
+       from capita_plan p
+       left join usuario u on u.id = p.autorizado_por
+       left join capita_plan anterior on anterior.id = p.reemplaza_a
+      where p.ejercicio_anio = $1 and p.vigente`,
+    [anio],
+  );

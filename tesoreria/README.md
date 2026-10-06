@@ -358,7 +358,14 @@ un asiento de dinero.
 
 **Los comprobantes se validan por sus primeros bytes**, no por la extensión ni por
 lo que declare el navegador. Se guardan fuera del webroot y solo se sirven con
-sesión válida. No se transcodifican: el original es el dato probatorio.
+sesión válida. No se transcodifican: el original es el dato probatorio. Para VER
+un HEIC (que muchos navegadores no pintan) se sirve un JPEG derivado, convertido
+una sola vez y cacheado junto al original con el sufijo .visor.jpg; el original
+no se toca y el script de limpieza ignora los derivados. La conversión es
+heic-convert, JavaScript y WASM puros, sin addons nativos: es la quinta
+dependencia de producción y la excepción está documentada aquí a propósito. Las
+imágenes se abren en un visor encima de la página (CSS :target, sin JavaScript);
+los PDF siguen su enlace normal.
 
 **Los estilos se copian del sitio**, no se importan por ruta relativa: así esta
 carpeta se puede construir sola. `npm run estilos` los sincroniza y el build avisa

@@ -351,3 +351,28 @@ export const ajustadosDeVarios = (
           group by ma.movimiento_origen_id`,
         [ids],
       );
+
+/** Flujo del año mes por mes, para las gráficas del tablero. */
+export interface FlujoMes {
+  mes: number;
+  ingresos: number;
+  egresos: number;
+}
+
+export async function flujoPorMes(anio: number): Promise<FlujoMes[]> {
+  const filas = await consulta<{ mes: number; ingresos: number; egresos: number }>(
+    `select extract(month from periodo)::int as mes,
+            coalesce(sum(monto_centavos) filter (where tipo = 'ingreso'), 0)::int as ingresos,
+            coalesce(sum(monto_centavos) filter (where tipo = 'egreso'), 0)::int as egresos
+       from movimiento
+      where ejercicio_anio = $1
+      group by 1`,
+    [anio],
+  );
+  const porMes = new Map(filas.map((f) => [f.mes, f]));
+  return Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    ingresos: porMes.get(i + 1)?.ingresos ?? 0,
+    egresos: porMes.get(i + 1)?.egresos ?? 0,
+  }));
+}

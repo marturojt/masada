@@ -4,6 +4,7 @@
  * y su liga con el padrón interno. Ligar es conciliar, no editar el reporte.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -16,6 +17,7 @@ import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaLigarRenglon, esquemaRenglonMembresia } from '@lib/esquemas/gt';
 import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { sonImagenes } from '@lib/archivos';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
 
@@ -99,6 +101,9 @@ const membresia = await obtenerMembresia(id);
 if (!membresia) return new Response('No encontrado', { status: 404 });
 
 const [renglones, hermanos] = await Promise.all([renglonesDeMembresia(id), hermanosActivos()]);
+const imagenes = membresia.archivo_id
+  ? await sonImagenes([membresia.archivo_id])
+  : new Map<number, boolean>();
 const nonceRenglon = await emitirNonce(sesion.idHash, 'gt_renglon');
 
 /* Cada renglón sin ligar lleva su propio formulario, con su propio nonce. */
@@ -130,7 +135,11 @@ Astro.response.status = estado;
     {membresia.renglones} hermano(s) reportados, {membresia.con_capita} generan cápita,
     {membresia.sin_ligar} sin conciliar con el padrón.
     {membresia.archivo_id && (
-      <a href={`/comprobantes/${membresia.archivo_id}`}>Ver documento</a>
+      <VisorImagen
+        archivoId={membresia.archivo_id}
+        texto="Ver documento"
+        esImagen={imagenes.get(membresia.archivo_id) ?? false}
+      />
     )}
   </p>
   {membresia.observaciones && <p class="apagado">{membresia.observaciones}</p>}

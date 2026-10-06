@@ -345,3 +345,156 @@
     color: var(--md-sys-color-on-surface-variant);
   }
 }
+
+/* ── Visor de comprobantes: overlay sin JavaScript, se abre con :target ───── */
+
+.visor {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.visor:target {
+  display: flex;
+}
+
+.visor__fondo {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: pointer;
+}
+
+.visor__cuadro {
+  position: relative;
+  margin: 0;
+  max-width: min(92vw, 70rem);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.visor__cuadro img {
+  max-width: 100%;
+  max-height: calc(90vh - 3.5rem);
+  object-fit: contain;
+  border: 1px solid var(--color-borde, #6b5b2e);
+  background: #000000;
+}
+
+.visor__pie {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Señal de que un texto trae historia en su tooltip al pasar el cursor. */
+.con-historia {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+/* ── Gráficas del tablero: SVG del servidor, paleta validada en oscuro ─────── */
+
+.grafica {
+  margin: 0;
+}
+
+.grafica svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.grafica__titulo {
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  margin-bottom: 0.5rem;
+}
+
+.grafica__rejilla {
+  stroke: rgba(240, 234, 214, 0.08);
+  stroke-width: 1;
+}
+
+.grafica__base {
+  stroke: rgba(240, 234, 214, 0.25);
+  stroke-width: 1;
+}
+
+.grafica__eje {
+  font-size: 10.5px;
+  fill: var(--md-sys-color-on-surface-variant, #b8b0a0);
+}
+
+/* Paleta de series validada sobre #141414: oro #C08A1E y azul #4C7FC4. */
+.grafica__ingreso,
+.grafica__muestra--ingreso {
+  fill: #c08a1e;
+  background: #c08a1e;
+}
+
+.grafica__egreso,
+.grafica__muestra--egreso {
+  fill: #4c7fc4;
+  background: #4c7fc4;
+}
+
+.grafica__linea {
+  fill: none;
+  stroke: #c08a1e;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.grafica__area {
+  fill: rgba(192, 138, 30, 0.12);
+  stroke: none;
+}
+
+.grafica__punto {
+  fill: #c08a1e;
+  stroke: #141414;
+  stroke-width: 2;
+}
+
+.grafica__leyenda {
+  display: flex;
+  gap: 1.2rem;
+  font-size: 0.82rem;
+  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  margin-top: 0.4rem;
+}
+
+.grafica__muestra {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: baseline;
+  margin-right: 0.3rem;
+}
+
+/* Barra de avance de cápitas: cobrado, vencido y por vencer, con sus huecos. */
+.avance {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(240, 234, 214, 0.06);
+}
+
+.avance__cobrado { background: var(--md-sys-color-tertiary); }
+.avance__vencido { background: var(--md-sys-color-error); }
+.avance__porvencer { background: rgba(240, 234, 214, 0.18); }
