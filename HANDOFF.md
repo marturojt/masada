@@ -1,6 +1,6 @@
 # Handoff — R∴L∴S∴ Masada No. 324
 
-Documento para retomar el trabajo. Última actualización: **6 de octubre de 2026**.
+Documento para retomar el trabajo. Última actualización: **10 de octubre de 2026**.
 
 > Lee primero el `README.md` de la raíz para el sitio público y
 > `tesoreria/README.md` para el sistema de tesorería. Este documento cubre el
@@ -187,6 +187,11 @@ queda como ambiente de desarrollo.
 - [x] **Desplegar `ce831cc`, la corrección de captura (025) y la Ley de
       Ingresos GT (026)**. Hecho el 5 de octubre de 2026: producción en
       `bea099e`, migración 026, 82/82 pruebas en el servidor, respaldo previo.
+- [ ] **Desplegar la actualización de seguridad** (10 de octubre de 2026): astro
+      7.3.8, @astrojs/node 11.1.7 (caída por Host malformado), sharp 0.35.5 y
+      transitivas; `npm audit` en 0, con y sin dependencias de desarrollo.
+      `/_image` responde 404. Sin migraciones; exige `npm ci` (cambió el lock,
+      astro 7.3 compila con rolldown en vez de esbuild).
 - [ ] **Cerrar la puerta de la corrección de captura** cuando termine el año de
       captura en paralelo (por ejemplo, solo en meses sin corte, o solo el
       primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.

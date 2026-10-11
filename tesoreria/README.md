@@ -397,6 +397,11 @@ dependencia de producción y la excepción está documentada aquí a propósito.
 imágenes se abren en un visor encima de la página (CSS :target, sin JavaScript);
 los PDF siguen su enlace normal.
 
+**El optimizador de imágenes de Astro está apagado.** No se usa `<Image>`:
+`image.service` es noop y el middleware responde 404 en `/_image`, para que un
+fallo en ese código (como el RCE por AVIF de septiembre de 2026) no sea
+alcanzable desde fuera. Los HEIC se convierten con heic-convert, no con sharp.
+
 **Los estilos se copian del sitio**, no se importan por ruta relativa: así esta
 carpeta se puede construir sola. `npm run estilos` los sincroniza y el build avisa
 si divergieron.

@@ -15,7 +15,15 @@ import { leerSesion } from './lib/sesion';
 const PUBLICAS = new Set(['/entrar', '/salir']);
 
 /** Prefijos de recursos que sirve el propio Astro o Vite, no son datos. */
-const PREFIJOS_RECURSOS = ['/_astro/', '/_image', '/@', '/node_modules/', '/favicon'];
+const PREFIJOS_RECURSOS = ['/_astro/', '/@', '/node_modules/', '/favicon'];
+
+/*
+ * El optimizador de imágenes de Astro no se usa (image.service es noop), pero
+ * Astro igual monta /_image. Se apaga aquí: responde 404 sin llegar al
+ * endpoint, así un fallo futuro en ese código no es alcanzable desde fuera.
+ */
+const esOptimizadorDeImagenes = (ruta: string): boolean =>
+  ruta === '/_image' || ruta.startsWith('/_image/');
 
 const CSP = [
   "default-src 'none'",
@@ -40,9 +48,10 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   ctx.locals.sesion = null;
 
   const ruta = ctx.url.pathname.replace(/\/+$/, '') || '/';
+  const apagada = esOptimizadorDeImagenes(ctx.url.pathname);
   const esRecurso = PREFIJOS_RECURSOS.some((p) => ctx.url.pathname.startsWith(p));
 
-  if (!esRecurso) {
+  if (!esRecurso && !apagada) {
     ctx.locals.sesion = await leerSesion(ctx);
 
     if (!ctx.locals.sesion && !PUBLICAS.has(ruta)) {
@@ -53,7 +62,12 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     }
   }
 
-  const respuesta = await next();
+  const respuesta = apagada
+    ? new Response('No encontrado', {
+        status: 404,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      })
+    : await next();
 
   respuesta.headers.set('X-Robots-Tag', 'noindex, nofollow');
   respuesta.headers.set('X-Content-Type-Options', 'nosniff');
