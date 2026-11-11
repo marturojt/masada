@@ -96,7 +96,14 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
                     </span>
                   </>
                 )}
-                {e.modalidad !== 'promocion' && planes?.get(e.hermano_id)?.reemplazo_de && (
+                {/*
+                  Ajustado es cuando cambió el trato, como una promoción convertida a
+                  mensual. Un recálculo que deja la misma modalidad (corregir cómo se
+                  contaron los meses) no es ajuste y no se marca.
+                */}
+                {e.modalidad !== 'promocion' &&
+                  planes?.get(e.hermano_id)?.reemplazo_de &&
+                  planes?.get(e.hermano_id)?.reemplazo_de !== e.modalidad && (
                   <>
                     {' '}
                     <span
