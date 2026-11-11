@@ -131,7 +131,13 @@ descuentan: habilitarla en agosto con 2,000 ya pagados son 3,000 por cubrir. El
 cargo único aterriza en el mes en que se habilita, el sistema lo decide solo. El
 sistema no deja asignar una modalidad que no corresponda al mes de ingreso, y lo
 explica cuando pasa. El prorrateo cuenta desde la fecha de ingreso interna, sin
-depender de cuándo reconozca al hermano la Gran Tesorería.
+depender de cuándo reconozca al hermano la Gran Tesorería: si ingresó antes del
+día 15, ese mes cuenta; del 15 en adelante, empieza el mes siguiente (migración
+031). Al reasignar la modalidad, un mes que quedó fuera de lo que le
+corresponde se cancela aunque tenga pago, y ese pago vuelve como saldo a favor
+para aplicarlo desde su ficha. La migración 032 recalculó así a quienes ya
+tenían cobrado su mes de ingreso, y en su caso el dinero liberado se reaplicó
+solo al siguiente mes pendiente, porque era un cobro de más del sistema.
 
 **Promoción convertida a mensual** (el trato de "un tramo con promoción y el
 resto mes a mes"): desde la ficha de cápitas del hermano, el V∴M∴ puede convertir

@@ -56,7 +56,8 @@ test('promoción: un solo cargo de 5,000, con quién la autorizó', async () => 
 
 test('prorrateo: quien entra en abril paga 4,500 por nueve meses', async () => {
   await enPrueba(async ({ cliente }) => {
-    const id = await crearHermano(cliente, 'Prueba Abril', '2026-04-15', 'aprendiz');
+    /* Antes del día 15: abril cuenta. */
+    const id = await crearHermano(cliente, 'Prueba Abril', '2026-04-10', 'aprendiz');
     await cliente.query('select fn_asignar_capita($1, $2, $3)', [id, ANIO, 'prorrateo']);
 
     const { rows } = await cliente.query(
@@ -522,5 +523,112 @@ test('el estado torcido de una reasignación vieja se repara con la conversión'
     /* Sus siguientes 500 caen en julio. */
     const pago = await pagarCapita(cliente, hermano, '2026-09-01', 50000, tesorero);
     assert.equal(pago.aplicado, 50000);
+  });
+});
+
+const mesesVigentes = async (cliente, hermanoId) => {
+  const { rows } = await cliente.query(
+    `select to_char(periodo, 'YYYY-MM') as mes from capita_cargo
+      where hermano_id = $1 and ejercicio_anio = $2 and estado = 'vigente'
+      order by periodo`,
+    [hermanoId, ANIO],
+  );
+  return rows.map((r) => r.mes);
+};
+
+test('quien ingresa antes del día 15 paga ese mes; del 15 en adelante, desde el siguiente', async () => {
+  await enPrueba(async ({ cliente }) => {
+    const el10 = await crearHermano(cliente, 'Iniciado el 10', `${ANIO}-08-10`, 'aprendiz');
+    await cliente.query('select fn_asignar_capita($1, $2, $3)', [el10, ANIO, 'prorrateo']);
+    assert.equal((await mesesVigentes(cliente, el10))[0], `${ANIO}-08`);
+
+    const el15 = await crearHermano(cliente, 'Iniciado el 15', `${ANIO}-08-15`, 'aprendiz');
+    await cliente.query('select fn_asignar_capita($1, $2, $3)', [el15, ANIO, 'prorrateo']);
+    assert.equal((await mesesVigentes(cliente, el15))[0], `${ANIO}-09`);
+
+    const el29 = await crearHermano(cliente, 'Iniciado el 29', `${ANIO}-08-29`, 'aprendiz');
+    await cliente.query('select fn_asignar_capita($1, $2, $3)', [el29, ANIO, 'prorrateo']);
+    assert.deepEqual(await mesesVigentes(cliente, el29), [
+      `${ANIO}-09`,
+      `${ANIO}-10`,
+      `${ANIO}-11`,
+      `${ANIO}-12`,
+    ]);
+
+    /* Enero después del 15 ya no es "desde enero": le toca prorrateo. */
+    const enero = await crearHermano(cliente, 'Iniciado el 20 de enero', `${ANIO}-01-20`, 'aprendiz');
+    await debeFallar(
+      cliente,
+      () => cliente.query('select fn_asignar_capita($1, $2, $3)', [enero, ANIO, 'mensual']),
+      /prorrateo/i,
+    );
+
+    const diciembre = await crearHermano(cliente, 'Iniciado el 20 de diciembre', `${ANIO}-12-20`, 'aprendiz');
+    await debeFallar(
+      cliente,
+      () => cliente.query('select fn_asignar_capita($1, $2, $3)', [diciembre, ANIO, 'prorrateo']),
+      /año siguiente/i,
+    );
+  });
+});
+
+test('al reasignar, el mes cobrado de más se cancela y su pago vuelve como saldo a favor', async () => {
+  await enPrueba(async ({ cliente, tesorero }) => {
+    /* El estado de Adolfo: se le generó agosto y su pago lo cubrió. */
+    const id = await crearHermano(cliente, 'Iniciado tarde en agosto', `${ANIO}-08-01`, 'aprendiz');
+    await cliente.query('select fn_asignar_capita($1, $2, $3)', [id, ANIO, 'prorrateo']);
+    await pagarCapita(cliente, id, `${ANIO}-09-18`, 200000, tesorero);
+    await cliente.query('set constraints all immediate');
+
+    await cliente.query("update hermano set fecha_ingreso = $2 where id = $1", [id, `${ANIO}-08-29`]);
+    await cliente.query('select fn_asignar_capita($1, $2, $3)', [id, ANIO, 'prorrateo']);
+    await cliente.query('set constraints all immediate');
+
+    assert.deepEqual(await mesesVigentes(cliente, id), [
+      `${ANIO}-09`,
+      `${ANIO}-10`,
+      `${ANIO}-11`,
+      `${ANIO}-12`,
+    ]);
+    const { rows } = await cliente.query(
+      `select coalesce(sum(ca.monto_aplicado_centavos), 0)::int as aplicado
+         from capita_aplicacion ca join capita_cargo cc on cc.id = ca.capita_cargo_id
+        where cc.hermano_id = $1`,
+      [id],
+    );
+    /* 1,500 siguen en septiembre a noviembre; 500 quedan libres como saldo a favor. */
+    assert.equal(rows[0].aplicado, 150000);
+  });
+});
+
+test('el recálculo mueve el pago del mes de más al siguiente pendiente, y nada más', async () => {
+  await enPrueba(async ({ cliente, tesorero }) => {
+    const id = await crearHermano(cliente, 'Como Adolfo', `${ANIO}-08-01`, 'aprendiz');
+    await cliente.query('select fn_asignar_capita($1, $2, $3)', [id, ANIO, 'prorrateo']);
+    await pagarCapita(cliente, id, `${ANIO}-09-18`, 200000, tesorero);
+    await cliente.query('set constraints all immediate');
+    await cliente.query('update hermano set fecha_ingreso = $2 where id = $1', [id, `${ANIO}-08-29`]);
+
+    const { rows: liberado } = await cliente.query('select fn_recalcular_alta_capita($1, $2) as n', [
+      id,
+      ANIO,
+    ]);
+    await cliente.query('set constraints all immediate');
+    assert.equal(liberado[0].n, 50000);
+
+    const { rows } = await cliente.query(
+      `select to_char(periodo, 'YYYY-MM') as mes, saldo_centavos
+         from v_adeudo_capita_mes where hermano_id = $1 order by periodo`,
+      [id],
+    );
+    assert.deepEqual(
+      rows.map((r) => [r.mes, r.saldo_centavos]),
+      [
+        [`${ANIO}-09`, 0],
+        [`${ANIO}-10`, 0],
+        [`${ANIO}-11`, 0],
+        [`${ANIO}-12`, 0],
+      ],
+    );
   });
 });

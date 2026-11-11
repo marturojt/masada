@@ -129,8 +129,9 @@ conviene confirmar o corregir:
    preferencial, pago único". El valor interno no cambió, el histórico se conserva.
 2. **Doble firma**: se mantiene en todos los egresos, marcada como pendiente de
    ratificación en el reglamento interno.
-3. **Prorrateo**: la capacidad sigue igual (500 por mes restante desde el ingreso
-   interno); su definición funcional fina quedó pendiente a propósito.
+3. **Prorrateo**: 500 por mes restante desde el ingreso interno; el mes de
+   ingreso cuenta solo si fue antes del día 15 (definido el 10 de noviembre de
+   2026, caso de Adolfo Ponce de León Lima).
 4. **Medio de pago GT**: al entregar por banco se registra "transferencia", por
    efectivo "efectivo". Si un pago fue con tarjeta u otro medio, se corrige a mano.
 5. **Conceptos gl_***: los conceptos viejos de Gran Logia quedaron desactivados;
@@ -197,6 +198,11 @@ queda como ambiente de desarrollo.
       primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.
 - [ ] **Comentarios de Arturo sobre las pestañas**: se atendieron el 6 (egresos)
       y el 7 (Gran Tesorería). Seguir con los que siguen.
+- [ ] **Desplegar el alta de cápita antes del 15** (migraciones 031 y 032):
+      quien ingresa del día 15 en adelante empieza a pagar el mes siguiente, y
+      la 032 recalcula sola a los que ya tenían cobrado ese mes (Adolfo Ponce de
+      León Lima, iniciado el 29 de agosto, y los demás que haya): el pago del
+      mes de más pasa al siguiente pendiente. Exige `npm run migrar`.
 - [ ] **Desplegar membresías solo como documento** (migración 030): sin captura
       de renglones, documento obligatorio, y eliminar una registrada por error
       (nivel V∴M∴, con motivo). Exige `npm run migrar`. Después de desplegar,
