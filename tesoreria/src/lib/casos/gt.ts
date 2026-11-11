@@ -12,11 +12,19 @@ import { consumirNonce } from '../csrf';
 import { enTransaccion, unaFila } from '../db';
 import { conceptoPorClave } from '../datos/conceptos';
 import { insertarEgreso } from '../datos/egresos';
-import { insertarTarifaGT, type GrupoTarifaGT, type TipoObligacion } from '../datos/gt';
+import {
+  describirObligacion,
+  insertarTarifaGT,
+  type ClaseTramite,
+  type GrupoTarifaGT,
+  type ObligacionResumida,
+  type TipoObligacion,
+} from '../datos/gt';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
 import { hoyISO } from '../fechas';
 import type { Sesion } from '../sesion';
+import { esNivelVM } from '../tipos';
 
 interface Contexto {
   sesion: Sesion;
@@ -284,7 +292,14 @@ export async function capturarObligacion(
   return enTransaccion(async (tx) => {
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_obligacion');
 
-    const anio = Number(datos.periodo_desde.slice(0, 4));
+    /*
+     * El folio va con el año de lo que ampara; un trámite, con el de su
+     * solicitud: un ajuste de cápitas que empieza en diciembre del año
+     * anterior se pidió y se pagó este año.
+     */
+    const anio = Number(
+      (datos.tipo === 'tramite' ? datos.fecha_documento : datos.periodo_desde).slice(0, 4),
+    );
     const folio = await tx.laFila<{ folio: string }>(
       'select fn_gt_folio_obligacion($1, $2) as folio',
       [anio, datos.tipo],
@@ -389,6 +404,124 @@ export async function agregarDetalleObligacion(
   }, usuarioId);
 }
 
+/**
+ * Corrección de captura de una obligación, del nivel V∴M∴: los meses que
+ * ampara, la fecha del documento y, si es trámite, su clase y su nombre. El
+ * monto no se toca: con pagos aplicados, la base ya lo impide. Mover los meses
+ * de una ordinaria cambia el a plomo, que es justo lo que se corrige. El antes
+ * y el después quedan en la bitácora.
+ */
+export async function corregirObligacion(
+  ctx: Contexto,
+  id: number,
+  datos: {
+    periodo_desde: string;
+    periodo_hasta: string;
+    fecha_documento: string;
+    tramite_clase?: ClaseTramite | undefined;
+    tramite_descripcion?: string | undefined;
+    motivo_correccion?: string | undefined;
+  },
+): Promise<void> {
+  if (!esNivelVM(ctx.sesion.usuario.rol)) {
+    throw new ErrorDeNegocio('Las correcciones de captura las hace el Venerable Maestro.');
+  }
+  const usuarioId = ctx.sesion.usuario.id;
+
+  if (datos.periodo_hasta < datos.periodo_desde) {
+    throw new ErrorDeNegocio('El último mes no puede ser anterior al primero.', 'periodo_hasta');
+  }
+  if (datos.fecha_documento > hoyISO()) {
+    throw new ErrorDeNegocio('La fecha del documento no puede ser futura.', 'fecha_documento');
+  }
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_correccion');
+
+    const previa = await tx.unaFila<{
+      folio: string;
+      tipo: TipoObligacion;
+      estatus: string;
+      periodo_desde: string;
+      periodo_hasta: string;
+      fecha_documento: string;
+      tramite_clase: ClaseTramite | null;
+      tramite_descripcion: string | null;
+    }>(
+      `select folio, tipo, estatus, to_char(periodo_desde, 'YYYY-MM') as periodo_desde,
+              to_char(periodo_hasta, 'YYYY-MM') as periodo_hasta, fecha_documento::text,
+              tramite_clase, tramite_descripcion
+         from gt_obligacion where id = $1 for update`,
+      [id],
+    );
+    if (!previa) throw new ErrorDeNegocio('Esa obligación no existe.');
+    if (previa.estatus === 'cancelada') {
+      throw new ErrorDeNegocio('La obligación está cancelada, ya no se corrige.');
+    }
+
+    const esTramite = previa.tipo === 'tramite';
+    const nuevo = {
+      periodo_desde: datos.periodo_desde,
+      periodo_hasta: datos.periodo_hasta,
+      fecha_documento: datos.fecha_documento,
+      tramite_clase: esTramite ? (datos.tramite_clase ?? previa.tramite_clase) : null,
+      tramite_descripcion: esTramite ? (datos.tramite_descripcion ?? null) : null,
+    };
+    if (nuevo.tramite_clase === 'otro' && !nuevo.tramite_descripcion) {
+      throw new ErrorDeNegocio(
+        'Un trámite "otro" lleva su nombre, como "Carta de regularidad".',
+        'tramite_descripcion',
+      );
+    }
+    /* Fuera del ajuste de cápitas, un trámite no ampara meses: va en el de su solicitud. */
+    if (esTramite && nuevo.tramite_clase !== 'ajuste_capitas') {
+      nuevo.periodo_desde = nuevo.fecha_documento.slice(0, 7);
+      nuevo.periodo_hasta = nuevo.periodo_desde;
+    }
+
+    const antes: Record<string, unknown> = {};
+    const despues: Record<string, unknown> = {};
+    for (const campo of Object.keys(nuevo) as (keyof typeof nuevo)[]) {
+      if (nuevo[campo] !== previa[campo]) {
+        antes[campo] = previa[campo];
+        despues[campo] = nuevo[campo];
+      }
+    }
+    if (Object.keys(despues).length === 0) {
+      throw new ErrorDeNegocio('No hay nada distinto que guardar.');
+    }
+
+    try {
+      await tx.consulta(
+        `update gt_obligacion
+            set periodo_desde = $2, periodo_hasta = $3, fecha_documento = $4,
+                tramite_clase = $5, tramite_descripcion = $6, actualizado_por = $7
+          where id = $1`,
+        [
+          id,
+          `${nuevo.periodo_desde}-01`,
+          `${nuevo.periodo_hasta}-01`,
+          nuevo.fecha_documento,
+          nuevo.tramite_clase,
+          nuevo.tramite_descripcion,
+          usuarioId,
+        ],
+      );
+    } catch (error) {
+      comoErrorDeNegocio(error);
+    }
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'gt_obligacion_corregida',
+      entidad: 'gt_obligacion',
+      entidadId: id,
+      detalle: { folio: previa.folio, antes, despues, motivo: datos.motivo_correccion ?? null },
+    });
+  }, usuarioId);
+}
+
 export async function cancelarObligacion(
   ctx: Contexto,
   obligacionId: number,
@@ -444,14 +577,18 @@ export async function generarEgresoDePago(
   return enTransaccion(async (tx) => {
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_generar_egreso');
 
-    const obligaciones = await tx.consulta<{
-      id: number;
-      folio: string;
-      tipo: string;
-      fecha_documento: string;
-      saldo: number;
-    }>(
-      `select o.id, o.folio, o.tipo, o.fecha_documento::text,
+    const obligaciones = await tx.consulta<
+      {
+        id: number;
+        folio: string;
+        fecha_documento: string;
+        saldo: number;
+      } & ObligacionResumida
+    >(
+      `select o.id, o.folio, o.tipo, o.fecha_documento::text, o.tramite_clase,
+              o.tramite_descripcion, o.periodo_desde::text, o.periodo_hasta::text,
+              (select h.nombre_completo from hermano h where h.id = o.hermano_id)
+                as hermano_nombre,
               (o.monto_reportado_centavos
                 - coalesce((select sum(a.monto_centavos) from gt_pago_aplicacion a
                              where a.obligacion_id = o.id), 0))::int as saldo
@@ -511,7 +648,9 @@ export async function generarEgresoDePago(
         fecha_solicitud: fechaSolicitud,
         concepto_id: concepto.id,
         beneficiario: previo?.beneficiario ?? 'M∴R∴G∴L∴ Valle de México',
-        descripcion: `Pago a la Gran Tesorería: ${obligaciones.map((o) => o.folio).join(', ')}`,
+        descripcion: `Pago a la Gran Tesorería: ${obligaciones
+          .map((o) => `${o.folio} (${describirObligacion(o)})`)
+          .join(', ')}`,
         hermano_id: null,
         monto_solicitado_centavos: total,
         requiere_comprobacion: false,

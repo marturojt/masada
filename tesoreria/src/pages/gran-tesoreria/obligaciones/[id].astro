@@ -13,6 +13,7 @@ import Selector from '@componentes/Selector.astro';
 import {
   agregarDetalleObligacion,
   cancelarObligacion,
+  corregirObligacion,
   generarEgresoDePago,
 } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
@@ -30,11 +31,11 @@ import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaVacio } from '@lib/esquemas/comunes';
 import { esquemaMotivo } from '@lib/esquemas/egreso';
-import { esquemaDetalleObligacion } from '@lib/esquemas/gt';
+import { esquemaCorreccionObligacion, esquemaDetalleObligacion } from '@lib/esquemas/gt';
 import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { sonImagenes } from '@lib/archivos';
-import { requerirSesion } from '@lib/sesion';
+import { esVM, requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
 
 const sesion = requerirSesion(Astro);
@@ -52,6 +53,12 @@ const ETIQUETAS: Record<string, string> = {
   periodo: 'Periodo',
   descripcion: 'Descripción',
   motivo: 'Motivo de cancelación',
+  periodo_desde: 'Primer mes',
+  periodo_hasta: 'Último mes',
+  fecha_documento: 'Fecha del documento',
+  tramite_clase: 'Qué trámite es',
+  tramite_descripcion: 'Nombre del trámite',
+  motivo_correccion: 'Motivo de la corrección',
 };
 
 let errores: Record<string, string> = {};
@@ -96,6 +103,20 @@ if (Astro.request.method === 'POST') {
           const creado = await generarEgresoDePago({ ...ctxBase, nonce: r.nonce }, [id]);
           return Astro.redirect(`/egresos/${creado.egresoId}?ok=egreso`, 303);
         }
+      } else if (entrada.accion === 'corregir') {
+        const r = await validar(entrada, {
+          esquema: esquemaCorreccionObligacion,
+          proposito: 'gt_correccion',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          valores = r.valores;
+          estado = r.estado;
+        } else {
+          await corregirObligacion({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+          return Astro.redirect(`/gran-tesoreria/obligaciones/${id}?ok=corregido`, 303);
+        }
       } else if (entrada.accion === 'cancelar') {
         const r = await validar(entrada, {
           esquema: esquemaMotivo,
@@ -136,11 +157,17 @@ const imagenes = obligacion.documento_calculo_id
   ? await sonImagenes([obligacion.documento_calculo_id])
   : new Map<number, boolean>();
 
-const [nonceDetalle, nonceGenerar, nonceCancelar] = await Promise.all([
+const soyVM = esVM(sesion);
+const [nonceDetalle, nonceGenerar, nonceCancelar, nonceCorreccion] = await Promise.all([
   emitirNonce(sesion.idHash, 'gt_detalle'),
   emitirNonce(sesion.idHash, 'gt_generar_egreso'),
   emitirNonce(sesion.idHash, 'gt_cancelar'),
+  soyVM ? emitirNonce(sesion.idHash, 'gt_correccion') : Promise.resolve(''),
 ]);
+const opcionesClase: Opcion[] = Object.entries(NOMBRE_CLASE_TRAMITE).map(([valor, texto]) => ({
+  valor,
+  texto,
+}));
 
 const viva = obligacion.estatus === 'pendiente_pago' || obligacion.estatus === 'parcialmente_pagada';
 const totalDetalle = detalle.reduce((s, d) => s + d.subtotal_centavos, 0);
@@ -224,6 +251,17 @@ Astro.response.status = estado;
               <tr><th>Fecha de solicitud</th><td>{formatoFechaCorta(obligacion.fecha_documento)}</td></tr>
             ) : (
               <tr><th>Ampara</th><td>{rangoPeriodos}</td></tr>
+            )
+          }
+          {
+            obligacion.tramite_clase === 'ajuste_capitas' && (
+              <tr>
+                <th>Cubre</th>
+                <td>
+                  {rangoPeriodos}
+                  <span class="apagado"> · no cuenta para el a plomo de la logia</span>
+                </td>
+              </tr>
             )
           }
           <tr><th>Fecha del documento</th><td>{formatoFechaCorta(obligacion.fecha_documento)}</td></tr>
@@ -443,6 +481,86 @@ Astro.response.status = estado;
         )
       }
     </section>
+
+    {
+      soyVM && obligacion.estatus !== 'cancelada' && (
+        <section class="tarjeta">
+          <details open={seccion === 'corregir'}>
+            <summary style="cursor: pointer;">
+              <h2 style="display: inline; margin: 0;">Corregir la captura</h2>
+            </summary>
+            <p class="apagado" style="font-size: 0.85rem; margin-top: 0.75rem;">
+              Para errores de captura: los meses que ampara, la fecha del documento y, en un
+              trámite, qué trámite es. El monto no se toca. Mover los meses de una ordinaria
+              cambia el a plomo. El antes y el después quedan en la bitácora.
+            </p>
+            <div style="max-width: 28rem;">
+              <Formulario csrf={sesion.csrfToken} nonce={nonceCorreccion} accionInterna="corregir">
+                {obligacion.tipo === 'tramite' && (
+                  <>
+                    <Selector
+                      nombre="tramite_clase"
+                      etiqueta={ETIQUETAS.tramite_clase!}
+                      opciones={opcionesClase}
+                      valor={valores.tramite_clase ?? obligacion.tramite_clase ?? 'otro'}
+                      error={seccion === 'corregir' ? errores.tramite_clase : undefined}
+                      requerido
+                    />
+                    <Campo
+                      nombre="tramite_descripcion"
+                      etiqueta={ETIQUETAS.tramite_descripcion!}
+                      valor={valores.tramite_descripcion ?? obligacion.tramite_descripcion ?? ''}
+                      error={seccion === 'corregir' ? errores.tramite_descripcion : undefined}
+                      ayuda='Obligatorio en "Otro trámite"; en los demás, opcional.'
+                    />
+                  </>
+                )}
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                  <Campo
+                    nombre="periodo_desde"
+                    etiqueta={ETIQUETAS.periodo_desde!}
+                    tipo="month"
+                    valor={valores.periodo_desde ?? obligacion.periodo_desde.slice(0, 7)}
+                    error={seccion === 'corregir' ? errores.periodo_desde : undefined}
+                    requerido
+                  />
+                  <Campo
+                    nombre="periodo_hasta"
+                    etiqueta={ETIQUETAS.periodo_hasta!}
+                    tipo="month"
+                    valor={valores.periodo_hasta ?? obligacion.periodo_hasta.slice(0, 7)}
+                    error={seccion === 'corregir' ? errores.periodo_hasta : undefined}
+                    requerido
+                  />
+                </div>
+                {obligacion.tipo === 'tramite' && (
+                  <p class="apagado" style="font-size: 0.8rem; margin-top: 0;">
+                    En un trámite los meses solo cuentan si es ajuste de cápitas; en los demás
+                    quedan en el mes de la solicitud.
+                  </p>
+                )}
+                <Campo
+                  nombre="fecha_documento"
+                  etiqueta={obligacion.tipo === 'tramite' ? 'Fecha de solicitud' : ETIQUETAS.fecha_documento!}
+                  tipo="date"
+                  valor={valores.fecha_documento ?? obligacion.fecha_documento}
+                  error={seccion === 'corregir' ? errores.fecha_documento : undefined}
+                  requerido
+                />
+                <Campo
+                  nombre="motivo_correccion"
+                  etiqueta={ETIQUETAS.motivo_correccion!}
+                  valor={valores.motivo_correccion}
+                  error={seccion === 'corregir' ? errores.motivo_correccion : undefined}
+                  ayuda="Opcional. Por ejemplo: meses según el recibo Aju-124396."
+                />
+                <button class="btn btn--primary" type="submit">Guardar corrección</button>
+              </Formulario>
+            </div>
+          </details>
+        </section>
+      )
+    }
 
     {
       viva && obligacion.pagado_centavos === 0 && (

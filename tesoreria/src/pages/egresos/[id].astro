@@ -47,7 +47,7 @@ import {
   esquemaMotivoSuplencia,
 } from '@lib/esquemas/egreso';
 import { listarConceptos } from '@lib/datos/conceptos';
-import { NOMBRE_TIPO_OBLIGACION, obligacionesDeEgreso } from '@lib/datos/gt';
+import { describirObligacion, obligacionesDeEgreso } from '@lib/datos/gt';
 import { formatoFechaCorta, formatoMomento, hoyISO, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { sonImagenes } from '@lib/archivos';
@@ -458,7 +458,7 @@ Astro.response.status = estado;
               <thead>
                 <tr>
                   <th>Folio</th>
-                  <th>Tipo</th>
+                  <th>Qué es</th>
                   <th class="num">Monto ligado</th>
                 </tr>
               </thead>
@@ -468,7 +468,7 @@ Astro.response.status = estado;
                     <td>
                       <a href={`/gran-tesoreria/obligaciones/${o.obligacion_id}`}>{o.folio}</a>
                     </td>
-                    <td>{NOMBRE_TIPO_OBLIGACION[o.tipo as keyof typeof NOMBRE_TIPO_OBLIGACION] ?? o.tipo}</td>
+                    <td>{describirObligacion(o)}</td>
                     <td class="num">{formatoMXN(o.monto_centavos)}</td>
                   </tr>
                 ))}

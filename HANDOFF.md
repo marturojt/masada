@@ -1,6 +1,6 @@
 # Handoff — R∴L∴S∴ Masada No. 324
 
-Documento para retomar el trabajo. Última actualización: **10 de octubre de 2026**.
+Documento para retomar el trabajo. Última actualización: **10 de noviembre de 2026**.
 
 > Lee primero el `README.md` de la raíz para el sitio público y
 > `tesoreria/README.md` para el sistema de tesorería. Este documento cubre el
@@ -187,7 +187,7 @@ queda como ambiente de desarrollo.
 - [x] **Desplegar `ce831cc`, la corrección de captura (025) y la Ley de
       Ingresos GT (026)**. Hecho el 5 de octubre de 2026: producción en
       `bea099e`, migración 026, 82/82 pruebas en el servidor, respaldo previo.
-- [ ] **Desplegar la actualización de seguridad** (10 de octubre de 2026): astro
+- [x] **Desplegar la actualización de seguridad** (10 de octubre de 2026): astro
       7.3.8, @astrojs/node 11.1.7 (caída por Host malformado), sharp 0.35.5 y
       transitivas; `npm audit` en 0, con y sin dependencias de desarrollo.
       `/_image` responde 404. Sin migraciones; exige `npm ci` (cambió el lock,
@@ -197,9 +197,15 @@ queda como ambiente de desarrollo.
       primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.
 - [ ] **Comentarios de Arturo sobre las pestañas**: se atendieron el 6 (egresos)
       y el 7 (Gran Tesorería). Seguir con los que siguen.
-- [ ] (Backlog) **Corregir periodos de una obligación GT desde su ficha** (solo
-      periodos, nunca montos, con motivo): hoy esa corrección requirió
-      intervención por servidor y el guardián de la base ya la permite.
+- [ ] **Desplegar el ajuste de cápitas** (migración 027): clase de trámite
+      propia con los meses que cubre; los trámites "otro" llamados "Ajuste de
+      cápitas" se reclasifican solos (caso GT-2026-0011 de Cristian Colín,
+      recibo Aju-124396). Corrección de obligaciones desde su ficha (meses,
+      fecha y clase, nunca monto). La lista de Egresos dice qué paga cada egreso
+      de GT. Exige `npm run migrar`; sin dependencias nuevas.
+      Después de desplegar: en la ficha de GT-2026-0011, "Corregir la captura"
+      con los meses dic 2025 a oct 2026, y adjuntar el recibo (IMG_5296.heic)
+      en su egreso EG-2026-0013 como "Recibo de la Gran Tesorería".
 - [x] **Desplegar la tesorería** en https://tesoreria.masada324.org. Hecho el
       24 de agosto de 2026. El procedimiento y lo que el despliegue real destapó
       están en `tesoreria/README.md`, sección "Despliegue"; la operación del

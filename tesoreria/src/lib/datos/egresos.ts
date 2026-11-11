@@ -3,6 +3,7 @@
  */
 import { consulta, unaFila, type Tx } from '../db';
 import type { Rol } from '../tipos';
+import type { ObligacionResumida } from './gt';
 
 export type EstadoEgreso =
   | 'registrado'
@@ -61,6 +62,8 @@ export interface EgresoFila {
   firmas: number;
   /** Folio GTP- si el egreso pagó a la Gran Tesorería y ya se entregó. */
   pago_gt_folio: string | null;
+  /** Las obligaciones GT que paga, para decir qué fue sin abrir la ficha. */
+  obligaciones_gt: ObligacionResumida[] | null;
 }
 
 const COLUMNAS = `e.id, e.folio, e.fecha_solicitud, e.ejercicio_anio, e.concepto_id,
@@ -72,7 +75,17 @@ const COLUMNAS = `e.id, e.folio, e.fecha_solicitud, e.ejercicio_anio, e.concepto
        e.motivo_rechazo, e.motivo_cancelacion, e.notas,
        (select count(*)::int from egreso_firma f where f.egreso_id = e.id) as firmas,
        (select p.folio from movimiento m join gt_pago p on p.movimiento_id = m.id
-         where m.egreso_id = e.id and m.tipo = 'egreso') as pago_gt_folio`;
+         where m.egreso_id = e.id and m.tipo = 'egreso') as pago_gt_folio,
+       (select json_agg(json_build_object(
+                 'tipo', o.tipo, 'tramite_clase', o.tramite_clase,
+                 'tramite_descripcion', o.tramite_descripcion,
+                 'hermano_nombre', ho.nombre_completo,
+                 'periodo_desde', o.periodo_desde, 'periodo_hasta', o.periodo_hasta)
+               order by o.periodo_desde, o.id)
+          from egreso_gt_obligacion l
+          join gt_obligacion o on o.id = l.obligacion_id
+          left join hermano ho on ho.id = o.hermano_id
+         where l.egreso_id = e.id) as obligaciones_gt`;
 
 const DESDE = `from egreso e
        join concepto c on c.id = e.concepto_id
@@ -385,13 +398,10 @@ export const beneficiariosUsados = (): Promise<{ beneficiario: string; egresos: 
       order by lower(beneficiario), beneficiario`,
   );
 
-export interface ObligacionSinEgreso {
+export interface ObligacionSinEgreso extends ObligacionResumida {
   id: number;
   folio: string;
-  tipo: string;
   fecha_documento: string;
-  hermano_nombre: string | null;
-  tramite_descripcion: string | null;
   saldo_centavos: number;
 }
 
@@ -403,7 +413,8 @@ export interface ObligacionSinEgreso {
 export const obligacionesSinEgreso = (): Promise<ObligacionSinEgreso[]> =>
   consulta<ObligacionSinEgreso>(
     `select o.id, o.folio, o.tipo, o.fecha_documento::text,
-            h.nombre_completo as hermano_nombre, o.tramite_descripcion,
+            h.nombre_completo as hermano_nombre, o.tramite_clase, o.tramite_descripcion,
+            o.periodo_desde::text, o.periodo_hasta::text,
             (o.monto_reportado_centavos
               - coalesce((select sum(a.monto_centavos) from gt_pago_aplicacion a
                            where a.obligacion_id = o.id), 0))::int as saldo_centavos

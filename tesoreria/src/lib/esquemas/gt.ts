@@ -9,6 +9,7 @@ import {
   notas,
   opcionDe,
   periodoISO,
+  periodoISOOpcional,
   texto,
   textoOpcional,
 } from './comunes';
@@ -63,10 +64,13 @@ export const esquemaObligacion = z.object({
 export const esquemaTramite = z.object({
   hermano_id: idPositivo('El hermano'),
   tramite_clase: opcionDe(
-    ['iniciacion', 'afiliacion', 'aumento_salario', 'exaltacion', 'otro'],
+    ['iniciacion', 'afiliacion', 'aumento_salario', 'exaltacion', 'ajuste_capitas', 'otro'],
     'Indica qué trámite es.',
   ),
   tramite_descripcion: textoOpcional('El nombre del trámite', 200),
+  /* Solo el ajuste de cápitas ampara meses: los que la GT cobró. */
+  cubre_desde: periodoISOOpcional('El primer mes que cubre'),
+  cubre_hasta: periodoISOOpcional('El último mes que cubre'),
   fecha_solicitud: fechaISO('La fecha de solicitud'),
   monto_reportado: montoEnCentavos('Lo que cobró la Gran Tesorería'),
   observaciones: notas(800),
@@ -115,4 +119,20 @@ export const esquemaAportacionEspecie = z.object({
   ),
   unidad: textoOpcional('La unidad', 40),
   valor_estimado: montoEnCentavosOpcional('El valor estimado'),
+});
+
+/*
+ * Corrección de captura de una obligación: los meses que ampara, la fecha del
+ * documento y, en un trámite, su clase y su nombre. El monto nunca.
+ */
+export const esquemaCorreccionObligacion = z.object({
+  periodo_desde: periodoISO('El primer mes'),
+  periodo_hasta: periodoISO('El último mes'),
+  fecha_documento: fechaISO('La fecha del documento'),
+  tramite_clase: opcionDe(
+    ['iniciacion', 'afiliacion', 'aumento_salario', 'exaltacion', 'ajuste_capitas', 'otro'],
+    'Indica qué trámite es.',
+  ).optional(),
+  tramite_descripcion: textoOpcional('El nombre del trámite', 200),
+  motivo_correccion: textoOpcional('El motivo de la corrección', 300),
 });

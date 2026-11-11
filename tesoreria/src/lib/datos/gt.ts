@@ -6,6 +6,7 @@
  * Tesorería. Las tarifas son referencia para capturarlo, no lo calculan.
  */
 import { consulta, unaFila, type Tx } from '../db';
+import { nombrePeriodoCorto } from '../fechas';
 import type { Bolsa } from '../tipos';
 
 export type TipoObligacion = 'ordinaria' | 'regularizacion' | 'tramite' | 'extraordinaria';
@@ -42,6 +43,7 @@ export type ClaseTramite =
   | 'afiliacion'
   | 'aumento_salario'
   | 'exaltacion'
+  | 'ajuste_capitas'
   | 'otro';
 
 export const NOMBRE_CLASE_TRAMITE: Record<ClaseTramite, string> = {
@@ -49,8 +51,59 @@ export const NOMBRE_CLASE_TRAMITE: Record<ClaseTramite, string> = {
   afiliacion: 'Afiliación',
   aumento_salario: 'Aumento de salario (da el grado de compañero)',
   exaltacion: 'Exaltación (da el grado de maestro)',
+  ajuste_capitas: 'Ajuste de cápitas (meses que GT cobra para respetar su fecha)',
   otro: 'Otro trámite administrativo',
 };
+
+/** Nombre corto, para una línea de lista. */
+const CLASE_CORTA: Record<ClaseTramite, string> = {
+  iniciacion: 'Iniciación',
+  afiliacion: 'Afiliación',
+  aumento_salario: 'Aumento de salario',
+  exaltacion: 'Exaltación',
+  ajuste_capitas: 'Ajuste de cápitas',
+  otro: 'Trámite',
+};
+
+const rangoCorto = (desde: string, hasta: string): string =>
+  desde.slice(0, 7) === hasta.slice(0, 7)
+    ? nombrePeriodoCorto(desde.slice(0, 7))
+    : `${nombrePeriodoCorto(desde.slice(0, 7))} a ${nombrePeriodoCorto(hasta.slice(0, 7))}`;
+
+export interface ObligacionResumida {
+  tipo: TipoObligacion;
+  tramite_clase: ClaseTramite | null;
+  tramite_descripcion: string | null;
+  hermano_nombre: string | null;
+  periodo_desde: string;
+  periodo_hasta: string;
+}
+
+/**
+ * Qué es una obligación, en palabras: "Cápitas ordinarias oct 2026",
+ * "Iniciación, Juan Pérez", "Ajuste de cápitas dic 2025 a oct 2026, Cristian
+ * Colín". Un trámite no ampara meses, salvo el ajuste de cápitas.
+ */
+export function describirObligacion(o: ObligacionResumida): string {
+  const rango = rangoCorto(o.periodo_desde, o.periodo_hasta);
+  const quien = o.hermano_nombre ? `, ${o.hermano_nombre}` : '';
+  switch (o.tipo) {
+    case 'ordinaria':
+      return `Cápitas ordinarias ${rango}`;
+    case 'regularizacion':
+      return `Regularización ${rango}${quien}`;
+    case 'extraordinaria':
+      return `Extraordinaria ${rango}${quien}`;
+    case 'tramite': {
+      if (o.tramite_clase === 'ajuste_capitas') return `Ajuste de cápitas ${rango}${quien}`;
+      const nombre =
+        o.tramite_clase === 'otro' || !o.tramite_clase
+          ? (o.tramite_descripcion ?? 'Trámite')
+          : CLASE_CORTA[o.tramite_clase];
+      return `${nombre}${quien}`;
+    }
+  }
+}
 
 export const NOMBRE_TIPO_OBLIGACION: Record<TipoObligacion, string> = {
   ordinaria: 'Ordinaria del mes',
@@ -414,11 +467,14 @@ export const obligacionesLigadasAEgreso = (
 
 export const obligacionesDeEgreso = (
   egresoId: number,
-): Promise<{ obligacion_id: number; monto_centavos: number; folio: string; tipo: string }[]> =>
+): Promise<({ obligacion_id: number; monto_centavos: number; folio: string } & ObligacionResumida)[]> =>
   consulta(
-    `select l.obligacion_id, l.monto_centavos, o.folio, o.tipo
+    `select l.obligacion_id, l.monto_centavos, o.folio, o.tipo, o.tramite_clase,
+            o.tramite_descripcion, h.nombre_completo as hermano_nombre,
+            o.periodo_desde::text, o.periodo_hasta::text
        from egreso_gt_obligacion l
        join gt_obligacion o on o.id = l.obligacion_id
+       left join hermano h on h.id = o.hermano_id
       where l.egreso_id = $1
       order by o.periodo_desde`,
     [egresoId],

@@ -174,6 +174,19 @@ export const periodoISO = (etiqueta = 'El periodo') =>
       ),
   );
 
+/** Periodo opcional AAAA-MM: vacío o ausente se vuelve undefined. */
+export const periodoISOOpcional = (etiqueta = 'El periodo') =>
+  z.preprocess(
+    comoTexto,
+    z
+      .string()
+      .transform((v) => (v.trim() === '' ? undefined : v.trim()))
+      .refine(
+        (v) => v === undefined || /^\d{4}-(0[1-9]|1[0-2])$/.test(v),
+        `${etiqueta} debe tener formato AAAA-MM.`,
+      ),
+  );
+
 export const idPositivo = (etiqueta = 'El registro') =>
   z.preprocess(
     comoTexto,

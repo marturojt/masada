@@ -205,9 +205,19 @@ en su ficha como consulta.
   ya cerrados.
 - **Trámites**: pantalla propia, como pasa en la ventanilla: una fecha de
   solicitud, un hermano, una clase (iniciación, afiliación, aumento de salario,
-  exaltación, u otro trámite administrativo con su nombre, como una carta de
-  regularidad) y lo que la GT cobró. No amparan meses ni cuentan para el a
-  plomo; su pago sale igual, como egreso con dos firmas. La regla de grados es
+  exaltación, ajuste de cápitas, u otro trámite administrativo con su nombre,
+  como una carta de regularidad) y lo que la GT cobró. No amparan meses ni
+  cuentan para el a plomo; su pago sale igual, como egreso con dos firmas. El
+  **ajuste de cápitas** es la excepción en los meses: es lo que GT cobra para
+  respetar la fecha de iniciación de un hermano cuyo trámite no se concluyó a
+  tiempo, y su periodo son los meses que cubre (como dice el recibo), aunque
+  tampoco cuenta para el a plomo de la logia.
+- **Corrección de una obligación** (nivel V∴M∴, desde su ficha): los meses que
+  ampara, la fecha del documento y, en un trámite, su clase y su nombre. Nunca
+  el monto. Queda en la bitácora con el antes y el después.
+- En Egresos, cada pago a GT dice qué paga ("Cápitas ordinarias oct 2026",
+  "Iniciación, fulano", "Ajuste de cápitas dic 2025 a oct 2026, fulano") en vez
+  del nombre del concepto. La regla de grados es
   la de siempre: iniciación da aprendiz, aumento da compañero, exaltación da
   maestro, y así lo registra el padrón.
 - **Pagos**: de las obligaciones pendientes se genera un egreso normal con dos

@@ -18,7 +18,7 @@ import {
 import { formatoMXN } from '@lib/dinero';
 import { formatoFechaCorta } from '@lib/fechas';
 import { avisoDe } from '@lib/formulario';
-import { NOMBRE_TIPO_OBLIGACION } from '@lib/datos/gt';
+import { describirObligacion } from '@lib/datos/gt';
 import { esVM, requerirSesion } from '@lib/sesion';
 
 const sesion = requerirSesion(Astro);
@@ -154,11 +154,7 @@ const conFiltro = (valor?: string): string => {
                     <a href={`/gran-tesoreria/obligaciones/${o.id}`}>{o.folio}</a>
                   </td>
                   <td>{formatoFechaCorta(o.fecha_documento)}</td>
-                  <td>
-                    {NOMBRE_TIPO_OBLIGACION[o.tipo as keyof typeof NOMBRE_TIPO_OBLIGACION] ?? o.tipo}
-                    {o.tramite_descripcion && <> · {o.tramite_descripcion}</>}
-                    {o.hermano_nombre && <> · {o.hermano_nombre}</>}
-                  </td>
+                  <td>{describirObligacion(o)}</td>
                   <td class="num">{formatoMXN(o.saldo_centavos)}</td>
                 </tr>
               ))}
@@ -224,11 +220,28 @@ const conFiltro = (valor?: string): string => {
                 <td>{formatoFechaCorta(e.fecha_solicitud)}</td>
                 <td>{e.fecha_entrega ? formatoFechaCorta(e.fecha_entrega) : '—'}</td>
                 <td>
-                  {e.concepto_nombre}
-                  {e.pago_gt_folio && (
+                  {e.obligaciones_gt ? (
                     <>
-                      {' '}
-                      <span class="insignia">{e.pago_gt_folio}</span>
+                      {e.obligaciones_gt.map((o, i) => (
+                        <>
+                          {i > 0 && <br />}
+                          {describirObligacion(o)}
+                        </>
+                      ))}
+                      <br />
+                      <span class="apagado" style="font-size: 0.8rem;">
+                        Gran Tesorería{e.pago_gt_folio && <> · {e.pago_gt_folio}</>}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {e.concepto_nombre}
+                      {e.pago_gt_folio && (
+                        <>
+                          {' '}
+                          <span class="insignia">{e.pago_gt_folio}</span>
+                        </>
+                      )}
                     </>
                   )}
                 </td>

@@ -357,3 +357,35 @@ test('la ley 2026-2027 queda cargada y la tarifa vigente es la última de cada c
     );
   });
 });
+
+test('el ajuste de cápitas es un trámite con meses que no cuentan para el a plomo', async () => {
+  await enPrueba(async ({ cliente, tesorero }) => {
+    const { rows: hermano } = await cliente.query(
+      `insert into hermano (nombre_completo, grado, fecha_ingreso, motivo_ingreso)
+       values ('Hermano del ajuste', 'aprendiz', '2025-11-15', 'iniciacion') returning id`,
+    );
+    const { rows: folio } = await cliente.query(
+      "select fn_gt_folio_obligacion(2026, 'tramite') as folio",
+    );
+    const { rows } = await cliente.query(
+      `insert into gt_obligacion
+         (folio, tipo, tramite_clase, tramite_descripcion, hermano_id, periodo_desde,
+          periodo_hasta, fecha_documento, monto_reportado_centavos, creado_por, actualizado_por)
+       values ($1, 'tramite', 'ajuste_capitas', null, $2, '2025-12-01', '2026-10-01',
+               '2026-11-04', 275000, $3, $3)
+       returning id`,
+      [folio[0].folio, hermano[0].id, tesorero],
+    );
+    const pago = await nuevoPagoGT(cliente, tesorero, 275000, '2026-11-10');
+    await cliente.query(
+      'insert into gt_pago_aplicacion (pago_id, obligacion_id, monto_centavos) values ($1, $2, 275000)',
+      [pago.id, rows[0].id],
+    );
+    await cliente.query('set constraints all immediate');
+
+    const { rows: cubiertos } = await cliente.query(
+      "select count(*)::int as n from v_gt_periodos_cubiertos where anio = 2026 and cubierto",
+    );
+    assert.equal(cubiertos[0].n, 0);
+  });
+});

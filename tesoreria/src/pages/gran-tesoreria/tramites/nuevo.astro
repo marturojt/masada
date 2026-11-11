@@ -30,6 +30,8 @@ const ETIQUETAS: Record<string, string> = {
   hermano_id: 'Hermano',
   tramite_clase: 'Qué trámite es',
   tramite_descripcion: 'Nombre del trámite',
+  cubre_desde: 'Cubre desde',
+  cubre_hasta: 'Cubre hasta',
   fecha_solicitud: 'Fecha de solicitud',
   monto_reportado: 'Lo que cobró la Gran Tesorería',
   calculo: 'Documento o nota de la GT',
@@ -67,14 +69,25 @@ if (Astro.request.method === 'POST') {
     estado = resultado.estado;
   } else {
     try {
-      /* El trámite no ampara meses: su periodo es el mes de la solicitud. */
-      const periodo = resultado.datos.fecha_solicitud.slice(0, 7);
+      /*
+       * Un trámite no ampara meses: su periodo es el mes de la solicitud. El
+       * ajuste de cápitas es la excepción: su periodo son los meses que cubre.
+       */
+      const datos = resultado.datos;
+      const periodo = datos.fecha_solicitud.slice(0, 7);
+      const esAjuste = datos.tramite_clase === 'ajuste_capitas';
+      if (esAjuste && (!datos.cubre_desde || !datos.cubre_hasta)) {
+        throw new ErrorDeNegocio(
+          'Indica los meses que cubre el ajuste, como vienen en el recibo (por ejemplo, dic 2025 a oct 2026).',
+          datos.cubre_desde ? 'cubre_hasta' : 'cubre_desde',
+        );
+      }
       const creada = await capturarObligacion(
         { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
         {
           tipo: 'tramite',
-          periodo_desde: periodo,
-          periodo_hasta: periodo,
+          periodo_desde: esAjuste ? datos.cubre_desde! : periodo,
+          periodo_hasta: esAjuste ? datos.cubre_hasta! : periodo,
           fecha_documento: resultado.datos.fecha_solicitud,
           monto_reportado: resultado.datos.monto_reportado,
           hermano_id: resultado.datos.hermano_id,
@@ -160,6 +173,29 @@ Astro.response.status = estado;
       error={errores.tramite_descripcion}
       ayuda='Obligatorio si es "Otro trámite administrativo": por ejemplo, Carta de regularidad para grados filosóficos.'
     />
+    <fieldset class="campo" style="border: 0; padding: 0; margin: 0 0 1rem;">
+      <legend class="campo__etiqueta">Meses que cubre (solo ajuste de cápitas)</legend>
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <Campo
+          nombre="cubre_desde"
+          etiqueta={ETIQUETAS.cubre_desde!}
+          tipo="month"
+          valor={valores.cubre_desde}
+          error={errores.cubre_desde}
+        />
+        <Campo
+          nombre="cubre_hasta"
+          etiqueta={ETIQUETAS.cubre_hasta!}
+          tipo="month"
+          valor={valores.cubre_hasta}
+          error={errores.cubre_hasta}
+        />
+      </div>
+      <span class="campo__ayuda">
+        Los meses que la Gran Tesorería cobró para respetar la fecha de iniciación del
+        hermano, como dice el recibo. Los demás trámites no amparan meses.
+      </span>
+    </fieldset>
     <Campo
       nombre="fecha_solicitud"
       etiqueta={ETIQUETAS.fecha_solicitud!}
