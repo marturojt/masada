@@ -1,0 +1,345 @@
+---
+/*
+ * Informe anual del tesorero: el ejercicio de enero a diciembre, para leerlo en
+ * tenida y archivarlo. Abre con un texto en palabras y sigue con las cifras del
+ * año: mes por mes, por clasificación, cápitas, Gran Tesorería, aportaciones en
+ * especie y lo que queda pendiente. No nombra a quienes deben.
+ */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import { resumenCapitas } from '@lib/datos/capitas';
+import { NOMBRE_CLASIFICACION, controlBolsas, cortesDelAnio, vistaBolsas } from '@lib/datos/cortes';
+import { cuotasPorCobrar } from '@lib/datos/cuotas';
+import { pendientesDeComprobar } from '@lib/datos/egresos';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { obligacionesConSaldo } from '@lib/datos/estado-general';
+import { estadoAplomo, listarPagosGT } from '@lib/datos/gt';
+import {
+  agruparPorClasificacion,
+  conceptosDelAnio,
+  especieDelAnio,
+  parrafosAnuales,
+} from '@lib/datos/informe-anual';
+import { resumenDelPeriodo } from '@lib/datos/tablero';
+import { formatoCifra, formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, formatoFechaLarga, hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+void sesion;
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+
+const [cortes, control, conceptos, capitas, aplomo, pagosGT, especie, porComprobar, cuotas, obligaciones] =
+  await Promise.all([
+    cortesDelAnio(anio),
+    controlBolsas(anio),
+    conceptosDelAnio(anio),
+    resumenCapitas(anio),
+    estadoAplomo(),
+    listarPagosGT(anio),
+    especieDelAnio(anio),
+    pendientesDeComprobar(),
+    cuotasPorCobrar(),
+    obligacionesConSaldo(),
+  ]);
+
+const hoy = periodoActual();
+const resumen = resumenDelPeriodo(cortes, null, hoy);
+const cerrados = cortes.filter((c) => c.estado_corte === 'cerrado').length;
+const enCurso = cortes.some((c) => c.periodo.slice(0, 7) >= hoy);
+
+/* El último mes que ya empezó es el que da el saldo final y las bolsas. */
+const ultimo = cortes.filter((c) => c.periodo.slice(0, 7) <= hoy).at(-1);
+const bolsas =
+  ultimo && vistaBolsas(control, ultimo.periodo.slice(0, 7)) !== 'oculta'
+    ? { banco: ultimo.banco_final_centavos, efectivo: ultimo.efectivo_final_centavos }
+    : null;
+
+const mejor = cortes.reduce<(typeof cortes)[number] | null>(
+  (m, c) => (!m || c.total_ingresos_centavos > m.total_ingresos_centavos ? c : m),
+  null,
+);
+const pagadoGT = pagosGT.reduce((s, p) => s + p.monto_centavos, 0);
+
+const parrafos = parrafosAnuales({
+  anio,
+  cerrados,
+  enCurso,
+  saldoInicial: cortes[0]?.saldo_inicial_centavos ?? 0,
+  ingresos: resumen.ingresos,
+  egresos: resumen.egresos,
+  saldoFinal: resumen.saldoFinal,
+  bolsas,
+  mejorMes: mejor ? { periodo: mejor.periodo.slice(0, 7), ingresos: mejor.total_ingresos_centavos } : null,
+  pagadoGT,
+  capitas: {
+    esperado: capitas?.esperado ?? 0,
+    pagado: capitas?.pagado ?? 0,
+    alCorriente: capitas?.al_corriente ?? 0,
+    conAdeudo: capitas?.con_adeudo ?? 0,
+    vencido: capitas?.vencido ?? 0,
+  },
+  aplomo,
+});
+
+const gruposIngreso = agruparPorClasificacion(conceptos, 'ingreso');
+const gruposEgreso = agruparPorClasificacion(conceptos, 'egreso');
+
+const pendientes = [
+  {
+    texto: `Cápitas vencidas de ${capitas?.con_adeudo ?? 0} ${(capitas?.con_adeudo ?? 0) === 1 ? 'hermano' : 'hermanos'}`,
+    monto: capitas?.vencido ?? 0,
+  },
+  {
+    texto: `${obligaciones.length} ${obligaciones.length === 1 ? 'obligación' : 'obligaciones'} con la Gran Tesorería por pagar`,
+    monto: obligaciones.reduce((s, o) => s + o.saldo_centavos, 0),
+  },
+  {
+    texto: `${porComprobar.length} ${porComprobar.length === 1 ? 'gasto entregado' : 'gastos entregados'} por comprobar`,
+    monto: porComprobar.reduce((s, p) => s + p.pendiente_centavos, 0),
+  },
+  {
+    texto: `Cuotas de grado por cobrar a ${new Set(cuotas.map((c) => c.hermano_id)).size} ${new Set(cuotas.map((c) => c.hermano_id)).size === 1 ? 'persona' : 'personas'}`,
+    monto: cuotas.reduce((s, c) => s + c.saldo_centavos, 0),
+  },
+].filter((p) => p.monto > 0);
+---
+
+<LayoutImpresion
+  titulo={`Informe anual de tesorería ${anio}`}
+  periodo={`Informe anual de tesorería, ejercicio ${anio}`}
+  borrador={cerrados < 12}
+  volverA="/reportes"
+>
+  <div class="bloque-impreso">
+    {parrafos.map((p) => <p>{p}</p>)}
+  </div>
+
+  <div class="bloque-impreso">
+    <h2>El año en cifras</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Saldo al inicio del ejercicio</th><td class="num">{formatoMXN(cortes[0]?.saldo_inicial_centavos ?? 0)}</td></tr>
+        <tr><th scope="row">Ingresos del año</th><td class="num">{formatoMXN(resumen.ingresos)}</td></tr>
+        <tr><th scope="row">Egresos del año</th><td class="num">{formatoMXN(resumen.egresos)}</td></tr>
+        <tr><th scope="row">Resultado</th><td class="num">{formatoMXN(resumen.resultado)}</td></tr>
+        <tr>
+          <th scope="row"><strong>{enCurso ? 'Saldo al día de hoy' : 'Saldo al cierre del ejercicio'}</strong></th>
+          <td class="num"><strong>{formatoMXN(resumen.saldoFinal)}</strong></td>
+        </tr>
+        {bolsas && (
+          <>
+            <tr><th scope="row">En banco</th><td class="num">{formatoMXN(bolsas.banco)}</td></tr>
+            <tr><th scope="row">En efectivo</th><td class="num">{formatoMXN(bolsas.efectivo)}</td></tr>
+          </>
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bloque-impreso">
+    <h2>Mes por mes</h2>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Mes</th>
+          <th scope="col" class="num">Saldo inicial</th>
+          <th scope="col" class="num">Ingresos</th>
+          <th scope="col" class="num">Egresos</th>
+          <th scope="col" class="num">Saldo final</th>
+          <th scope="col">Corte</th>
+        </tr>
+      </thead>
+      <tbody>
+        {cortes.map((c) => (
+          <tr>
+            <td>{nombrePeriodo(c.periodo.slice(0, 7))}</td>
+            <td class="num">{formatoCifra(c.saldo_inicial_centavos)}</td>
+            <td class="num">{formatoCifra(c.total_ingresos_centavos)}</td>
+            <td class="num">{formatoCifra(c.total_egresos_centavos)}</td>
+            <td class="num">{formatoCifra(c.saldo_final_centavos)}</td>
+            <td>
+              {c.estado_corte === 'cerrado'
+                ? 'Cerrado'
+                : c.periodo.slice(0, 7) > hoy
+                  ? 'Por venir'
+                  : 'Abierto'}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">Total del año</td>
+          <td class="num">{formatoCifra(resumen.ingresos)}</td>
+          <td class="num">{formatoCifra(resumen.egresos)}</td>
+          <td class="num">{formatoCifra(resumen.saldoFinal)}</td>
+          <td />
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {
+    ([
+      ['Ingresos por clasificación', gruposIngreso, resumen.ingresos],
+      ['Egresos por clasificación', gruposEgreso, resumen.egresos],
+    ] as const).map(([titulo, grupos, total]) =>
+      grupos.length > 0 && (
+        <div class="bloque-impreso">
+          <h2>{titulo}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Concepto</th>
+                <th scope="col" class="num">Movimientos</th>
+                <th scope="col" class="num">Monto</th>
+                <th scope="col" class="num">Del total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grupos.map((g) => (
+                <>
+                  <tr>
+                    <td colspan="2"><strong>{NOMBRE_CLASIFICACION[g.clasificacion] ?? g.clasificacion}</strong></td>
+                    <td class="num"><strong>{formatoCifra(g.total)}</strong></td>
+                    <td class="num">{total > 0 ? `${Math.round((g.total / total) * 100)}%` : ''}</td>
+                  </tr>
+                  {g.conceptos.map((c) => (
+                    <tr>
+                      <td style="padding-left: 1.2rem;">{c.concepto_nombre}</td>
+                      <td class="num">{c.movimientos}</td>
+                      <td class="num">{formatoCifra(c.monto_centavos)}</td>
+                      <td />
+                    </tr>
+                  ))}
+                </>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">Total</td>
+                <td class="num">{formatoCifra(total)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ),
+    )
+  }
+
+  <div class="bloque-impreso">
+    <h2>Cápitas {anio}</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Esperado del ejercicio</th><td class="num">{formatoMXN(capitas?.esperado ?? 0)}</td></tr>
+        <tr><th scope="row">Cobrado</th><td class="num">{formatoMXN(capitas?.pagado ?? 0)}</td></tr>
+        {(capitas?.condonado ?? 0) > 0 && (
+          <tr><th scope="row">Exento</th><td class="num">{formatoMXN(capitas?.condonado ?? 0)}</td></tr>
+        )}
+        <tr><th scope="row">Vencido</th><td class="num">{formatoMXN(capitas?.vencido ?? 0)}</td></tr>
+        {(capitas?.por_vencer ?? 0) > 0 && (
+          <tr><th scope="row">Por vencer en lo que resta del año</th><td class="num">{formatoMXN(capitas?.por_vencer ?? 0)}</td></tr>
+        )}
+        <tr>
+          <th scope="row">Hermanos al corriente y con adeudo</th>
+          <td class="num">{capitas?.al_corriente ?? 0} y {capitas?.con_adeudo ?? 0}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bloque-impreso">
+    <h2>Gran Tesorería</h2>
+    <p>
+      {(aplomo.ordinario_a_plomo
+        ? 'La logia está a plomo en sus obligaciones ordinarias'
+        : `La logia tiene ${aplomo.meses_pendientes} ${aplomo.meses_pendientes === 1 ? 'mes ordinario pendiente' : 'meses ordinarios pendientes'}`) +
+        (aplomo.cubierto_hasta ? `, cubierta hasta ${nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}.` : '.')}
+    </p>
+    {
+      pagosGT.length === 0 ? (
+        <p class="apagado">No hubo pagos a la Gran Tesorería en {anio}.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Pago</th>
+              <th scope="col">Fecha</th>
+              <th scope="col">Obligaciones que cubre</th>
+              <th scope="col" class="num">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...pagosGT].reverse().map((p) => (
+              <tr>
+                <td>{p.folio}</td>
+                <td>{formatoFechaCorta(p.fecha_pago)}</td>
+                <td>{p.obligaciones ?? ''}</td>
+                <td class="num">{formatoCifra(p.monto_centavos)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">Total pagado en el año</td>
+              <td class="num">{formatoCifra(pagadoGT)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )
+    }
+  </div>
+
+  {
+    especie.length > 0 && (
+      <div class="bloque-impreso">
+        <h2>Aportaciones en especie</h2>
+        <p>La tesorería agradece estas aportaciones. Constan fuera de las cifras porque no son dinero.</p>
+        <table>
+          <tbody>
+            {especie.map((a) => (
+              <tr>
+                <td>{formatoFechaCorta(a.fecha)}</td>
+                <td>{a.aportante_nombre}</td>
+                <td>
+                  {a.descripcion}
+                  {a.destino && <> · {a.destino}</>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  <div class="bloque-impreso">
+    <h2>Lo que queda pendiente</h2>
+    {
+      pendientes.length === 0 ? (
+        <p>La tesorería no deja pendientes: no hay adeudos por cobrar ni compromisos por pagar.</p>
+      ) : (
+        <table>
+          <tbody>
+            {pendientes.map((p) => (
+              <tr>
+                <th scope="row">{p.texto}</th>
+                <td class="num">{formatoMXN(p.monto)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
+
+  <p class="sello">
+    {cerrados === 12
+      ? `Cifras de los doce cortes cerrados del ejercicio ${anio}.`
+      : `Borrador al ${formatoFechaLarga(hoyISO())}: ${cerrados} de 12 cortes cerrados.`}
+  </p>
+</LayoutImpresion>

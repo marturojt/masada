@@ -1,7 +1,10 @@
 ---
 /*
- * Tablero: lo que un tesorero quiere ver al entrar. Saldo de caja, qué mes toca
- * cerrar, cómo van las cápitas y qué egresos esperan firma o comprobación.
+ * Tablero: lo que un tesorero quiere ver al entrar. Primero cuánto entró y salió
+ * en el periodo elegido (el ejercicio o un mes) y de qué conceptos; después lo
+ * pendiente: caja, cápitas, Gran Tesorería y egresos que esperan algo.
+ *
+ * El periodo viaja en la dirección (?anio=2026&periodo=2026-08), sin JavaScript.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import GraficaFlujoMensual from '@componentes/graficas/GraficaFlujoMensual.astro';
@@ -10,11 +13,25 @@ import { estadoAplomo } from '@lib/datos/gt';
 import { pendientesDeEvidencia } from '@lib/datos/pendientes';
 import { resumenCapitas, sinPlan } from '@lib/datos/capitas';
 import { bolsasAlDia, controlBolsas, cortesDelAnio, primerMesAbierto } from '@lib/datos/cortes';
-import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import {
+  conceptosDelPeriodo,
+  periodoDeUrl,
+  resumenDelPeriodo,
+  type ConceptoPeriodo,
+} from '@lib/datos/tablero';
+import Selector from '@componentes/Selector.astro';
 import { listarEgresos, pendientesDeComprobar } from '@lib/datos/egresos';
 import { flujoPorMes, saldoDeCaja } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
-import { formatoFechaCorta, formatoFechaLarga, hoyISO, nombrePeriodo, periodoActual } from '@lib/fechas';
+import {
+  MESES,
+  formatoFechaCorta,
+  formatoFechaLarga,
+  hoyISO,
+  nombrePeriodo,
+  periodoActual,
+} from '@lib/fechas';
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_ESTADO_EGRESO, CLASE_ESTADO_EGRESO } from '@lib/datos/egresos';
@@ -23,8 +40,11 @@ import { cuotasPorCobrar } from '@lib/datos/cuotas';
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 
-const ejercicio = await ejercicioVigente();
-const anio = ejercicio.anio;
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
+const periodo = periodoDeUrl(Astro.url, anio);
 
 const [
   caja,
@@ -39,6 +59,7 @@ const [
   evidencias,
   cuotas,
   control,
+  conceptos,
 ] = await Promise.all([
     saldoDeCaja(anio),
     resumenCapitas(anio),
@@ -52,7 +73,39 @@ const [
     pendientesDeEvidencia(),
     cuotasPorCobrar(),
     controlBolsas(anio),
+    conceptosDelPeriodo(anio, periodo),
   ]);
+
+/* Sección 1: cuánto entró y salió en el periodo. */
+const resumen = resumenDelPeriodo(cortes, periodo, periodoActual());
+const nombreDelPeriodo = periodo ? nombrePeriodo(periodo) : `todo ${anio}`;
+const opcionesPeriodo = [
+  { valor: '', texto: `Todo ${anio}` },
+  ...MESES.map((m, i) => ({ valor: `${anio}-${String(i + 1).padStart(2, '0')}`, texto: m })),
+];
+
+/* Diferencia contra el mes anterior, con signo y en palabras. */
+const contraAnterior = (actual: number, previo: number): string => {
+  const dif = actual - previo;
+  if (dif === 0) return 'igual que';
+  return `${dif > 0 ? '+' : '−'}${formatoMXN(Math.abs(dif))} vs`;
+};
+
+/* Sección 2: de dónde vino y a dónde se fue, con su parte del total. */
+const reparto = (tipo: 'ingreso' | 'egreso') => {
+  const filas = conceptos.filter((c) => c.tipo === tipo);
+  const total = filas.reduce((s, c) => s + c.monto_centavos, 0);
+  return filas.map((c: ConceptoPeriodo) => ({
+    ...c,
+    porcentaje: total > 0 ? (c.monto_centavos / total) * 100 : 0,
+  }));
+};
+const repartoIngresos = reparto('ingreso');
+const repartoEgresos = reparto('egreso');
+const enlaceConcepto = (c: ConceptoPeriodo) =>
+  `/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&concepto=${c.concepto_id}`;
+const formatoPorcentaje = (p: number) =>
+  p > 0 && p < 1 ? 'menos de 1%' : `${Math.round(p)}%`;
 
 /* Hasta el arqueo inicial, el desglose banco y efectivo no es confiable. */
 const conBolsas = bolsasAlDia(control);
@@ -125,6 +178,123 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
   }
 
   <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <form method="get" class="filtros" aria-label="Periodo del tablero">
+        {
+          ejercicios.length > 1 ? (
+            <Selector
+              nombre="anio"
+              etiqueta="Ejercicio"
+              opciones={ejercicios.map((e) => ({ valor: String(e.anio), texto: String(e.anio) }))}
+              valor={String(anio)}
+            />
+          ) : (
+            <input type="hidden" name="anio" value={String(anio)} />
+          )
+        }
+        <Selector nombre="periodo" etiqueta="Periodo" opciones={opcionesPeriodo} valor={periodo ?? ''} />
+        <div class="filtros__acciones">
+          <button class="btn btn--primary" type="submit">Ver</button>
+          {periodo && <a class="btn btn--ghost" href={`/?anio=${anio}`}>Todo el año</a>}
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="titulo-periodo">
+      <h2 id="titulo-periodo" style="margin: 0 0 0.75rem;">
+        {periodo ? nombrePeriodo(periodo) : `Ejercicio ${anio}`}
+      </h2>
+      <div class="cifras-periodo">
+        <div class="tarjeta">
+          <h3 class="grafica__titulo">Ingresos</h3>
+          <p class="cifras-periodo__valor cifras-periodo__valor--ingreso">{formatoMXN(resumen.ingresos)}</p>
+          <p class="cifras-periodo__nota">
+            {resumen.anterior
+              ? `${contraAnterior(resumen.ingresos, resumen.anterior.ingresos)} ${nombrePeriodo(resumen.anterior.periodo).split(' ')[0]}`
+              : <a href={`/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&tipo=ingreso`}>ver movimientos</a>}
+          </p>
+        </div>
+        <div class="tarjeta">
+          <h3 class="grafica__titulo">Egresos</h3>
+          <p class="cifras-periodo__valor cifras-periodo__valor--egreso">{formatoMXN(resumen.egresos)}</p>
+          <p class="cifras-periodo__nota">
+            {resumen.anterior
+              ? `${contraAnterior(resumen.egresos, resumen.anterior.egresos)} ${nombrePeriodo(resumen.anterior.periodo).split(' ')[0]}`
+              : <a href={`/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&tipo=egreso`}>ver movimientos</a>}
+          </p>
+        </div>
+        <div class="tarjeta">
+          <h3 class="grafica__titulo">Resultado</h3>
+          <p class:list={['cifras-periodo__valor', { 'cifras-periodo__valor--negativo': resumen.resultado < 0 }]}>
+            {resumen.resultado < 0 ? '−' : ''}{formatoMXN(Math.abs(resumen.resultado))}
+          </p>
+          <p class="cifras-periodo__nota">
+            {resumen.resultado > 0
+              ? 'Entró más de lo que salió'
+              : resumen.resultado < 0
+                ? 'Salió más de lo que entró'
+                : 'Entró lo mismo que salió'}
+          </p>
+        </div>
+        <div class="tarjeta">
+          <h3 class="grafica__titulo">{resumen.etiquetaSaldo}</h3>
+          <p class="cifras-periodo__valor">{formatoMXN(resumen.saldoFinal)}</p>
+          <p class="cifras-periodo__nota">
+            {periodo ? <a href={`/cortes/${periodo}`}>ver el corte</a> : <a href="/cortes">ver los cortes</a>}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.25rem;">
+      {
+        (
+          [
+            ['ingreso', 'De dónde vino', repartoIngresos, 'Sin ingresos'],
+            ['egreso', 'A dónde se fue', repartoEgresos, 'Sin egresos'],
+          ] as const
+        ).map(([tipo, titulo, filas, vacio]) => (
+          <section class="tarjeta">
+            <h2>{titulo}</h2>
+            {filas.length === 0 ? (
+              <p class="apagado">{vacio} en {nombreDelPeriodo}.</p>
+            ) : (
+              <ul class="reparto">
+                {filas.map((c) => (
+                  <li class="reparto__fila">
+                    <a class="reparto__nombre" href={enlaceConcepto(c)}>{c.concepto_nombre}</a>
+                    <span class="reparto__monto">
+                      {formatoMXN(c.monto_centavos)}{' '}
+                      <span class="reparto__detalle">{formatoPorcentaje(c.porcentaje)}</span>
+                    </span>
+                    <span class="reparto__pista" aria-hidden="true">
+                      <span
+                        class:list={['reparto__barra', `reparto__barra--${tipo}`]}
+                        style={`width: ${Math.max(c.porcentaje, 0.5)}%;`}
+                      ></span>
+                    </span>
+                    <span class="reparto__detalle">
+                      {c.movimientos} {c.movimientos === 1 ? 'movimiento' : 'movimientos'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))
+      }
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1.25rem;">
+      <section class="tarjeta">
+        <GraficaFlujoMensual flujo={flujo} anio={anio} seleccionado={periodo} />
+      </section>
+      <section class="tarjeta">
+        <GraficaSaldo flujo={flujo} apertura={caja.apertura} anio={anio} />
+      </section>
+    </div>
+
+    <h2 style="margin: 0.5rem 0 0;">Pendientes</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem;">
       <section class="tarjeta">
         <h2>Caja</h2>
@@ -196,15 +366,6 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
           {mesAbierto ? `Sigue ${nombrePeriodo(mesAbierto)}` : 'Ejercicio completo'} ·{' '}
           <a href="/cortes">ver</a>
         </p>
-      </section>
-    </div>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1.25rem;">
-      <section class="tarjeta">
-        <GraficaFlujoMensual flujo={flujo} />
-      </section>
-      <section class="tarjeta">
-        <GraficaSaldo flujo={flujo} apertura={caja.apertura} anio={anio} />
       </section>
     </div>
 

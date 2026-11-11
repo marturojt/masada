@@ -223,6 +223,7 @@ const AVISOS: Record<string, string> = {
   comprobacion: 'Comprobación registrada.',
   concepto: 'Concepto guardado.',
   corte: 'Corte cerrado.',
+  mensaje: 'Mensaje del informe guardado.',
   arqueo: 'Arqueo inicial registrado: banco y efectivo quedan como se contaron.',
   ejercicio: 'Ejercicio actualizado.',
   contrasena: 'Contraseña actualizada.',

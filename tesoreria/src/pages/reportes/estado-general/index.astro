@@ -1,0 +1,45 @@
+---
+/*
+ * Estado general de la tesorería, en pantalla. Es la foto completa al momento
+ * de abrirla: caja, cápitas con los hermanos que deben, Gran Tesorería, cuotas
+ * de grado, egresos pendientes y evidencias. Se imprime o se descarga en CSV.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import EstadoGeneral from '@componentes/EstadoGeneral.astro';
+import { estadoGeneral, resumenEnPalabras } from '@lib/datos/estado-general';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoFechaLarga, hoyISO } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const estado = await estadoGeneral(anio);
+---
+
+<LayoutAdmin titulo="Estado general" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    <span>Al {formatoFechaLarga(hoyISO())}</span>
+    <span><a href={`/reportes/estado-general/imprimir?anio=${anio}`}>Imprimir</a></span>
+    <span><a href={`/reportes/estado-general.csv?anio=${anio}`}>Descargar CSV</a></span>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+    <h1 style="margin-bottom: 0.2rem;">Estado general</h1>
+    <div style="display: flex; gap: 0.5rem;">
+      <a class="btn btn--ghost" href={`/reportes/estado-general/imprimir?anio=${anio}`}>Vista para imprimir</a>
+      <a class="btn btn--ghost" href={`/reportes/estado-general.csv?anio=${anio}`}>Descargar CSV</a>
+    </div>
+  </div>
+  <p class="apagado">
+    Así está la tesorería en este momento. Es de uso interno: lleva los nombres de quienes
+    deben, a diferencia del informe de tenida. {resumenEnPalabras(estado)}
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <EstadoGeneral estado={estado} />
+  </div>
+</LayoutAdmin>

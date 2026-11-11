@@ -12,6 +12,7 @@ import TablaMovimientos from '@componentes/TablaMovimientos.astro';
 import {
   cerrarCorte,
   reabrirCorte,
+  guardarMensajeInforme,
   registrarAjuste,
   registrarArqueoInicial,
 } from '@lib/casos/cortes';
@@ -26,6 +27,7 @@ import {
   vistaBolsas,
 } from '@lib/datos/cortes';
 import { estadoAplomo } from '@lib/datos/gt';
+import { mensajeDelInforme } from '@lib/datos/informe';
 import { sonImagenes } from '@lib/archivos';
 import { ajustadosDeVarios, listarMovimientos, totalesPorConcepto } from '@lib/datos/movimientos';
 import { pendientesDeComprobar } from '@lib/datos/egresos';
@@ -35,6 +37,7 @@ import {
   esquemaAjuste,
   esquemaArqueo,
   esquemaCierre,
+  esquemaMensajeInforme,
   esquemaReapertura,
 } from '@lib/esquemas/corte';
 import {
@@ -115,6 +118,19 @@ if (Astro.request.method === 'POST') {
           });
           return Astro.redirect(`/cortes/${periodo}?ok=ajuste`, 303);
         }
+      } else if (entrada.accion === 'mensaje') {
+        const r = await validar(entrada, {
+          esquema: esquemaMensajeInforme,
+          proposito: 'informe_mensaje',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await guardarMensajeInforme({ ...ctxBase, nonce: r.nonce }, periodo, r.datos.mensaje);
+          return Astro.redirect(`/cortes/${periodo}?ok=mensaje#informe`, 303);
+        }
       } else if (entrada.accion === 'arqueo') {
         const r = await validar(entrada, {
           esquema: esquemaArqueo,
@@ -147,7 +163,7 @@ if (Astro.request.method === 'POST') {
 const calculado = await corteDelPeriodo(periodo);
 if (!calculado) return new Response('Ese mes no pertenece a ningún ejercicio', { status: 404 });
 
-const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo, control] =
+const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo, control, mensaje] =
   await Promise.all([
     corteGuardado(periodo),
     listarMovimientos({ periodo }),
@@ -157,6 +173,7 @@ const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo, c
     pagosGTDelPeriodo(periodo),
     estadoAplomo(),
     controlBolsas(calculado.anio),
+    mensajeDelInforme(periodo),
   ]);
 
 const reaperturas = guardado ? await reaperturasDe(guardado.id) : [];
@@ -186,6 +203,7 @@ const arrastres = porComprobar.filter(
 
 const nonceCierre = await emitirNonce(sesion.idHash, 'corte_cerrar');
 const nonceReapertura = await emitirNonce(sesion.idHash, 'corte_reabrir');
+const nonceMensaje = esFuturo ? '' : await emitirNonce(sesion.idHash, 'informe_mensaje');
 const nonceArqueo = pideArqueo ? await emitirNonce(sesion.idHash, 'arqueo_inicial') : '';
 const noncesAjuste = await emitirNonces(
   sesion.idHash,
@@ -204,6 +222,7 @@ Astro.response.status = estado;
     <span><a href="/cortes">← Cortes</a></span>
     <span>Ejercicio {calculado.anio}</span>
     <span><a href={`/cortes/${periodo}/imprimir`}>Imprimir</a></span>
+    <span><a href={`/cortes/${periodo}/informe`}>Informe de tenida</a></span>
   </div>
 
   {aviso && <div class="aviso">{aviso}</div>}
@@ -569,6 +588,41 @@ Astro.response.status = estado;
         )
       }
     </section>
+
+    {
+      !esFuturo && (
+        <section class="tarjeta" id="informe">
+          <h2>Informe de tenida</h2>
+          <p class="apagado" style="font-size: 0.9rem;">
+            El informe que se lee a los hermanos lleva un texto que arma el sistema con las
+            cifras de este mes y, debajo, tu mensaje. No nombra a quienes deben, solo da
+            cifras. El mensaje se puede escribir o corregir aunque el mes ya esté cerrado.
+          </p>
+          {seccion === 'mensaje' && <ResumenErrores errores={errores} />}
+          <div style="max-width: 40rem;">
+            <Formulario csrf={sesion.csrfToken} nonce={nonceMensaje} accionInterna="mensaje">
+              <Campo
+                nombre="mensaje"
+                etiqueta="Mensaje del tesorero"
+                valor={mensaje?.mensaje ?? ''}
+                error={errores.mensaje}
+                ayuda={
+                  mensaje
+                    ? `Guardado por ${mensaje.actualizado_nombre ?? 'la tesorería'} el ${formatoMomento(mensaje.actualizado_en)}; déjalo vacío para quitarlo.`
+                    : 'Opcional. Por ejemplo, un agradecimiento, un recordatorio de pago o lo que viene el próximo mes.'
+                }
+                largo
+                filas={5}
+              />
+              <div class="formulario__acciones">
+                <button class="btn btn--primary" type="submit">Guardar mensaje</button>
+                <a class="btn btn--ghost" href={`/cortes/${periodo}/informe`}>Ver el informe</a>
+              </div>
+            </Formulario>
+          </div>
+        </section>
+      )
+    }
 
     {
       pideArqueo && (

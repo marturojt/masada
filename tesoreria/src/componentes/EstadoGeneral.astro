@@ -1,0 +1,302 @@
+---
+/*
+ * Secciones del estado general. Lo usan la página del sistema y la hoja
+ * impresa: con `impresion` las tablas van sin estilos de pantalla y sin enlaces.
+ */
+import type { EstadoGeneral } from '@lib/datos/estado-general';
+import { NOMBRE_EVENTO_CUOTA } from '@lib/datos/cuotas';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
+
+interface Props {
+  estado: EstadoGeneral;
+  impresion?: boolean;
+}
+
+const { estado: e, impresion = false } = Astro.props;
+
+const tabla = impresion ? undefined : 'tabla';
+const bloque = impresion ? 'bloque-impreso' : 'tarjeta';
+/* En pantalla, un enlace; en papel, solo el texto. */
+const liga = (href: string) => (impresion ? undefined : href);
+
+const totalEgresos =
+  e.egresos.porFirmar.length + e.egresos.porEntregar.length + e.egresos.porComprobar.length;
+---
+
+<section class={bloque}>
+  <h2>Caja</h2>
+  <table class={tabla}>
+    <tbody>
+      <tr>
+        <th scope="row">Total en caja</th>
+        <td class="num"><strong>{formatoMXN(e.caja.saldo)}</strong></td>
+      </tr>
+      {
+        e.caja.conBolsas ? (
+          <>
+            <tr>
+              <th scope="row">En banco</th>
+              <td class="num">{formatoMXN(e.caja.banco)}</td>
+            </tr>
+            <tr>
+              <th scope="row">En efectivo</th>
+              <td class="num">{formatoMXN(e.caja.efectivo)}</td>
+            </tr>
+          </>
+        ) : (
+          <tr>
+            <th scope="row">Banco y efectivo</th>
+            <td class="num">Pendiente del arqueo inicial</td>
+          </tr>
+        )
+      }
+    </tbody>
+  </table>
+</section>
+
+<section class={bloque}>
+  <h2>Cápitas {e.anio}</h2>
+  <table class={tabla}>
+    <tbody>
+      <tr><th scope="row">Esperado del ejercicio</th><td class="num">{formatoMXN(e.capitas.esperado)}</td></tr>
+      <tr><th scope="row">Cobrado</th><td class="num">{formatoMXN(e.capitas.pagado)}</td></tr>
+      {e.capitas.condonado > 0 && (
+        <tr><th scope="row">Exento</th><td class="num">{formatoMXN(e.capitas.condonado)}</td></tr>
+      )}
+      <tr><th scope="row">Vencido</th><td class="num"><strong>{formatoMXN(e.capitas.vencido)}</strong></td></tr>
+      <tr><th scope="row">Por vencer en el año</th><td class="num">{formatoMXN(e.capitas.porVencer)}</td></tr>
+      <tr>
+        <th scope="row">Hermanos</th>
+        <td class="num">
+          {e.capitas.alCorriente} al corriente, {e.capitas.adeudos.length} con adeudo
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  {
+    e.capitas.adeudos.length > 0 && (
+      <>
+        <h3>Hermanos con adeudo</h3>
+        <table class={tabla}>
+          <thead>
+            <tr>
+              <th scope="col">Hermano</th>
+              <th scope="col">Modalidad</th>
+              <th scope="col">Situación</th>
+              <th scope="col" class="num">Vencido</th>
+              <th scope="col" class="num">Por vencer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {e.capitas.adeudos.map((a) => (
+              <tr>
+                <td><a href={liga(`/capitas/hermano/${a.hermano_id}`)}>{a.nombre}</a></td>
+                <td>{a.modalidad}</td>
+                <td>{a.situacion}</td>
+                <td class="num">{formatoMXN(a.vencido_centavos)}</td>
+                <td class="num">{a.por_vencer_centavos > 0 ? formatoMXN(a.por_vencer_centavos) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">Total</td>
+              <td class="num">{formatoMXN(e.capitas.adeudos.reduce((s, a) => s + a.vencido_centavos, 0))}</td>
+              <td class="num">{formatoMXN(e.capitas.adeudos.reduce((s, a) => s + a.por_vencer_centavos, 0))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </>
+    )
+  }
+
+  {
+    e.saldosAFavor.length > 0 && (
+      <>
+        <h3>Saldos a favor de hermanos</h3>
+        <p class="apagado">Dinero ya recibido que falta aplicar a cápitas futuras o devolver.</p>
+        <table class={tabla}>
+          <tbody>
+            {e.saldosAFavor.map((s) => (
+              <tr>
+                <td><a href={liga(`/capitas/hermano/${s.hermano_id}`)}>{s.nombre}</a></td>
+                <td class="num">{formatoMXN(s.saldo_centavos)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+</section>
+
+<section class={bloque}>
+  <h2>Gran Tesorería</h2>
+  <p>
+    {(e.gt.aplomo.ordinario_a_plomo
+      ? 'La logia está a plomo en sus obligaciones ordinarias'
+      : `La logia tiene ${e.gt.aplomo.meses_pendientes} ${e.gt.aplomo.meses_pendientes === 1 ? 'mes ordinario pendiente' : 'meses ordinarios pendientes'}`) +
+      (e.gt.aplomo.cubierto_hasta
+        ? `, cubierta hasta ${nombrePeriodo(e.gt.aplomo.cubierto_hasta.slice(0, 7))}.`
+        : '.')}
+  </p>
+  {
+    e.gt.pendientes.length === 0 ? (
+      <p class="apagado">
+        {e.gt.aplomo.ordinario_a_plomo
+          ? 'Sin obligaciones por pagar.'
+          : 'No hay obligaciones capturadas con saldo: los meses pendientes todavía no tienen su obligación registrada en Gran Tesorería.'}
+      </p>
+    ) : (
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Folio</th>
+            <th scope="col">Obligación</th>
+            <th scope="col" class="num">Monto</th>
+            <th scope="col" class="num">Pagado</th>
+            <th scope="col" class="num">Por pagar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {e.gt.pendientes.map((o) => (
+            <tr>
+              <td><a href={liga(`/gran-tesoreria/obligaciones/${o.id}`)}>{o.folio}</a></td>
+              <td>{o.descripcion}</td>
+              <td class="num">{formatoMXN(o.monto_reportado_centavos)}</td>
+              <td class="num">{o.pagado_centavos > 0 ? formatoMXN(o.pagado_centavos) : '—'}</td>
+              <td class="num">{formatoMXN(o.saldo_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4">Total por pagar</td>
+            <td class="num">{formatoMXN(e.gt.totalPendiente)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    )
+  }
+</section>
+
+<section class={bloque}>
+  <h2>Cuotas de grado por cobrar</h2>
+  {
+    e.cuotas.length === 0 ? (
+      <p class="apagado">Nadie debe cuotas de grado.</p>
+    ) : (
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Persona</th>
+            <th scope="col">Cuota</th>
+            <th scope="col">Fecha</th>
+            <th scope="col" class="num">Monto</th>
+            <th scope="col" class="num">Por cobrar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {e.cuotas.map((c) => (
+            <tr>
+              <td><a href={liga(`/hermanos/${c.hermano_id}`)}>{c.nombre_completo}</a></td>
+              <td>{NOMBRE_EVENTO_CUOTA[c.tipo_evento]}</td>
+              <td>{formatoFechaCorta(c.fecha)}</td>
+              <td class="num">{formatoMXN(c.monto_centavos)}</td>
+              <td class="num">{formatoMXN(c.saldo_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4">Total por cobrar</td>
+            <td class="num">{formatoMXN(e.totalCuotas)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    )
+  }
+</section>
+
+<section class={bloque}>
+  <h2>Egresos que esperan algo</h2>
+  {
+    totalEgresos === 0 ? (
+      <p class="apagado">Ningún egreso espera firma, entrega ni comprobación.</p>
+    ) : (
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Folio</th>
+            <th scope="col">Beneficiario</th>
+            <th scope="col">Concepto</th>
+            <th scope="col">Qué falta</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {e.egresos.porFirmar.map((g) => (
+            <tr>
+              <td><a href={liga(`/egresos/${g.id}`)}>{g.folio}</a></td>
+              <td>{g.beneficiario}</td>
+              <td>{g.concepto_nombre}</td>
+              <td>Firmas de autorización</td>
+              <td class="num">{formatoMXN(g.monto_solicitado_centavos)}</td>
+            </tr>
+          ))}
+          {e.egresos.porEntregar.map((g) => (
+            <tr>
+              <td><a href={liga(`/egresos/${g.id}`)}>{g.folio}</a></td>
+              <td>{g.beneficiario}</td>
+              <td>{g.concepto_nombre}</td>
+              <td>Registrar la entrega</td>
+              <td class="num">{formatoMXN(g.monto_autorizado_centavos ?? g.monto_solicitado_centavos)}</td>
+            </tr>
+          ))}
+          {e.egresos.porComprobar.map((p) => (
+            <tr>
+              <td><a href={liga(`/egresos/${p.id}`)}>{p.folio}</a></td>
+              <td>{p.beneficiario}</td>
+              <td>{p.concepto_nombre}</td>
+              <td>Comprobar, entregado el {formatoFechaCorta(p.fecha_entrega)}</td>
+              <td class="num">{formatoMXN(p.pendiente_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+</section>
+
+<section class={bloque}>
+  <h2>Evidencias faltantes</h2>
+  {
+    e.evidencias.length === 0 ? (
+      <p class="apagado">Todo tiene su documento.</p>
+    ) : (
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Qué falta</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {e.evidencias.map((v) => (
+            <tr>
+              <td>{formatoFechaCorta(v.fecha)}</td>
+              <td>
+                <a href={liga(v.ver_en)}>{v.titulo}</a>
+                {v.detalle && <span class="apagado"> · {v.detalle}</span>}
+              </td>
+              <td class="num">{v.monto_centavos != null ? formatoMXN(v.monto_centavos) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+</section>

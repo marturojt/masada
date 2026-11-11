@@ -24,6 +24,11 @@ export const esquemaAjuste = z.object({
   motivo: texto('El motivo', 400),
 });
 
+/** Mensaje del tesorero para el informe de tenida. Vacío lo borra. */
+export const esquemaMensajeInforme = z.object({
+  mensaje: notas(4000),
+});
+
 /** Arqueo inicial: lo que de verdad hay en banco y en efectivo al arrancar. */
 export const esquemaArqueo = z.object({
   fecha: fechaISO('La fecha del arqueo'),

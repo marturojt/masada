@@ -12,6 +12,7 @@ import { consumirNonce } from '../csrf';
 import { enTransaccion, unaFila } from '../db';
 import { conceptoPorClave } from '../datos/conceptos';
 import { cerrarCorteEnBase, reabrirCorteEnBase, registrarArqueoEnBase } from '../datos/cortes';
+import { guardarMensajeEnBase } from '../datos/informe';
 import { insertarMovimiento, ligarAjuste, obtenerMovimiento, ajustadoDe } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
@@ -315,5 +316,39 @@ export async function registrarArqueoInicial(
     });
 
     return traspasoId;
+  }, usuarioId);
+}
+
+/**
+ * Mensaje del tesorero para el informe de tenida de un mes. No es dinero, así
+ * que se puede escribir aunque el corte ya esté cerrado; vacío lo borra.
+ */
+export async function guardarMensajeInforme(
+  ctx: Contexto,
+  periodo: string,
+  mensaje: string | undefined,
+): Promise<void> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'informe_mensaje');
+
+    let resultado: Awaited<ReturnType<typeof guardarMensajeEnBase>>;
+    try {
+      resultado = await guardarMensajeEnBase(tx, periodo, mensaje, usuarioId);
+    } catch (error) {
+      comoErrorDeNegocio(error, 'mensaje');
+    }
+
+    if (resultado !== 'sin_cambio') {
+      await registrarEn(tx, {
+        usuarioId,
+        idPeticion: ctx.idPeticion,
+        accion: `informe_mensaje_${resultado}`,
+        entidad: 'informe_mensaje',
+        entidadId: periodo,
+        detalle: { periodo, caracteres: mensaje?.length ?? 0 },
+      });
+    }
   }, usuarioId);
 }

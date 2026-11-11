@@ -498,3 +498,126 @@
 .avance__cobrado { background: var(--md-sys-color-tertiary); }
 .avance__vencido { background: var(--md-sys-color-error); }
 .avance__porvencer { background: rgba(240, 234, 214, 0.18); }
+
+/* ── Tablero por periodo: filtro, cifras y reparto por concepto ────────────── */
+
+/* Filtros GET: selects en fila que bajan a columna en pantalla angosta. */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+}
+
+.filtros .campo {
+  margin: 0;
+  min-width: 11rem;
+}
+
+.filtros__acciones {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding-bottom: 0.15rem;
+}
+
+/* Cuatro cifras del periodo. */
+.cifras-periodo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 1rem;
+}
+
+.cifras-periodo__valor {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.cifras-periodo__valor--ingreso { color: #d9a441; }
+.cifras-periodo__valor--egreso { color: #7ea6dc; }
+.cifras-periodo__valor--negativo { color: var(--md-sys-color-error); }
+
+.cifras-periodo__nota {
+  font-size: 0.82rem;
+  margin: 0.3rem 0 0;
+  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+}
+
+/* Reparto por concepto: barra horizontal, monto y porcentaje. */
+.reparto {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.reparto__fila {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.75rem;
+  align-items: baseline;
+}
+
+.reparto__nombre {
+  overflow-wrap: anywhere;
+}
+
+.reparto__monto {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reparto__pista {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(240, 234, 214, 0.06);
+  overflow: hidden;
+}
+
+.reparto__barra {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.reparto__barra--ingreso { background: #c08a1e; }
+.reparto__barra--egreso { background: #4c7fc4; }
+
+.reparto__detalle {
+  font-size: 0.78rem;
+  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+}
+
+/* Meses de la gráfica como enlaces: zona de clic invisible que se marca al pasar. */
+.grafica__zona {
+  fill: transparent;
+}
+
+.grafica__mes:hover .grafica__zona,
+.grafica__mes:focus-visible .grafica__zona {
+  fill: rgba(240, 234, 214, 0.05);
+}
+
+.grafica__zona--elegida,
+.grafica__mes:hover .grafica__zona--elegida {
+  fill: rgba(192, 138, 30, 0.14);
+}
+
+.grafica__mes:focus-visible {
+  outline: none;
+}
+
+.grafica__cifras {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.grafica__cifras summary {
+  cursor: pointer;
+  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+}

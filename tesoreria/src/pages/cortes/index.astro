@@ -129,6 +129,12 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
                   </a>
                   {' · '}
                   <a href={`/cortes/${periodo}/imprimir`}>Imprimir</a>
+                  {!futuro && (
+                    <>
+                      {' · '}
+                      <a href={`/cortes/${periodo}/informe`}>Informe</a>
+                    </>
+                  )}
                 </td>
               </tr>
             );

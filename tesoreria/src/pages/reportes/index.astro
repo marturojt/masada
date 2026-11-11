@@ -1,0 +1,76 @@
+---
+/*
+ * Reportes de la tesorería: el estado general (uso interno) y los informes que
+ * se leen en tenida, el mensual y el anual.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import { cortesDelAnio } from '@lib/datos/cortes';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { nombrePeriodo, periodoActual } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const hoy = periodoActual();
+const meses = (await cortesDelAnio(anio))
+  .map((c) => ({ periodo: c.periodo.slice(0, 7), cerrado: c.estado_corte === 'cerrado' }))
+  .filter((m) => m.periodo <= hoy)
+  .reverse();
+---
+
+<LayoutAdmin titulo="Reportes" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span>Ejercicio {anio}</span>
+    {ejercicios.length > 1 && ejercicios.map((e) => (
+      e.anio !== anio && <span><a href={`/reportes?anio=${e.anio}`}>Ver {e.anio}</a></span>
+    ))}
+  </div>
+
+  <h1>Reportes</h1>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>Estado general</h2>
+      <p class="apagado">
+        Cómo está la tesorería en este momento: caja, cápitas con los hermanos que deben,
+        Gran Tesorería, cuotas de grado, egresos pendientes y evidencias. Es de uso interno.
+      </p>
+      <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        <a class="btn btn--primary" href={`/reportes/estado-general?anio=${anio}`}>Ver</a>
+        <a class="btn btn--ghost" href={`/reportes/estado-general/imprimir?anio=${anio}`}>Imprimir</a>
+        <a class="btn btn--ghost" href={`/reportes/estado-general.csv?anio=${anio}`}>Descargar CSV</a>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Informe anual de tesorería {anio}</h2>
+      <p class="apagado">
+        El ejercicio de enero a diciembre, para leerlo en tenida: el año en cifras, mes por
+        mes, por clasificación, cápitas, Gran Tesorería y lo que queda pendiente. Sin nombres
+        de quienes deben. Es borrador hasta que se cierre diciembre.
+      </p>
+      <a class="btn btn--primary" href={`/reportes/informe-anual?anio=${anio}`}>Ver el informe anual</a>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Informes de tenida</h2>
+      <p class="apagado">
+        El informe de cada mes, con el texto que arma el sistema y el mensaje del tesorero.
+        El mensaje se escribe en el corte del mes.
+      </p>
+      <ul>
+        {meses.map((m) => (
+          <li>
+            <a href={`/cortes/${m.periodo}/informe`}>{nombrePeriodo(m.periodo)}</a>
+            {' · '}
+            <a href={`/cortes/${m.periodo}#informe`}>escribir mensaje</a>
+            {!m.cerrado && <span class="apagado"> · borrador</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  </div>
+</LayoutAdmin>

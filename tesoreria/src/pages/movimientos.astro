@@ -1,0 +1,127 @@
+---
+/*
+ * Libro de caja filtrado: los movimientos de un ejercicio, opcionalmente de un
+ * mes, de un tipo o de un concepto. Es el destino de los enlaces del tablero.
+ * Los filtros viajan en la dirección (GET), así que una vista se puede guardar.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Selector from '@componentes/Selector.astro';
+import TablaMovimientos from '@componentes/TablaMovimientos.astro';
+import { sonImagenes } from '@lib/archivos';
+import { listarConceptos } from '@lib/datos/conceptos';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { ajustadosDeVarios, listarMovimientos } from '@lib/datos/movimientos';
+import { periodoDeUrl } from '@lib/datos/tablero';
+import { formatoMXN } from '@lib/dinero';
+import { MESES, nombrePeriodo } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const periodo = periodoDeUrl(Astro.url, anio);
+
+const tipoCrudo = Astro.url.searchParams.get('tipo');
+const tipo = tipoCrudo === 'ingreso' || tipoCrudo === 'egreso' ? tipoCrudo : undefined;
+
+const conceptos = await listarConceptos();
+const conceptoCrudo = Number(Astro.url.searchParams.get('concepto'));
+const concepto = conceptos.find((c) => c.id === conceptoCrudo) ?? null;
+
+const movimientos = await listarMovimientos({
+  anio,
+  periodo: periodo ?? undefined,
+  tipo,
+  conceptoId: concepto?.id,
+});
+
+const ajustados = new Map(
+  (await ajustadosDeVarios(movimientos.map((m) => m.id))).map((a) => [
+    a.movimiento_origen_id,
+    a.ajustado,
+  ]),
+);
+const imagenes = await sonImagenes(
+  movimientos.map((m) => m.archivo_id).filter((a): a is number => a !== null),
+);
+
+const ingresos = movimientos
+  .filter((m) => m.tipo === 'ingreso')
+  .reduce((s, m) => s + m.monto_centavos, 0);
+const egresos = movimientos
+  .filter((m) => m.tipo === 'egreso')
+  .reduce((s, m) => s + m.monto_centavos, 0);
+
+const descripcion = [
+  concepto?.nombre,
+  tipo === 'ingreso' ? 'Ingresos' : tipo === 'egreso' ? 'Egresos' : null,
+  periodo ? nombrePeriodo(periodo) : `todo ${anio}`,
+]
+  .filter(Boolean)
+  .join(' · ');
+
+const opcionesPeriodo = [
+  { valor: '', texto: `Todo ${anio}` },
+  ...MESES.map((m, i) => ({ valor: `${anio}-${String(i + 1).padStart(2, '0')}`, texto: m })),
+];
+---
+
+<LayoutAdmin titulo="Movimientos" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href={`/?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}`}>← Tablero</a></span>
+    <span>Ejercicio {anio}</span>
+    {tipo !== 'egreso' && <span>Ingresos: {formatoMXN(ingresos)}</span>}
+    {tipo !== 'ingreso' && <span>Egresos: {formatoMXN(egresos)}</span>}
+  </div>
+
+  <h1>Movimientos</h1>
+  <p class="apagado">{descripcion}</p>
+
+  <form method="get" class="filtros">
+    <input type="hidden" name="anio" value={String(anio)} />
+    <Selector nombre="periodo" etiqueta="Periodo" opciones={opcionesPeriodo} valor={periodo ?? ''} />
+    <Selector
+      nombre="tipo"
+      etiqueta="Tipo"
+      opciones={[
+        { valor: '', texto: 'Ingresos y egresos' },
+        { valor: 'ingreso', texto: 'Solo ingresos' },
+        { valor: 'egreso', texto: 'Solo egresos' },
+      ]}
+      valor={tipo ?? ''}
+    />
+    <Selector
+      nombre="concepto"
+      etiqueta="Concepto"
+      opciones={[
+        { valor: '', texto: 'Todos' },
+        ...[...conceptos]
+          .sort((x, y) => (x.naturaleza === y.naturaleza ? 0 : x.naturaleza === 'ingreso' ? -1 : 1))
+          .map((c) => ({
+            valor: String(c.id),
+            texto: c.nombre,
+            grupo: c.naturaleza === 'ingreso' ? 'Ingresos' : 'Egresos',
+          })),
+      ]}
+      valor={concepto ? String(concepto.id) : ''}
+    />
+    <div class="filtros__acciones">
+      <button class="btn btn--primary" type="submit">Ver</button>
+      <a class="btn btn--ghost" href={`/movimientos?anio=${anio}`}>Quitar filtros</a>
+    </div>
+  </form>
+
+  <section class="tarjeta" style="margin-top: 1.25rem;">
+    <TablaMovimientos
+      movimientos={movimientos}
+      titulo={`${movimientos.length} ${movimientos.length === 1 ? 'movimiento' : 'movimientos'}`}
+      conSigno={tipo === undefined}
+      ajustados={ajustados}
+      imagenes={imagenes}
+      netearTotal={false}
+      vacio="No hay movimientos con estos filtros."
+    />
+  </section>
+</LayoutAdmin>

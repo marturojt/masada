@@ -4,6 +4,9 @@
  * sin JavaScript: el detalle de cada barra sale con el tooltip nativo (title).
  * Paleta validada sobre la superficie oscura: oro para ingresos, azul para
  * egresos, con separación suficiente también para daltonismo.
+ *
+ * Con `anio`, cada mes es un enlace que filtra el tablero a ese mes, y el mes
+ * elegido se resalta. Las cifras exactas van en una tabla desplegable.
  */
 import type { FlujoMes } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
@@ -11,9 +14,17 @@ import { MESES, MESES_CORTOS } from '@lib/fechas';
 
 interface Props {
   flujo: FlujoMes[];
+  /** Ejercicio de la gráfica: activa los enlaces por mes. */
+  anio?: number;
+  /** Mes elegido, AAAA-MM, para resaltarlo. */
+  seleccionado?: string | null;
 }
 
-const { flujo } = Astro.props;
+const { flujo, anio, seleccionado = null } = Astro.props;
+
+const periodoDe = (mes: number) => `${anio}-${String(mes).padStart(2, '0')}`;
+const enlaceDe = (mes: number) =>
+  periodoDe(mes) === seleccionado ? `/?anio=${anio}` : `/?anio=${anio}&periodo=${periodoDe(mes)}`;
 
 const ANCHO = 680;
 const ALTO = 230;
@@ -72,7 +83,20 @@ const lineas = [1, 2, 3].map((n) => n * paso);
     />
 
     {flujo.map((f, i) => (
-      <>
+      <a
+        href={anio ? enlaceDe(f.mes) : undefined}
+        class="grafica__mes"
+        aria-label={anio ? `${MESES[f.mes - 1]}: ingresos ${formatoMXN(f.ingresos)}, egresos ${formatoMXN(f.egresos)}` : undefined}
+      >
+        {/* Zona de clic de todo el mes, y el resalte del mes elegido. */}
+        <rect
+          x={xMes(i) + 1}
+          y={MARGEN.arriba}
+          width={anchoMes - 2}
+          height={zona.h + MARGEN.abajo - 4}
+          rx="4"
+          class:list={['grafica__zona', { 'grafica__zona--elegida': anio && periodoDe(f.mes) === seleccionado }]}
+        />
         {f.ingresos > 0 && (
           <rect
             x={xMes(i) + 4}
@@ -105,11 +129,47 @@ const lineas = [1, 2, 3].map((n) => n * paso);
         >
           {MESES_CORTOS[f.mes - 1]}
         </text>
-      </>
+      </a>
     ))}
   </svg>
   <div class="grafica__leyenda">
     <span><span class="grafica__muestra grafica__muestra--ingreso"></span> Ingresos</span>
     <span><span class="grafica__muestra grafica__muestra--egreso"></span> Egresos</span>
+    {anio && <span>Toca un mes para ver solo ese mes.</span>}
   </div>
+  <details class="grafica__cifras">
+    <summary>Ver cifras por mes</summary>
+    <div class="tabla-envoltura">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Mes</th>
+            <th scope="col" class="num">Ingresos</th>
+            <th scope="col" class="num">Egresos</th>
+            <th scope="col" class="num">Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {flujo.map((f) => (
+            <tr>
+              <td>
+                {anio ? <a href={enlaceDe(f.mes)}>{MESES[f.mes - 1]}</a> : MESES[f.mes - 1]}
+              </td>
+              <td class="num">{formatoMXN(f.ingresos)}</td>
+              <td class="num">{formatoMXN(f.egresos)}</td>
+              <td class="num">{formatoMXN(f.ingresos - f.egresos)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td class="num">{formatoMXN(flujo.reduce((s, f) => s + f.ingresos, 0))}</td>
+            <td class="num">{formatoMXN(flujo.reduce((s, f) => s + f.egresos, 0))}</td>
+            <td class="num">{formatoMXN(flujo.reduce((s, f) => s + f.ingresos - f.egresos, 0))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </details>
 </figure>
