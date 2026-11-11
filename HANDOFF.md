@@ -197,7 +197,11 @@ queda como ambiente de desarrollo.
       primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.
 - [ ] **Comentarios de Arturo sobre las pestañas**: se atendieron el 6 (egresos)
       y el 7 (Gran Tesorería). Seguir con los que siguen.
-- [ ] **Desplegar candidatos y cuotas de grado** (migración 028): candidatos en
+- [ ] **Desplegar el nombre del concepto GT** (migración 029): "Pago de cápitas
+      a la Gran Tesorería" pasa a "Pago a la Gran Tesorería", porque por ahí
+      salen también trámites, ajustes y regularizaciones. Solo el nombre, y
+      solo si no se había renombrado. Exige `npm run migrar`.
+- [x] **Desplegar candidatos y cuotas de grado** (migración 028): candidatos en
       el padrón como etapa previa (sin grado, fecha de ingreso ni cápitas) que
       pasan a hermano el día de su ceremonia; cuotas de grado por cobrar que se
       saldan solas con los ingresos de su concepto. Exige `npm run migrar`.
