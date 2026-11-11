@@ -7,8 +7,10 @@
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
+import Confirmacion from '@componentes/Confirmacion.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Selector from '@componentes/Selector.astro';
 import {
   agregarDetalleObligacion,
@@ -25,6 +27,7 @@ import {
   detalleDeObligacion,
   estadoAplomo,
   obtenerObligacion,
+  egresoEnTramiteDe,
 } from '@lib/datos/gt';
 import { hermanosActivos } from '@lib/datos/hermanos';
 import { formatoMXN } from '@lib/dinero';
@@ -170,6 +173,12 @@ const opcionesClase: Opcion[] = Object.entries(NOMBRE_CLASE_TRAMITE).map(([valor
 }));
 
 const viva = obligacion.estatus === 'pendiente_pago' || obligacion.estatus === 'parcialmente_pagada';
+/* Si ya hay un egreso vivo que la paga, se manda a ese en lugar de ofrecer otro. */
+const enTramite = viva ? await egresoEnTramiteDe(id) : null;
+const avisoEnlaces =
+  Astro.url.searchParams.get('ok') === 'obligacion' && viva && !enTramite
+    ? [{ href: '#pagar', texto: 'Generar el egreso para pagarla' }]
+    : [];
 const totalDetalle = detalle.reduce((s, d) => s + d.subtotal_centavos, 0);
 
 const NOMBRE_CONCEPTO_DETALLE: Record<string, string> = {
@@ -210,7 +219,7 @@ Astro.response.status = estado;
     <span>{NOMBRE_TIPO_OBLIGACION[obligacion.tipo]}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} enlaces={avisoEnlaces} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
@@ -316,16 +325,32 @@ Astro.response.status = estado;
       </div>
 
       {
-        viva && obligacion.saldo_centavos > 0 && (
-          <Formulario
-            csrf={sesion.csrfToken}
-            nonce={nonceGenerar}
-            accionInterna="generar_egreso"
-          >
-            <button class="btn btn--primary" type="submit">
-              Generar egreso por {formatoMXN(obligacion.saldo_centavos)}
-            </button>
-          </Formulario>
+        viva && obligacion.saldo_centavos > 0 && enTramite && (
+          <p id="pagar" style="font-size: 0.9rem;">
+            Ya está en trámite el egreso <a href={`/egresos/${enTramite.id}`}>{enTramite.folio}</a>
+            {enTramite.estado === 'registrado'
+              ? ', que espera las dos firmas.'
+              : ', ya autorizado: falta registrar la entrega del dinero.'}
+          </p>
+        )
+      }
+      {
+        viva && obligacion.saldo_centavos > 0 && !enTramite && (
+          <div id="pagar">
+            <p class="apagado" style="font-size: 0.85rem;">
+              Para pagarla se genera un egreso. Después lleva la firma del tesorero y la del
+              V∴M∴, y al registrar la entrega el pago a la Gran Tesorería queda asentado solo.
+            </p>
+            <Formulario
+              csrf={sesion.csrfToken}
+              nonce={nonceGenerar}
+              accionInterna="generar_egreso"
+            >
+              <button class="btn btn--primary" type="submit">
+                Generar egreso por {formatoMXN(obligacion.saldo_centavos)}
+              </button>
+            </Formulario>
+          </div>
         )
       }
     </section>
@@ -458,8 +483,9 @@ Astro.response.status = estado;
       <h2>Pagos aplicados</h2>
       {
         aplicaciones.length === 0 ? (
-          <p class="apagado">Sin pagos todavía. El pago se materializa al entregar el egreso.</p>
+          <p class="apagado">Sin pagos todavía. El pago queda asentado aquí cuando se registra la entrega del egreso.</p>
         ) : (
+          <div class="tabla-envoltura">
           <table class="tabla">
             <thead>
               <tr>
@@ -478,6 +504,7 @@ Astro.response.status = estado;
               ))}
             </tbody>
           </table>
+          </div>
         )
       }
     </section>
@@ -581,6 +608,10 @@ Astro.response.status = estado;
                 largo
                 filas={2}
                 requerido
+              />
+              <Confirmacion
+                texto="Entiendo que la obligación cancelada ya no se puede pagar ni reactivar."
+                error={seccion === 'cancelar' ? errores.confirmo : undefined}
               />
               <button class="btn btn--ghost" type="submit">Cancelar obligación</button>
             </Formulario>

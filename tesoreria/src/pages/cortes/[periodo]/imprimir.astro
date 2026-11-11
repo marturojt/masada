@@ -21,6 +21,7 @@ import { NOMBRE_BOLSA } from '@lib/tipos';
 import { formatoCifra, formatoMXN } from '@lib/dinero';
 import { formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
 import { requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 void sesion;
@@ -263,7 +264,7 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
       : 'La logia tiene obligaciones ordinarias pendientes con la Gran Tesorería'}
     {aplomo.cubierto_hasta && <>, cubierta hasta {nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}</>}
     {aplomo.regularizaciones_pendientes > 0 && (
-      <>, con {aplomo.regularizaciones_pendientes} regularización(es) pendiente(s)</>
+      <>, con {cuenta(aplomo.regularizaciones_pendientes, 'regularización pendiente', 'regularizaciones pendientes')}</>
     )}. Dato al momento de imprimir esta hoja.
   </p>
   {
@@ -316,7 +317,7 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
                 <td>{a.aportante_nombre}</td>
                 <td>
                   {a.descripcion}
-                  {a.cantidad && <> · {Number(a.cantidad)} {a.unidad ?? 'pieza(s)'}</>}
+                  {a.cantidad && <> · {Number(a.cantidad)} {a.unidad ?? (Number(a.cantidad) === 1 ? 'pieza' : 'piezas')}</>}
                   {a.destino && <> · {a.destino}</>}
                 </td>
                 <td class="num">

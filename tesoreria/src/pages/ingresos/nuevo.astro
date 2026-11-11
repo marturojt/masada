@@ -10,11 +10,12 @@ import { emitirNonce } from '@lib/csrf';
 import { listarConceptos } from '@lib/datos/conceptos';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
 import { personasParaCobro } from '@lib/datos/hermanos';
+import { cuotasDe } from '@lib/datos/cuotas';
 import { NOMBRE_TARIFA, tarifasVigentes } from '@lib/datos/tarifas';
-import { formatoMXN } from '@lib/dinero';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaIngreso } from '@lib/esquemas/movimiento';
-import { procesarFormulario } from '@lib/formulario';
+import { idDeUrl, procesarFormulario } from '@lib/formulario';
 import { hoyISO } from '@lib/fechas';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO_PLURAL, type Opcion } from '@lib/tipos';
@@ -34,7 +35,7 @@ const ETIQUETAS: Record<string, string> = {
   fecha: 'Fecha',
   concepto_id: 'Concepto',
   monto: 'Monto',
-  bolsa: 'Bolsa',
+  bolsa: 'Dónde quedó el dinero',
   hermano_id: 'Hermano',
   descripcion: 'Descripción',
   comprobante: 'Comprobante',
@@ -42,6 +43,32 @@ const ETIQUETAS: Record<string, string> = {
 
 let errores: Record<string, string> = {};
 let valores: Record<string, string> = { fecha: hoyISO() };
+
+/*
+ * Lo que ya se sabe por la URL: el hermano, el concepto o que es el abono de
+ * una cuota de grado (`?cuota=1`, desde la ficha). Solo precarga: se valida
+ * igual al guardar.
+ */
+const hermanoUrl = idDeUrl(Astro.url, 'hermano');
+const conceptoUrl = idDeUrl(Astro.url, 'concepto');
+if (hermanoUrl && hermanos.some((h) => h.id === hermanoUrl)) {
+  valores.hermano_id = String(hermanoUrl);
+}
+if (conceptoUrl && conceptos.some((c) => c.id === conceptoUrl)) {
+  valores.concepto_id = String(conceptoUrl);
+}
+if (Astro.url.searchParams.get('cuota') === '1' && valores.hermano_id) {
+  /* La cuota pendiente más antigua decide el concepto (cuota_<evento>) y el monto. */
+  const pendiente = (await cuotasDe(Number(valores.hermano_id))).find(
+    (c) => c.estatus === 'vigente' && c.saldo_centavos > 0,
+  );
+  const conceptoCuota =
+    pendiente && conceptos.find((c) => c.clave === `cuota_${pendiente.tipo_evento}`);
+  if (pendiente && conceptoCuota) {
+    valores.concepto_id = String(conceptoCuota.id);
+    valores.monto = aPesosTexto(pendiente.saldo_centavos);
+  }
+}
 let estado = 200;
 
 if (Astro.request.method === 'POST') {
@@ -57,12 +84,12 @@ if (Astro.request.method === 'POST') {
     estado = resultado.estado;
   } else {
     try {
-      await registrarIngreso(
+      const movimientoId = await registrarIngreso(
         { sesion, nonce: resultado.nonce, idPeticion: Astro.locals.idPeticion },
         resultado.datos,
         resultado.archivos.comprobante,
       );
-      return Astro.redirect('/ingresos?ok=ingreso', 303);
+      return Astro.redirect(`/ingresos?ok=ingreso&mov=${movimientoId}`, 303);
     } catch (error) {
       if (!(error instanceof ErrorDeNegocio)) throw error;
       errores = { [error.campo ?? '_general']: error.message };
@@ -149,21 +176,20 @@ Astro.response.status = estado;
       valor={valores.hermano_id}
       error={errores.hermano_id}
       vacio="No aplica"
-      ayuda="Obligatorio en las cuotas de grado."
+      ayuda="Solo si el concepto lo pide, por ejemplo las cuotas de grado."
     />
 
 
     <Selector
       nombre="bolsa"
-      etiqueta="Bolsa"
+      etiqueta="¿Dónde quedó el dinero?"
       opciones={[
-        { valor: 'efectivo', texto: 'Efectivo' },
-        { valor: 'banco', texto: 'Banco' },
+        { valor: 'efectivo', texto: 'Efectivo (se recibió en mano)' },
+        { valor: 'banco', texto: 'Banco (transferencia o depósito)' },
       ]}
       valor={valores.bolsa ?? 'efectivo'}
       error={errores.bolsa}
       requerido
-      ayuda="Efectivo si se recibió en la tenida, banco si fue transferencia."
     />
 
     <Campo
@@ -179,6 +205,7 @@ Astro.response.status = estado;
       etiqueta={ETIQUETAS.comprobante!}
       tipo="file"
       error={errores.comprobante}
+      repetirArchivo={Object.keys(errores).length > 0}
       aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
       ayuda="Opcional en ingresos. JPEG, PNG, WEBP, HEIC o PDF, hasta 10 MB."
     />

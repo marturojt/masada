@@ -60,8 +60,8 @@ const opcionesEvento: Opcion[] = (Object.entries(NOMBRE_EVENTO_CUOTA) as [string
   <h2>Cuotas de grado</h2>
   <p class="apagado" style="font-size: 0.85rem;">
     Lo que debe a la logia por su iniciación, afiliación, aumento de salario o exaltación.
-    Los pagos se capturan en <a href="/ingresos/nuevo">Ingresos</a> con el concepto de la
-    cuota y a su nombre: se aplican solos, en uno o varios abonos.
+    Los pagos se capturan en <a href={`/ingresos/nuevo?hermano=${hermanoId}&cuota=1`}>Ingresos</a>
+    con el concepto de la cuota y a su nombre: se aplican solos, en uno o varios abonos.
   </p>
   {abierto && <ResumenErrores errores={errores} />}
 

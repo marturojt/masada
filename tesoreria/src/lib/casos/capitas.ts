@@ -66,7 +66,7 @@ export async function asignarModalidad(
   /* La promoción es discrecional del Venerable Maestro. */
   if (esPromocion && !esVM) {
     throw new ErrorDeNegocio(
-      'La promoción de pago único la autoriza el Venerable Maestro. Pídele que la habilite.',
+      'La anual preferencial la autoriza el Venerable Maestro. Pídele que la habilite.',
       'modalidad',
     );
   }

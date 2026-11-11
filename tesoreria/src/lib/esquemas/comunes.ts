@@ -270,3 +270,10 @@ export const grado: z.ZodType<Grado> = opcionDe(
  * CSRF y nonce.
  */
 export const esquemaVacio = z.object({});
+
+/**
+ * Casilla "entiendo que no se puede deshacer". La pide el navegador con
+ * required, pero la exige el servidor: sin ella la acción no se ejecuta.
+ */
+export const confirmacion = (mensaje = 'Marca la casilla para confirmar.') =>
+  z.preprocess(comoTexto, z.string().refine((v) => v === 'si', mensaje));

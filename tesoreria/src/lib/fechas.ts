@@ -142,3 +142,27 @@ export function periodoSiguiente(periodo: string): string {
     ? `${anio + 1}-01`
     : `${anio}-${String(mes + 1).padStart(2, '0')}`;
 }
+
+/**
+ * Meses en palabras para un aviso: 'marzo 2026', 'marzo a mayo 2026' si son
+ * seguidos, o 'enero, marzo y abril 2026' si no. Recibe 'YYYY-MM' en orden.
+ */
+export function listaDeMeses(periodos: string[]): string {
+  if (periodos.length === 0) return '';
+  const primero = periodos[0]!;
+  const ultimo = periodos[periodos.length - 1]!;
+  if (periodos.length === 1) return nombrePeriodo(primero);
+
+  const seguidos = periodos.every((p, i) => i === 0 || periodoSiguiente(periodos[i - 1]!) === p);
+  const mismoAnio = primero.slice(0, 4) === ultimo.slice(0, 4);
+  const sinAnio = (p: string) => MESES[Number(p.slice(5, 7)) - 1] ?? '?';
+
+  if (seguidos) {
+    return mismoAnio
+      ? `${sinAnio(primero)} a ${nombrePeriodo(ultimo)}`
+      : `${nombrePeriodo(primero)} a ${nombrePeriodo(ultimo)}`;
+  }
+  const nombres = periodos.map((p) => (mismoAnio ? sinAnio(p) : nombrePeriodo(p)));
+  const lista = `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+  return mismoAnio ? `${lista} ${primero.slice(0, 4)}` : lista;
+}

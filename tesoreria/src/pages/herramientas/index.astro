@@ -4,6 +4,7 @@
  * La exportación del cuadro al sitio público vive en su propia página.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -159,7 +160,7 @@ Astro.response.status = estado;
     <span>{sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   {seccion === null && <ResumenErrores errores={errores} />}
 
   <h1>Herramientas</h1>

@@ -1,0 +1,32 @@
+---
+/*
+ * Casilla para confirmar una acción que no se puede deshacer. Va dentro del
+ * formulario y el esquema la exige con `confirmacion()`, así que sin JavaScript
+ * sigue siendo un paso consciente y no un clic de más.
+ */
+interface Props {
+  texto: string;
+  error?: string | undefined;
+  nombre?: string;
+}
+
+const { texto, error, nombre = 'confirmo' } = Astro.props;
+const idCampo = `campo-${nombre}`;
+const idError = `${idCampo}-error`;
+---
+
+<div class="campo confirmacion">
+  <label for={idCampo}>
+    <input
+      id={idCampo}
+      type="checkbox"
+      name={nombre}
+      value="si"
+      required
+      aria-invalid={error ? 'true' : undefined}
+      aria-describedby={error ? idError : undefined}
+    />
+    <span>{texto}</span>
+  </label>
+  {error && <span class="campo__error" id={idError}>{error}</span>}
+</div>

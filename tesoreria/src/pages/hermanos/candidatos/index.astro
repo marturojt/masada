@@ -6,6 +6,7 @@
  * pasan al padrón desde su ficha.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -21,6 +22,7 @@ import { esquemaCandidato } from '@lib/esquemas/hermano';
 import { formatoFechaCorta } from '@lib/fechas';
 import { avisoDe, procesarFormulario } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -95,10 +97,10 @@ Astro.response.status = estado;
 <LayoutAdmin titulo="Candidatos" sesion={sesion}>
   <div class="barra__contexto" slot="contexto">
     <span><a href="/hermanos">← Padrón</a></span>
-    <span>{vigentes.length} candidato(s)</span>
+    <span>{cuenta(vigentes.length, 'candidato', 'candidatos')}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Candidatos</h1>

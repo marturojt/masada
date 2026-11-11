@@ -4,6 +4,7 @@
  * administrador). Los usuarios no se borran: se desactivan.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -77,7 +78,7 @@ Astro.response.status = estado;
     <span><a href="/herramientas">← Herramientas</a></span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Usuarios de la plataforma</h1>

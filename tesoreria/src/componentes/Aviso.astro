@@ -1,0 +1,37 @@
+---
+/*
+ * Aviso tras guardar algo: qué pasó, un detalle opcional y los enlaces a lo que
+ * normalmente se hace después. El texto principal sale del diccionario cerrado
+ * de avisos; el detalle lo arma la página con datos leídos de la base, nunca de
+ * la query.
+ */
+interface Enlace {
+  href: string;
+  texto: string;
+}
+
+interface Props {
+  texto: string | null | undefined;
+  detalle?: string | null;
+  enlaces?: Enlace[];
+  error?: boolean;
+}
+
+const { texto, detalle, enlaces = [], error = false } = Astro.props;
+---
+
+{
+  texto && (
+    <div class:list={['aviso', { 'aviso--error': error }]} role={error ? 'alert' : 'status'}>
+      <p class="aviso__texto">{texto}</p>
+      {detalle && <p class="aviso__detalle">{detalle}</p>}
+      {enlaces.length > 0 && (
+        <p class="aviso__siguiente">
+          {enlaces.map((e) => (
+            <a href={e.href}>{e.texto}</a>
+          ))}
+        </p>
+      )}
+    </div>
+  )
+}

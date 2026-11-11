@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   bolsa,
+  confirmacion,
   fechaISO,
   fechaISOOpcional,
   idOpcional,
@@ -93,9 +94,10 @@ export const esquemaDocumento = z.object({
   descripcion: textoOpcional('La descripción', 300),
 });
 
-/** Rechazo o cancelación, siempre con motivo. */
+/** Rechazo, cancelación o eliminación: siempre con motivo y con la casilla de confirmación. */
 export const esquemaMotivo = z.object({
   motivo: texto('El motivo', 300),
+  confirmo: confirmacion(),
 });
 
 /** Cierre de la comprobación. */

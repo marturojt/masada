@@ -7,6 +7,7 @@
  * tarifas son referencia para capturarlo, no lo calculan.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import { generarEgresoDePago } from '@lib/casos/gt';
@@ -29,6 +30,7 @@ import { formatoFechaCorta, nombrePeriodo, nombrePeriodoCorto } from '@lib/fecha
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_BOLSA } from '@lib/tipos';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -114,14 +116,22 @@ Astro.response.status = estado;
     {aplomo.regularizaciones_pendientes > 0 && (
       <span>{aplomo.regularizaciones_pendientes} regularización(es) pendientes</span>
     )}
-    {aplomo.otras_pendientes > 0 && <span>{aplomo.otras_pendientes} trámite(s) pendientes</span>}
+    {aplomo.otras_pendientes > 0 && <span>{cuenta(aplomo.otras_pendientes, 'trámite pendiente', 'trámites pendientes')}</span>}
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
-    <h1>Gran Tesorería</h1>
+    <div>
+      <h1 style="margin-bottom: 0.2rem;">Gran Tesorería</h1>
+      <p class="apagado" style="margin: 0; font-size: 0.9rem; max-width: 46rem;">
+        Aquí se lleva lo que la Gran Tesorería le cobra a la logia. Cada cobro que llega
+        (la cuota del mes, una regularización o un trámite) se captura como una
+        <strong>obligación</strong>, y se paga con un egreso que lleva las dos firmas.
+        Estar <strong>a plomo</strong> quiere decir estar al corriente con esos pagos.
+      </p>
+    </div>
     <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
       <a class="btn btn--primary" href="/gran-tesoreria/obligaciones/nueva">Capturar obligación</a>
       <a class="btn btn--primary" href="/gran-tesoreria/tramites/nuevo">Capturar trámite</a>
@@ -137,7 +147,7 @@ Astro.response.status = estado;
         <p style="margin: 0;">
           {
             aplomo.ordinario_a_plomo ? (
-              <span class="insignia insignia--ok">A plomo en lo ordinario</span>
+              <span class="insignia insignia--ok">A plomo (al corriente) en lo ordinario</span>
             ) : (
               <span class="insignia insignia--alerta">
                 Pendiente desde {aplomo.primer_pendiente ? nombrePeriodo(aplomo.primer_pendiente.slice(0, 7)) : '—'}
@@ -245,8 +255,8 @@ Astro.response.status = estado;
                 Generar egreso de pago con las marcadas
               </button>
               <span class="apagado" style="font-size: 0.8rem;">
-                El egreso pasa por las dos firmas; al entregar el dinero, el pago GT y sus
-                aplicaciones se registran solos.
+                El egreso pasa por las dos firmas. Cuando registres la entrega del dinero, el
+                pago a la Gran Tesorería queda asentado solo en estas obligaciones.
               </span>
             </div>
           </Formulario>

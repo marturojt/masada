@@ -7,6 +7,7 @@ import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
 import Selector from '@componentes/Selector.astro';
 import Formulario from '@componentes/Formulario.astro';
+import Confirmacion from '@componentes/Confirmacion.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import {
   aplicarSaldoAFavor,
@@ -21,6 +22,7 @@ import {
   NOMBRE_MODALIDAD,
   adeudosDeHermano,
   condonacionesDeHermano,
+  detalleDePago,
   estadoDeCuenta,
   pagosDeHermano,
   planVigente,
@@ -33,10 +35,11 @@ import { foliosDeRecibo } from '@lib/datos/movimientos';
 import { aPesosTexto, formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaExencion } from '@lib/esquemas/capita';
-import { esquemaVacio, idPositivo, mes, montoEnCentavos, opcionDe, textoOpcional } from '@lib/esquemas/comunes';
+import { confirmacion, idPositivo, mes, montoEnCentavos, opcionDe, textoOpcional } from '@lib/esquemas/comunes';
 import { z } from 'zod';
-import { MESES, formatoFechaCorta, formatoMomento, nombrePeriodo } from '@lib/fechas';
-import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { MESES, formatoFechaCorta, formatoMomento, listaDeMeses, nombrePeriodo } from '@lib/fechas';
+import { avisoDe, idDeUrl, leerFormulario, validar } from '@lib/formulario';
+import Aviso from '@componentes/Aviso.astro';
 import { esVM, requerirSesion } from '@lib/sesion';
 import { NOMBRE_GRADO } from '@lib/tipos';
 
@@ -62,20 +65,21 @@ if (Astro.request.method === 'POST') {
     estado = entrada.estado;
   } else if (entrada.accion === 'saldo_aplicar') {
     const r = await validar(entrada, {
-      esquema: esquemaVacio,
+      esquema: z.object({ confirmo: confirmacion() }),
       proposito: 'capita_saldo_aplicar',
       sesion,
     });
     if (!r.ok) {
       errores = r.errores;
       estado = r.estado;
+      seccion = 'saldo_aplicar';
     } else {
       try {
         await aplicarSaldoAFavor(
           { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
           id,
         );
-        return Astro.redirect(`/capitas/hermano/${id}?ok=pago`, 303);
+        return Astro.redirect(`/capitas/hermano/${id}?ok=saldo_aplicado`, 303);
       } catch (error) {
         if (!(error instanceof ErrorDeNegocio)) throw error;
         errores = { [error.campo ?? '_general']: error.message };
@@ -139,7 +143,7 @@ if (Astro.request.method === 'POST') {
     const r = await validar(entrada, {
       esquema: z.object({
         monto: montoEnCentavos('El monto a convertir'),
-        bolsa: opcionDe(['banco', 'efectivo'], 'Elige la bolsa.'),
+        bolsa: opcionDe(['banco', 'efectivo'], 'Elige si quedó en el banco o en efectivo.'),
         motivo: textoOpcional('El motivo', 300),
       }),
       proposito: 'capita_saldo_donar',
@@ -229,8 +233,46 @@ const [cuenta, meses, pagos, condonaciones, plan] = await Promise.all([
   planVigente(id, anio),
 ]);
 
-const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const claveAviso = Astro.url.searchParams.get('ok');
+const aviso = avisoDe(claveAviso);
+
+/* Después de un pago: qué meses cubrió, cuánto quedó a favor y su recibo. */
+let avisoDetalle: string | null = null;
+let avisoEnlaces: { href: string; texto: string }[] = [];
+const movAviso = claveAviso === 'pago' ? idDeUrl(Astro.url, 'mov') : null;
+if (movAviso) {
+  const pago = await detalleDePago(movAviso, id);
+  if (pago) {
+    const partes: string[] = [];
+    if (pago.periodos.length > 0) partes.push(`Cubrió ${listaDeMeses(pago.periodos)}.`);
+    if (pago.monto > pago.aplicado) {
+      partes.push(`Quedaron ${formatoMXN(pago.monto - pago.aplicado)} como saldo a favor.`);
+    }
+    avisoDetalle = partes.join(' ') || null;
+    avisoEnlaces = [
+      { href: `/recibos/${movAviso}`, texto: 'Ver e imprimir el recibo' },
+      { href: '/capitas/pagos/nuevo', texto: 'Registrar el pago de otro hermano' },
+    ];
+  }
+} else if (claveAviso === 'modalidad') {
+  avisoEnlaces = [{ href: `/capitas/pagos/nuevo?hermano=${id}`, texto: 'Registrar un pago' }];
+}
 const disponible = await saldoAFavorDisponible(id);
+
+/*
+ * A qué meses del ejercicio iría el saldo, del más antiguo hacia adelante. Es
+ * solo para avisar antes de confirmar; la aplicación real la hace el caso de uso.
+ */
+const mesesDelSaldo: string[] = [];
+{
+  let resta = disponible;
+  for (const m of meses) {
+    if (resta <= 0) break;
+    if (m.saldo_centavos <= 0) continue;
+    mesesDelSaldo.push(m.periodo.slice(0, 7));
+    resta -= m.saldo_centavos;
+  }
+}
 const folios = new Map(
   (await foliosDeRecibo(pagos.map((p) => p.movimiento_id))).map((f) => [
     f.movimiento_id,
@@ -266,7 +308,7 @@ Astro.response.status = estado;
     <span><a href={`/hermanos/${id}`}>Ficha del hermano</a></span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} detalle={avisoDetalle} enlaces={avisoEnlaces} />
   <ResumenErrores errores={errores} etiquetas={{ monto: 'Monto', motivo: 'Motivo' }} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
@@ -404,6 +446,15 @@ Astro.response.status = estado;
             nonce={nonceSaldoAplicar}
             accionInterna="saldo_aplicar"
           >
+            <p style="font-size: 0.9rem; margin-top: 0;">
+              {mesesDelSaldo.length > 0
+                ? `Se aplicaría a ${listaDeMeses(mesesDelSaldo)}.`
+                : `No hay meses pendientes en ${anio}. Si ya está abierto el ejercicio siguiente, se aplica a sus meses.`}
+            </p>
+            <Confirmacion
+              texto="Confirmo que el hermano está de acuerdo en usar su saldo a favor así."
+              error={seccion === 'saldo_aplicar' ? errores.confirmo : undefined}
+            />
             <div class="formulario__acciones" style="margin-top: 0;">
               <button class="btn btn--primary" type="submit">
                 Aplicar a meses pendientes
@@ -458,7 +509,7 @@ Astro.response.status = estado;
                 />
                 <Selector
                   nombre="bolsa"
-                  etiqueta="Bolsa donde quedó ese dinero"
+                  etiqueta="¿Dónde quedó ese dinero?"
                   opciones={[
                     { valor: 'banco', texto: 'Banco' },
                     { valor: 'efectivo', texto: 'Efectivo' },

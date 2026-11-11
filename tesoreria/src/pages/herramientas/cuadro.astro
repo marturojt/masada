@@ -11,6 +11,7 @@ import { consulta } from '@lib/db';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { listarPastMasters } from '@lib/datos/cargos';
 import { requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 
@@ -110,7 +111,7 @@ npm run exportar:cuadro -- --escribir</code></pre>
     {
       pastMasters.length > 0 && (
         <p class="apagado" style="font-size: 0.8rem; margin-bottom: 0;">
-          {pastMasters.filter((p) => p.derivado).length} derivado(s) del cuadro y{' '}
+          {cuenta(pastMasters.filter((p) => p.derivado).length, 'derivado', 'derivados')} del cuadro y{' '}
           {pastMasters.filter((p) => !p.derivado).length} del histórico capturado.
         </p>
       )

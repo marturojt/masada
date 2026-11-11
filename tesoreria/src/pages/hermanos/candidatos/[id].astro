@@ -4,6 +4,7 @@
  * ceremonia. Si desiste, queda registrado; no se borra.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import CuotasGrado from '@componentes/CuotasGrado.astro';
 import Formulario from '@componentes/Formulario.astro';
@@ -117,7 +118,7 @@ Astro.response.status = estado;
     <span>Candidato a {esIniciacion ? 'iniciación' : 'afiliación'}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   {seccion !== 'cuota' && <ResumenErrores errores={errores} />}
 
   <h1 style="margin-bottom: 0.2rem;">{candidato.nombre_completo}</h1>

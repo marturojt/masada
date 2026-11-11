@@ -215,14 +215,26 @@ export async function procesarFormulario<T>(
 /** Mensajes de éxito. Nunca se imprime en el HTML lo que venga en la query. */
 const AVISOS: Record<string, string> = {
   pago: 'Pago registrado.',
+  saldo_aplicado: 'Saldo a favor aplicado a los meses pendientes.',
+  traspaso: 'Traspaso registrado.',
+  hermano_nuevo: 'Hermano dado de alta. Falta asignarle su modalidad de cápita.',
+  entrega: 'Entrega registrada: el dinero ya salió de la tesorería.',
+  documento: 'Documento adjuntado.',
+  rechazo: 'Egreso rechazado. No se entregará el dinero.',
+  cancelacion: 'Egreso cancelado.',
+  autorizado: 'Egreso autorizado con las dos firmas. Ya se puede entregar el dinero.',
+  falta_firma_vm: 'Firma registrada. Falta la firma del V∴M∴ para autorizarlo.',
+  falta_firma_tesorero: 'Firma registrada. Falta la firma del tesorero para autorizarlo.',
+  comprobacion_cerrada: 'Comprobación cerrada.',
   hermano: 'Cambios guardados.',
   modalidad: 'Modalidad de cápita asignada.',
   ingreso: 'Ingreso registrado.',
-  egreso: 'Egreso registrado.',
+  egreso: 'Egreso registrado. Ahora necesita la firma del tesorero y la del V∴M∴ antes de entregar el dinero.',
   firma: 'Firma registrada.',
   comprobacion: 'Comprobación registrada.',
   concepto: 'Concepto guardado.',
-  corte: 'Corte cerrado.',
+  corte: 'Corte cerrado. Ya no admite capturas.',
+  reabierto: 'Corte reabierto. Queda registrado el motivo.',
   mensaje: 'Mensaje del informe guardado.',
   arqueo: 'Arqueo inicial registrado: banco y efectivo quedan como se contaron.',
   ejercicio: 'Ejercicio actualizado.',
@@ -244,10 +256,19 @@ const AVISOS: Record<string, string> = {
   suplencia: 'Motivo de la suplencia actualizado.',
   beneficiario: 'Beneficiario unificado en todos sus egresos.',
   candidato: 'Candidato dado de alta.',
-  iniciado: 'Ya es hermano activo. Falta asignarle su modalidad en Cápitas.',
+  iniciado: 'Ya es hermano activo. Falta asignarle su modalidad de cápita.',
   cuota: 'Cuota de grado guardada.',
   membresia_eliminada: 'Membresía eliminada. Queda constancia en la bitácora.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>
   clave ? (AVISOS[clave] ?? null) : null;
+
+/**
+ * Un id que viene en la URL junto al aviso (por ejemplo `&mov=123`). Solo dice
+ * qué buscar: la página lo vuelve a leer de la base y comprueba que le toca.
+ */
+export function idDeUrl(url: URL, nombre: string): number | null {
+  const n = Number(url.searchParams.get(nombre));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}

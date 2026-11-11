@@ -4,6 +4,7 @@
  * llevan lógica propia del sistema aparecen marcados y no se pueden desactivar.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -108,7 +109,7 @@ Astro.response.status = estado;
 ---
 
 <LayoutAdmin titulo="Conceptos" sesion={sesion}>
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Catálogo de conceptos</h1>

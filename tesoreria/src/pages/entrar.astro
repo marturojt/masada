@@ -64,7 +64,7 @@ if (Astro.request.method === 'POST') {
       const minutos = Math.ceil(limite.esperaSegundos / 60);
       errores = {
         _general:
-          `Demasiados intentos fallidos. Espera ${minutos} minuto(s) antes de volver a intentar.`,
+          `Demasiados intentos fallidos. Espera ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'} antes de volver a intentar.`,
       };
       valores = { correo: resultado.datos.correo };
       estado = 429;

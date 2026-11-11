@@ -60,6 +60,9 @@ export interface EgresoFila {
   motivo_cancelacion: string | null;
   notas: string | null;
   firmas: number;
+  /** Qué firma falta, para decirlo con nombre y no como un número. */
+  firmo_tesorero: boolean;
+  firmo_vm: boolean;
   /** Folio GTP- si el egreso pagó a la Gran Tesorería y ya se entregó. */
   pago_gt_folio: string | null;
   /** Las obligaciones GT que paga, para decir qué fue sin abrir la ficha. */
@@ -74,6 +77,10 @@ const COLUMNAS = `e.id, e.folio, e.fecha_solicitud, e.ejercicio_anio, e.concepto
        e.estado, e.fecha_autorizacion::text, e.fecha_entrega, e.fecha_comprobacion,
        e.motivo_rechazo, e.motivo_cancelacion, e.notas,
        (select count(*)::int from egreso_firma f where f.egreso_id = e.id) as firmas,
+       exists (select 1 from egreso_firma f
+                where f.egreso_id = e.id and f.rol_requerido = 'tesorero') as firmo_tesorero,
+       exists (select 1 from egreso_firma f
+                where f.egreso_id = e.id and f.rol_requerido = 'venerable_maestro') as firmo_vm,
        (select p.folio from movimiento m join gt_pago p on p.movimiento_id = m.id
          where m.egreso_id = e.id and m.tipo = 'egreso') as pago_gt_folio,
        (select json_agg(json_build_object(

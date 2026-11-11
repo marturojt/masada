@@ -5,6 +5,7 @@
  * Masada: no se concilian ni modifican el padrón.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import VisorImagen from '@componentes/VisorImagen.astro';
 import { sonImagenes } from '@lib/archivos';
 import Campo from '@componentes/Campo.astro';
@@ -78,7 +79,7 @@ Astro.response.status = estado;
     <span><a href="/gran-tesoreria">← Gran Tesorería</a></span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Membresías</h1>

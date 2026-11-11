@@ -28,6 +28,11 @@ interface Props {
   autoenfoque?: boolean;
   /** Id de un datalist con sugerencias: ayuda a no escribir el mismo nombre de dos maneras. */
   lista?: string;
+  /**
+   * Para campos de archivo cuando el formulario volvió con errores: el navegador
+   * no conserva el archivo elegido y hay que avisarlo.
+   */
+  repetirArchivo?: boolean;
 }
 
 const {
@@ -51,12 +56,17 @@ const {
   monto = false,
   autoenfoque = false,
   lista,
+  repetirArchivo = false,
 } = Astro.props;
 
 const idCampo = `campo-${nombre}`;
 const idError = `${idCampo}-error`;
 const idAyuda = `${idCampo}-ayuda`;
-const descrito = [error ? idError : null, ayuda ? idAyuda : null]
+const ayudaFinal =
+  tipo === 'file' && repetirArchivo
+    ? `Vuelve a elegir el archivo: el navegador no lo guarda cuando hay un error.${ayuda ? ` ${ayuda}` : ''}`
+    : ayuda;
+const descrito = [error ? idError : null, ayudaFinal ? idAyuda : null]
   .filter(Boolean)
   .join(' ');
 const valorTexto = valor == null ? '' : String(valor);
@@ -102,6 +112,6 @@ const valorTexto = valor == null ? '' : String(valor);
     )
   }
 
-  {ayuda && <span class="campo__ayuda" id={idAyuda}>{ayuda}</span>}
+  {ayudaFinal && <span class="campo__ayuda" id={idAyuda}>{ayudaFinal}</span>}
   {error && <span class="campo__error" id={idError}>{error}</span>}
 </div>

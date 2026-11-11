@@ -9,6 +9,8 @@ import CuotasGrado from '@componentes/CuotasGrado.astro';
 import { ACCIONES_CUOTA, atenderAccionCuota } from '@lib/acciones-cuotas';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Aviso from '@componentes/Aviso.astro';
+import { planVigente } from '@lib/datos/capitas';
 import Selector from '@componentes/Selector.astro';
 import {
   agregarEventoGrado,
@@ -157,6 +159,11 @@ const historial = await historialGrados(id);
 const registros = await registrosExternosDe(id);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 
+/* Un hermano activo sin modalidad no genera cápitas: se avisa siempre, no solo tras el alta. */
+const sinModalidad =
+  hermano.estatus === 'activo' && !(await planVigente(id, ejercicio.anio));
+const enlaceModalidad = { href: `/capitas/asignar?hermano=${id}`, texto: 'Asignar modalidad de cápita' };
+
 const nonceBaja = await emitirNonce(sesion.idHash, 'hermano_baja');
 const nonceReactivar = await emitirNonce(sesion.idHash, 'hermano_reactivar');
 const nonceGrado = await emitirNonce(sesion.idHash, 'hermano_grado');
@@ -213,7 +220,15 @@ Astro.response.status = estado;
     <span><a href="/hermanos">← Padrón</a></span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} enlaces={sinModalidad ? [enlaceModalidad] : []} />
+  {
+    sinModalidad && !aviso && (
+      <Aviso
+        texto={`Todavía no tiene modalidad de cápita para ${ejercicio.anio}, así que no se le cobra nada.`}
+        enlaces={[enlaceModalidad]}
+      />
+    )
+  }
   {seccion === null && <ResumenErrores errores={errores} />}
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">

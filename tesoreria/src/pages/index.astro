@@ -7,6 +7,7 @@
  * El periodo viaja en la dirección (?anio=2026&periodo=2026-08), sin JavaScript.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import GraficaFlujoMensual from '@componentes/graficas/GraficaFlujoMensual.astro';
 import GraficaSaldo from '@componentes/graficas/GraficaSaldo.astro';
 import { estadoAplomo } from '@lib/datos/gt';
@@ -36,6 +37,7 @@ import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_ESTADO_EGRESO, CLASE_ESTADO_EGRESO } from '@lib/datos/egresos';
 import { cuotasPorCobrar } from '@lib/datos/cuotas';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -140,7 +142,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
     <span>Total: {formatoMXN(caja.saldo)}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
 
   <h1>Tesorería</h1>
 
@@ -157,7 +159,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
   {
     faltantes.length > 0 && (
       <div class="aviso aviso--error">
-        {faltantes.length} hermano(s) sin modalidad de cápita para {anio}:{' '}
+        {faltantes.length === 1 ? 'Un hermano' : `${faltantes.length} hermanos`} sin modalidad de cápita para {anio}:{' '}
         {faltantes
           .slice(0, 4)
           .map((h) => h.nombre_completo)
@@ -342,7 +344,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
           {evidencias.length}
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          documento(s) por adjuntar · <a href="/pendientes">atender</a>
+          {evidencias.length === 1 ? 'documento' : 'documentos'} por adjuntar · <a href="/pendientes">atender</a>
         </p>
       </section>
 
@@ -352,7 +354,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
           {formatoMXN(porCobrarCuotas)}
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          por cobrar a {new Set(cuotas.map((c) => c.hermano_id)).size} persona(s) ·{' '}
+          por cobrar a {cuenta(new Set(cuotas.map((c) => c.hermano_id)).size, 'persona', 'personas')} ·{' '}
           <a href="/hermanos#cuotas">ver</a>
         </p>
       </section>
@@ -415,7 +417,13 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
                     <td>{e.beneficiario}</td>
                     <td class="num">{formatoMXN(e.monto_solicitado_centavos)}</td>
                     <td><span class:list={['insignia', CLASE_ESTADO_EGRESO[e.estado]]}>{NOMBRE_ESTADO_EGRESO[e.estado]}</span></td>
-                    <td>{2 - e.firmas} firma(s)</td>
+                    <td>
+                      {!e.firmo_tesorero && !e.firmo_vm
+                        ? 'Las dos firmas, del tesorero y del V∴M∴'
+                        : !e.firmo_vm
+                          ? 'La firma del V∴M∴'
+                          : 'La firma del tesorero'}
+                    </td>
                   </tr>
                 ))}
                 {porEntregar.map((e) => (

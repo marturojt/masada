@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  confirmacion,
   fechaISO,
   opcionDe,
   idPositivo,
@@ -11,6 +12,7 @@ import {
 
 export const esquemaCierre = z.object({
   observaciones: notas(1000),
+  confirmo: confirmacion('Marca la casilla para confirmar que el mes queda cerrado.'),
 });
 
 export const esquemaReapertura = z.object({

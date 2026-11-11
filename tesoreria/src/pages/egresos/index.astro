@@ -5,6 +5,7 @@
  * que GT ya cobró y aún no tiene egreso se muestra aparte, para que nada se pierda.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import {
   CLASE_ESTADO_EGRESO,
@@ -20,6 +21,7 @@ import { formatoFechaCorta } from '@lib/fechas';
 import { avisoDe } from '@lib/formulario';
 import { describirObligacion } from '@lib/datos/gt';
 import { esVM, requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -75,7 +77,7 @@ const conFiltro = (valor?: string): string => {
     {porComprobar.length > 0 && <span>{porComprobar.length} por comprobar</span>}
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
     <h1>Egresos</h1>
@@ -198,7 +200,7 @@ const conFiltro = (valor?: string): string => {
     ) : (
       <div class="tabla-envoltura">
         <table class="tabla">
-          <caption>{egresos.length} egreso(s)</caption>
+          <caption>{cuenta(egresos.length, 'egreso', 'egresos')}</caption>
           <thead>
             <tr>
               <th scope="col">Folio</th>

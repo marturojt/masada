@@ -12,7 +12,7 @@ import { registrarPagoCapita } from '@lib/casos/capitas';
 import { emitirNonce } from '@lib/csrf';
 import { cargosVencidosConAdjetivo, estadosDeCuenta } from '@lib/datos/capitas';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
-import { formatoMXN } from '@lib/dinero';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaPagoCapita } from '@lib/esquemas/capita';
 import { hoyISO } from '@lib/fechas';
@@ -30,7 +30,7 @@ const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
 const ETIQUETAS: Record<string, string> = {
   hermano_id: 'Hermano',
   fecha: 'Fecha del pago',
-  bolsa: 'Bolsa',
+  bolsa: 'Cómo pagó',
   monto: 'Monto',
   descripcion: 'Descripción',
   comprobante: 'Comprobante',
@@ -56,12 +56,15 @@ if (Astro.request.method === 'POST') {
     estado = resultado.estado;
   } else {
     try {
-      await registrarPagoCapita(
+      const pago = await registrarPagoCapita(
         { sesion, nonce: resultado.nonce, anio, idPeticion: Astro.locals.idPeticion },
         resultado.datos,
         resultado.archivos.comprobante,
       );
-      return Astro.redirect(`/capitas/hermano/${resultado.datos.hermano_id}?ok=pago`, 303);
+      return Astro.redirect(
+        `/capitas/hermano/${resultado.datos.hermano_id}?ok=pago&mov=${pago.movimientoId}`,
+        303,
+      );
     } catch (error) {
       if (!(error instanceof ErrorDeNegocio)) throw error;
       errores = { [error.campo ?? '_general']: error.message };
@@ -87,6 +90,13 @@ const opcionesHermano: Opcion[] = estados.map((e) => ({
 opcionesHermano.sort((a, b) => (a.grupo === b.grupo ? 0 : a.grupo === 'Con adeudo' ? -1 : 1));
 
 const elegido = estados.find((e) => String(e.hermano_id) === valores.hermano_id);
+
+/* Con el hermano ya elegido, se propone lo que debe; si está al corriente, un mes. */
+if (elegido && valores.monto === undefined) {
+  valores.monto = aPesosTexto(
+    elegido.vencido_centavos > 0 ? elegido.vencido_centavos : ejercicio.capita_mensual_centavos,
+  );
+}
 
 Astro.response.status = estado;
 ---
@@ -128,6 +138,7 @@ Astro.response.status = estado;
       error={errores.hermano_id}
       vacio="Elige un hermano"
       requerido
+      ayuda="Si no aparece, todavía no tiene modalidad de cápita: asígnasela primero en Cápitas."
     />
 
     <Campo
@@ -147,7 +158,11 @@ Astro.response.status = estado;
       valor={valores.monto}
       error={errores.monto}
       modoTeclado="decimal"
-      ayuda={`En pesos. Un mes son ${formatoMXN(ejercicio.capita_mensual_centavos)}, la promoción ${formatoMXN(ejercicio.capita_promocion_centavos)}.`}
+      ayuda={
+        elegido && elegido.vencido_centavos > 0
+          ? `Viene puesto lo vencido, ${formatoMXN(elegido.vencido_centavos)}. Cámbialo si paga otra cantidad; lo que sobre queda a favor.`
+          : `En pesos. Un mes son ${formatoMXN(ejercicio.capita_mensual_centavos)}, la anual preferencial ${formatoMXN(ejercicio.capita_promocion_centavos)}.`
+      }
       monto
       requerido
     />
@@ -155,15 +170,14 @@ Astro.response.status = estado;
 
     <Selector
       nombre="bolsa"
-      etiqueta="Bolsa"
+      etiqueta="¿Cómo pagó?"
       opciones={[
-        { valor: 'efectivo', texto: 'Efectivo' },
-        { valor: 'banco', texto: 'Banco' },
+        { valor: 'efectivo', texto: 'En efectivo' },
+        { valor: 'banco', texto: 'Transferencia o depósito al banco' },
       ]}
       valor={valores.bolsa ?? 'efectivo'}
       error={errores.bolsa}
       requerido
-      ayuda="Efectivo si pagó en la tenida, banco si fue transferencia o depósito."
     />
 
     <Campo
@@ -179,6 +193,7 @@ Astro.response.status = estado;
       etiqueta={ETIQUETAS.comprobante!}
       tipo="file"
       error={errores.comprobante}
+      repetirArchivo={Object.keys(errores).length > 0}
       aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
       ayuda="Opcional. Si pagó en efectivo en la tenida, no hace falta."
     />

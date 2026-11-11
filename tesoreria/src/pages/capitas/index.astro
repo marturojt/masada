@@ -1,6 +1,7 @@
 ---
 /* Panel de cápitas del ejercicio: quién está al corriente y quién debe. */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import { historiaDelPlan } from '@lib/capitas-historia';
 import MatrizCapitas from '@componentes/MatrizCapitas.astro';
 import {
@@ -49,7 +50,7 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
     <span>{resumen?.al_corriente ?? 0} al corriente, {resumen?.con_adeudo ?? 0} con adeudo</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
     <h1>Cápitas {anio}</h1>
@@ -63,7 +64,7 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
     faltantes.length > 0 && (
       <div class="aviso aviso--error">
         <p style="margin: 0;">
-          {faltantes.length} hermano(s) activos sin modalidad de cápita asignada para {anio}.
+          {faltantes.length === 1 ? 'Un hermano activo' : `${faltantes.length} hermanos activos`} sin modalidad de cápita asignada para {anio}.
           Mientras no la tengan, no se les puede registrar un pago.
         </p>
         <ul>
@@ -190,13 +191,15 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
           <section class="tarjeta" style="margin-top: 1.25rem;">
             <h2>Saldos a favor</h2>
             <p class="apagado" style="font-size: 0.85rem;">
-              Dinero recibido que todavía no cubre ningún mes. Se aplica solo cuando se
-              genere el cargo correspondiente.
+              Dinero recibido que todavía no cubre ningún mes. No se aplica solo: desde la
+              ficha de cada hermano se aplica a sus meses pendientes, se le devuelve o se
+              convierte en donativo.
             </p>
             <ul>
               {aFavor.map((e) => (
                 <li>
-                  {e.nombre_completo}: {formatoMXN(e.saldo_a_favor_centavos)}
+                  <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>:{' '}
+                  {formatoMXN(e.saldo_a_favor_centavos)}
                 </li>
               ))}
             </ul>

@@ -8,6 +8,8 @@ import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Aviso from '@componentes/Aviso.astro';
+import Confirmacion from '@componentes/Confirmacion.astro';
 import Selector from '@componentes/Selector.astro';
 import {
   agregarComprobacion,
@@ -63,6 +65,8 @@ if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { sta
 let errores: Record<string, string> = {};
 let estado = 200;
 let seccion: string | null = null;
+/* Lo que se envió, para volver a pintar el formulario tal cual si hubo error. */
+let valores: Record<string, string> = {};
 
 if (Astro.request.method === 'POST') {
   const entrada = await leerFormulario(Astro);
@@ -73,6 +77,7 @@ if (Astro.request.method === 'POST') {
   } else {
     const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
     seccion = entrada.accion;
+    valores = entrada.valores;
 
     try {
       switch (entrada.accion) {
@@ -86,8 +91,13 @@ if (Astro.request.method === 'POST') {
             errores = r.errores;
             estado = r.estado;
           } else {
-            await firmarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos);
-            return Astro.redirect(`/egresos/${id}?ok=firma`, 303);
+            const { autorizado } = await firmarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos);
+            const clave = autorizado
+              ? 'autorizado'
+              : r.datos.rol_requerido === 'tesorero'
+                ? 'falta_firma_vm'
+                : 'falta_firma_tesorero';
+            return Astro.redirect(`/egresos/${id}?ok=${clave}`, 303);
           }
           break;
         }
@@ -108,7 +118,7 @@ if (Astro.request.method === 'POST') {
               r.datos,
               r.archivos.comprobante,
             );
-            return Astro.redirect(`/egresos/${id}?ok=egreso`, 303);
+            return Astro.redirect(`/egresos/${id}?ok=entrega`, 303);
           }
           break;
         }
@@ -161,7 +171,7 @@ if (Astro.request.method === 'POST') {
             estado = r.estado;
           } else {
             await cerrarComprobacion({ ...ctxBase, nonce: r.nonce }, id, r.datos.fecha);
-            return Astro.redirect(`/egresos/${id}?ok=comprobacion`, 303);
+            return Astro.redirect(`/egresos/${id}?ok=comprobacion_cerrada`, 303);
           }
           break;
         }
@@ -182,7 +192,7 @@ if (Astro.request.method === 'POST') {
               r.datos,
               r.archivos.archivo,
             );
-            return Astro.redirect(`/egresos/${id}?ok=egreso`, 303);
+            return Astro.redirect(`/egresos/${id}?ok=documento`, 303);
           }
           break;
         }
@@ -237,7 +247,7 @@ if (Astro.request.method === 'POST') {
           } else {
             if (esRechazo) await rechazarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos.motivo);
             else await cancelarEgreso({ ...ctxBase, nonce: r.nonce }, id, r.datos.motivo);
-            return Astro.redirect(`/egresos/${id}?ok=egreso`, 303);
+            return Astro.redirect(`/egresos/${id}?ok=${esRechazo ? 'rechazo' : 'cancelacion'}`, 303);
           }
           break;
         }
@@ -283,7 +293,21 @@ const imagenes = await sonImagenes(
   documentos.map((d) => d.archivo_id).filter((a): a is number => a !== null),
 );
 
-const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const claveAviso = Astro.url.searchParams.get('ok');
+const aviso = avisoDe(claveAviso);
+/* Qué sigue después de cada paso, para no dejar al tesorero adivinando. */
+const avisoEnlaces: { href: string; texto: string }[] =
+  claveAviso === 'entrega' && egreso.estado === 'por_comprobar'
+    ? [{ href: '#comprobacion', texto: 'Cuando tengas los recibos, súbelos aquí abajo' }]
+    : claveAviso === 'autorizado' && egreso.estado === 'autorizado'
+      ? [{ href: '#entrega', texto: 'Registrar la entrega del dinero' }]
+      : [];
+
+/* Valor enviado si el formulario de esa sección volvió con error; si no, el de siempre. */
+const previo = (accion: string, campo: string, porDefecto: string): string =>
+  seccion === accion && valores[campo] !== undefined ? valores[campo]! : porDefecto;
+const conError = (accion: string): boolean =>
+  seccion === accion && Object.keys(errores).length > 0;
 
 const nonces = {
   firma: await emitirNonce(sesion.idHash, 'egreso_firma'),
@@ -332,7 +356,7 @@ Astro.response.status = estado;
     <span>{egreso.concepto_nombre}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} enlaces={avisoEnlaces} />
   {seccion === null && <ResumenErrores errores={errores} />}
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
@@ -450,10 +474,12 @@ Astro.response.status = estado;
       {
         obligacionesGT.length > 0 && (
           <div style="margin-top: 1rem;">
-            <h3>Obligaciones GT que paga este egreso</h3>
+            <h3>Lo que paga a la Gran Tesorería</h3>
             <p style="margin: 0; font-size: 0.9rem;">
-              Al registrar la entrega, el pago GT y sus aplicaciones se materializan solos.
+              Cuando registres la entrega del dinero, el pago queda asentado solo en estas
+              obligaciones.
             </p>
+            <div class="tabla-envoltura">
             <table class="tabla" style="margin-top: 0.5rem;">
               <thead>
                 <tr>
@@ -474,6 +500,7 @@ Astro.response.status = estado;
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )
       }
@@ -606,6 +633,7 @@ Astro.response.status = estado;
                     <Campo
                       nombre="motivo_suplencia"
                       etiqueta="Motivo de la suplencia"
+                      valor={previo('firmar', 'motivo_suplencia', '')}
                       error={errores.motivo_suplencia}
                       ayuda="Queda registrado que el V∴M∴ cubrió la firma del tesorero."
                       requerido
@@ -632,8 +660,13 @@ Astro.response.status = estado;
                   <Campo
                     nombre="motivo"
                     etiqueta="Motivo del rechazo"
+                    valor={previo('rechazar', 'motivo', '')}
                     error={errores.motivo}
                     requerido
+                  />
+                  <Confirmacion
+                    texto="Entiendo que un egreso rechazado ya no se puede firmar ni pagar."
+                    error={seccion === 'rechazar' ? errores.confirmo : undefined}
                   />
                   <div class="formulario__acciones">
                     <button class="btn btn--ghost" type="submit">Rechazar</button>
@@ -648,7 +681,7 @@ Astro.response.status = estado;
 
     {
       egreso.estado === 'autorizado' && (
-        <section class="tarjeta">
+        <section class="tarjeta" id="entrega">
           <h2>Registrar la entrega del dinero</h2>
           <p class="apagado" style="font-size: 0.85rem;">
             Esta es la operación que saca el dinero de la caja.
@@ -669,36 +702,47 @@ Astro.response.status = estado;
                 nombre="fecha_entrega"
                 etiqueta="Fecha de entrega"
                 tipo="date"
-                valor={hoyISO()}
+                valor={previo('entregar', 'fecha_entrega', hoyISO())}
                 error={errores.fecha_entrega}
                 requerido
               />
               <Campo
                 nombre="monto_entregado"
                 etiqueta="Monto entregado"
-                valor={aPesosTexto(egreso.monto_autorizado_centavos ?? 0)}
+                valor={
+                  esPagoGT
+                    ? aPesosTexto(egreso.monto_autorizado_centavos ?? 0)
+                    : previo('entregar', 'monto_entregado', aPesosTexto(egreso.monto_autorizado_centavos ?? 0))
+                }
                 error={errores.monto_entregado}
+                soloLectura={esPagoGT}
+                ayuda={
+                  esPagoGT
+                    ? 'Es exactamente lo que cobra la Gran Tesorería, por eso no se cambia.'
+                    : undefined
+                }
                 modoTeclado="decimal"
                 monto
                 requerido
               />
               <Selector
                 nombre="bolsa"
-                etiqueta="Bolsa"
+                etiqueta="¿De dónde salió el dinero?"
                 opciones={[
-                  { valor: 'banco', texto: 'Banco' },
+                  { valor: 'banco', texto: 'Banco (transferencia)' },
                   { valor: 'efectivo', texto: 'Efectivo' },
                 ]}
-                valor="banco"
+                valor={previo('entregar', 'bolsa', egreso.requiere_comprobacion ? 'efectivo' : 'banco')}
                 error={errores.bolsa}
                 requerido
-                ayuda="Banco si fue transferencia, efectivo si salió del sobre."
               />
               <Campo
                 nombre="comprobante"
                 etiqueta="Comprobante de pago"
                 tipo="file"
                 error={errores.comprobante}
+                repetirArchivo={conError('entregar')}
+                requerido={!egreso.requiere_comprobacion}
                 aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
                 ayuda={
                   egreso.requiere_comprobacion
@@ -709,6 +753,7 @@ Astro.response.status = estado;
               <Campo
                 nombre="descripcion_pago"
                 etiqueta="Descripción del pago"
+                valor={previo('entregar', 'descripcion_pago', '')}
                 error={errores.descripcion_pago}
                 ayuda="Por ejemplo: transferencia SPEI del 12 de agosto."
               />
@@ -729,8 +774,13 @@ Astro.response.status = estado;
                   <Campo
                     nombre="motivo"
                     etiqueta="Motivo de la cancelación"
+                    valor={previo('cancelar', 'motivo', '')}
                     error={errores.motivo}
                     requerido
+                  />
+                  <Confirmacion
+                    texto="Entiendo que un egreso cancelado ya no se puede pagar."
+                    error={seccion === 'cancelar' ? errores.confirmo : undefined}
                   />
                   <div class="formulario__acciones">
                     <button class="btn btn--ghost" type="submit">Cancelar egreso</button>
@@ -745,7 +795,7 @@ Astro.response.status = estado;
 
     {
       egreso.estado === 'por_comprobar' && (
-        <section class="tarjeta">
+        <section class="tarjeta" id="comprobacion">
           <h2>Comprobación</h2>
           <p class="apagado" style="font-size: 0.85rem;">
             Se entregaron {formatoMXN(entregado)}. Para cerrar, los recibos más lo devuelto
@@ -766,7 +816,7 @@ Astro.response.status = estado;
                   nombre="tipo"
                   etiqueta="Tipo"
                   opciones={opcionesTipoRecibo}
-                  valor="recibo"
+                  valor={previo('comprobar', 'tipo', 'recibo')}
                   error={errores.tipo}
                   requerido
                 />
@@ -774,14 +824,15 @@ Astro.response.status = estado;
                   nombre="fecha"
                   etiqueta="Fecha"
                   tipo="date"
-                  valor={hoyISO()}
-                  error={errores.fecha}
+                  valor={previo('comprobar', 'fecha', hoyISO())}
+                  error={seccion === 'comprobar' ? errores.fecha : undefined}
                   requerido
                 />
                 <Campo
                   nombre="monto"
                   etiqueta="Monto"
-                  error={errores.monto}
+                  valor={previo('comprobar', 'monto', '')}
+                  error={seccion === 'comprobar' ? errores.monto : undefined}
                   modoTeclado="decimal"
                   monto
                   requerido
@@ -789,6 +840,7 @@ Astro.response.status = estado;
                 <Campo
                   nombre="descripcion"
                   etiqueta="Qué se compró"
+                  valor={previo('comprobar', 'descripcion', '')}
                   error={errores.descripcion}
                 />
                 <Campo
@@ -798,6 +850,8 @@ Astro.response.status = estado;
                   error={errores.archivo}
                   aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
                   ayuda="Obligatoria: sin imagen el recibo no comprueba nada."
+                  repetirArchivo={conError('comprobar')}
+                  requerido
                 />
                 <div class="formulario__acciones">
                   <button class="btn btn--primary" type="submit">Agregar recibo</button>
@@ -817,27 +871,27 @@ Astro.response.status = estado;
                   nombre="fecha"
                   etiqueta="Fecha"
                   tipo="date"
-                  valor={hoyISO()}
-                  error={errores.fecha}
+                  valor={previo('devolver', 'fecha', hoyISO())}
+                  error={seccion === 'devolver' ? errores.fecha : undefined}
                   requerido
                 />
                 <Campo
                   nombre="monto"
                   etiqueta="Monto devuelto"
-                  valor={pendienteComprobar > 0 ? aPesosTexto(pendienteComprobar) : ''}
-                  error={errores.monto}
+                  valor={previo('devolver', 'monto', pendienteComprobar > 0 ? aPesosTexto(pendienteComprobar) : '')}
+                  error={seccion === 'devolver' ? errores.monto : undefined}
                   modoTeclado="decimal"
                   monto
                   requerido
                 />
                 <Selector
                   nombre="bolsa"
-                  etiqueta="Bolsa a la que regresa"
+                  etiqueta="¿A dónde regresa el dinero?"
                   opciones={[
                     { valor: 'efectivo', texto: 'Efectivo' },
-                    { valor: 'banco', texto: 'Banco' },
+                    { valor: 'banco', texto: 'Banco (depósito)' },
                   ]}
-                  valor="efectivo"
+                  valor={previo('devolver', 'bolsa', 'efectivo')}
                   error={errores.bolsa}
                   requerido
                 />
@@ -940,7 +994,7 @@ Astro.response.status = estado;
                   nombre="tipo"
                   etiqueta="Tipo"
                   opciones={opcionesDocumento}
-                  valor="comprobante_pago"
+                  valor={previo('documento', 'tipo', 'comprobante_pago')}
                   error={errores.tipo}
                   requerido
                 />
@@ -955,12 +1009,14 @@ Astro.response.status = estado;
                 <Campo
                   nombre="descripcion"
                   etiqueta="Descripción"
+                  valor={previo('documento', 'descripcion', '')}
                   error={errores.descripcion}
                 />
                 <Campo
                   nombre="archivo"
                   etiqueta="Archivo"
                   tipo="file"
+                  repetirArchivo={conError('documento')}
                   error={errores.archivo}
                   aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
                   requerido

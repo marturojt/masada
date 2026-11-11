@@ -1,6 +1,7 @@
 ---
 /* Cortes del ejercicio, mes por mes, con los saldos encadenados. */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import { controlBolsas, cortesDelAnio, vistaBolsas } from '@lib/datos/cortes';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { formatoMXN } from '@lib/dinero';
@@ -32,7 +33,7 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
     <span>{cerrados.length} de 12 meses cerrados</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
 
   <h1>Cortes mensuales {anio}</h1>
   <p class="apagado">

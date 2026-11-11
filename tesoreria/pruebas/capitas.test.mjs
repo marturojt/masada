@@ -632,3 +632,36 @@ test('el recálculo mueve el pago del mes de más al siguiente pendiente, y nada
     );
   });
 });
+
+test('la anualidad sin pagar es adeudo vencido aunque se haya asignado este mes', async () => {
+  await enPrueba(async ({ cliente, vm }) => {
+    const id = await crearHermano(cliente, 'Prueba Anualidad Reciente', '2025-12-31');
+    /* Diciembre: un mes que todavía no llega, el peor caso para la regla general. */
+    await cliente.query('select fn_asignar_capita($1, $2, $3, $4, $5, $6)', [
+      id, ANIO, 'promocion', 12, vm, 'Asignada a fin de año',
+    ]);
+
+    const { rows: mes } = await cliente.query(
+      `select estado_pago from v_adeudo_capita_mes where hermano_id = $1`,
+      [id],
+    );
+    assert.equal(mes[0].estado_pago, 'vencido');
+
+    const { rows: cuenta } = await cliente.query(
+      `select vencido_centavos, meses_vencidos, al_corriente
+         from v_estado_cuenta_capita where hermano_id = $1 and ejercicio_anio = $2`,
+      [id, ANIO],
+    );
+    assert.equal(cuenta[0].vencido_centavos, 500000);
+    assert.equal(cuenta[0].meses_vencidos, 1);
+    assert.equal(cuenta[0].al_corriente, false);
+
+    /* Con un abono queda vencida en parte; pagada completa, cubierta. */
+    await pagarCapita(cliente, id, '2026-02-10', 100000, vm);
+    const { rows: parcial } = await cliente.query(
+      `select estado_pago from v_adeudo_capita_mes where hermano_id = $1`,
+      [id],
+    );
+    assert.equal(parcial[0].estado_pago, 'vencido_parcial');
+  });
+});

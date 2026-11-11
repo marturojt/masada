@@ -5,8 +5,10 @@
  * concilia ni se gestiona desde aquí. Una registrada por error se elimina.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
+import Confirmacion from '@componentes/Confirmacion.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import { eliminarMembresia } from '@lib/casos/gt';
@@ -82,7 +84,7 @@ Astro.response.status = estado;
     <span>Documento del {formatoFechaCorta(membresia.fecha_documento)}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} />
 
   <h1>Membresía de {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</h1>
@@ -167,7 +169,7 @@ Astro.response.status = estado;
     {
       soyVM && (
         <section class="tarjeta">
-          <details open={errores.motivo !== undefined}>
+          <details open={errores.motivo !== undefined || errores.confirmo !== undefined}>
             <summary style="cursor: pointer;">Eliminar esta membresía</summary>
             <div style="margin-top: 0.75rem; max-width: 26rem;">
               <p class="apagado" style="font-size: 0.85rem;">
@@ -182,6 +184,7 @@ Astro.response.status = estado;
                   marcador="Registrada dos veces"
                   requerido
                 />
+                <Confirmacion texto="Entiendo que la membresía se borra y no se puede recuperar." error={errores.confirmo} />
                 <button class="btn btn--ghost" type="submit">Eliminar membresía</button>
               </Formulario>
             </div>

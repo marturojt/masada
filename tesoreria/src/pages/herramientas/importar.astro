@@ -19,6 +19,7 @@ import { esquemaVacio } from '@lib/esquemas/comunes';
 import { z } from 'zod';
 import { leerFormulario, validar } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 
@@ -151,7 +152,7 @@ Astro.response.status = estado;
       <section class="tarjeta" style="margin-top: 1.25rem;">
         <h2>Ensayo: {TIPOS.find((t) => t.tipo === ensayo!.tipo)?.titulo}</h2>
         <p>
-          {ensayo.total} fila(s), <strong>{ensayo.validas} válida(s)</strong>
+          {cuenta(ensayo.total, 'fila', 'filas')}, <strong>{cuenta(ensayo.validas, 'válida', 'válidas')}</strong>
           {ensayo.total - ensayo.validas > 0 && (
             <>
               {' '}y{' '}
@@ -192,7 +193,7 @@ Astro.response.status = estado;
             <textarea name="csv" hidden set:text={csvEnsayado} />
             <div class="formulario__acciones">
               <button class="btn btn--primary" type="submit">
-                Aplicar las {ensayo.validas} fila(s)
+                Aplicar {ensayo.validas === 1 ? 'la fila válida' : `las ${ensayo.validas} filas válidas`}
               </button>
               <a class="btn btn--ghost" href="/herramientas/importar">Descartar</a>
             </div>

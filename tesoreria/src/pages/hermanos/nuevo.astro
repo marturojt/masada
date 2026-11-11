@@ -44,7 +44,7 @@ if (Astro.request.method === 'POST') {
         },
         derivarFechasPorMotivo(resultado.datos, ejercicio.anio),
       );
-      return Astro.redirect(`/hermanos/${id}?ok=hermano`, 303);
+      return Astro.redirect(`/hermanos/${id}?ok=hermano_nuevo`, 303);
     } catch (error) {
       if (!(error instanceof ErrorDeNegocio)) throw error;
       errores = { [error.campo ?? '_general']: error.message };

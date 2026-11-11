@@ -509,3 +509,30 @@ export async function registrosExternosDe(
   ]);
   return { gran_secretaria: gs, gran_tesoreria: gt };
 }
+
+/**
+ * El mes que sigue a la última obligación ordinaria capturada (pagada o no),
+ * para proponerlo al capturar la siguiente. Sin ninguna, null.
+ */
+export const siguienteMesOrdinario = async (): Promise<string | null> => {
+  const fila = await unaFila<{ periodo: string | null }>(
+    `select to_char(max(periodo_hasta) + interval '1 month', 'YYYY-MM') as periodo
+       from gt_obligacion
+      where tipo = 'ordinaria' and estatus <> 'cancelada'`,
+  );
+  return fila?.periodo ?? null;
+};
+
+/** Egreso vivo (por firmar o por entregar) que ya paga esta obligación, si lo hay. */
+export const egresoEnTramiteDe = (
+  obligacionId: number,
+): Promise<{ id: number; folio: string; estado: string } | null> =>
+  unaFila(
+    `select e.id, e.folio, e.estado
+       from egreso_gt_obligacion l
+       join egreso e on e.id = l.egreso_id
+      where l.obligacion_id = $1 and e.estado in ('registrado', 'autorizado')
+      order by e.id desc
+      limit 1`,
+    [obligacionId],
+  );

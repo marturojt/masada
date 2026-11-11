@@ -10,7 +10,7 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { capturarObligacion } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
-import { NOMBRE_TIPO_OBLIGACION, estadoAplomo, tarifasGTVigentes } from '@lib/datos/gt';
+import { NOMBRE_TIPO_OBLIGACION, estadoAplomo, siguienteMesOrdinario, tarifasGTVigentes } from '@lib/datos/gt';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaObligacion } from '@lib/esquemas/gt';
@@ -32,7 +32,13 @@ const ETIQUETAS: Record<string, string> = {
   observaciones: 'Observaciones',
 };
 
-const [aplomo, tarifas] = await Promise.all([estadoAplomo(), tarifasGTVigentes()]);
+const [aplomo, tarifas, siguiente] = await Promise.all([
+  estadoAplomo(),
+  tarifasGTVigentes(),
+  siguienteMesOrdinario(),
+]);
+/* Se propone el primer mes que todavía no tiene obligación ordinaria capturada. */
+const periodoPropuesto = siguiente ?? aplomo.primer_pendiente?.slice(0, 7) ?? periodoActual();
 const tarifaDe = (clave: string) => tarifas.find((t) => t.clave === clave);
 const capita = tarifaDe('capita');
 const regularizacion = tarifaDe('regularizacion');
@@ -40,8 +46,8 @@ const regularizacion = tarifaDe('regularizacion');
 let errores: Record<string, string> = {};
 let valores: Record<string, string> = {
   tipo: 'ordinaria',
-  periodo_desde: periodoActual(),
-  periodo_hasta: periodoActual(),
+  periodo_desde: periodoPropuesto,
+  periodo_hasta: periodoPropuesto,
   fecha_documento: hoyISO(),
 };
 let estado = 200;
@@ -99,7 +105,7 @@ Astro.response.status = estado;
   {
     !aplomo.ordinario_a_plomo && (
       <div class="aviso aviso--error">
-        Aviso: la logia no está a plomo en lo ordinario
+        Aviso: la logia no está a plomo (al corriente) en lo ordinario
         {aplomo.primer_pendiente && (
           <> (pendiente desde {nombrePeriodo(aplomo.primer_pendiente.slice(0, 7))})</>
         )}
@@ -119,6 +125,7 @@ Astro.response.status = estado;
       valor={valores.tipo}
       error={errores.tipo}
       requerido
+      ayuda="Ordinaria: la cuota de cada mes por los hermanos activos. Regularización: meses atrasados que la Gran Tesorería cobra de una vez. Extraordinaria: cualquier otro cobro que no sea trámite."
     />
 
     <Campo

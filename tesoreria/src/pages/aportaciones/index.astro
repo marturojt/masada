@@ -5,6 +5,7 @@
  * la de especie deja constancia con folio APO- y JAMÁS toca el libro de caja.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -132,7 +133,7 @@ Astro.response.status = estado;
     <span>Ejercicio {anio}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Aportaciones extraordinarias</h1>
@@ -178,7 +179,7 @@ Astro.response.status = estado;
                       {a.destino && <span class="apagado"> · {a.destino}</span>}
                       {a.tipo === 'especie' && a.cantidad && (
                         <span class="apagado">
-                          {' '}· {Number(a.cantidad)} {a.unidad ?? 'pieza(s)'}
+                          {' '}· {Number(a.cantidad)} {a.unidad ?? (Number(a.cantidad) === 1 ? 'pieza' : 'piezas')}
                         </span>
                       )}
                     </td>

@@ -8,6 +8,8 @@ import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Aviso from '@componentes/Aviso.astro';
+import Confirmacion from '@componentes/Confirmacion.astro';
 import TablaMovimientos from '@componentes/TablaMovimientos.astro';
 import {
   cerrarCorte,
@@ -23,14 +25,16 @@ import {
   corteDelPeriodo,
   corteGuardado,
   pagosGTDelPeriodo,
+  primerMesAbierto,
   reaperturasDe,
   vistaBolsas,
 } from '@lib/datos/cortes';
 import { estadoAplomo } from '@lib/datos/gt';
 import { mensajeDelInforme } from '@lib/datos/informe';
 import { sonImagenes } from '@lib/archivos';
-import { ajustadosDeVarios, listarMovimientos, totalesPorConcepto } from '@lib/datos/movimientos';
-import { pendientesDeComprobar } from '@lib/datos/egresos';
+import { ajustadosDeVarios, listarMovimientos, saldoDeCaja, totalesPorConcepto } from '@lib/datos/movimientos';
+import { listarEgresos, pendientesDeComprobar } from '@lib/datos/egresos';
+import { pendientesDeEvidencia } from '@lib/datos/pendientes';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import {
@@ -46,9 +50,11 @@ import {
   hoyISO,
   nombrePeriodo,
   periodoActual,
+  periodoSiguiente,
 } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { esVM, requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const soyVM = esVM(sesion);
@@ -61,6 +67,8 @@ if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) {
 let errores: Record<string, string> = {};
 let estado = 200;
 let seccion: string | null = null;
+/* Lo que se envió, para volver a pintar el formulario tal cual si hubo error. */
+let valores: Record<string, string> = {};
 
 if (Astro.request.method === 'POST') {
   const entrada = await leerFormulario(Astro);
@@ -71,6 +79,7 @@ if (Astro.request.method === 'POST') {
   } else {
     const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
     seccion = entrada.accion;
+    valores = entrada.valores;
 
     try {
       if (entrada.accion === 'cerrar') {
@@ -99,7 +108,7 @@ if (Astro.request.method === 'POST') {
           const guardado = await corteGuardado(periodo);
           if (!guardado) throw new ErrorDeNegocio('Ese mes no tiene corte cerrado.');
           await reabrirCorte({ ...ctxBase, nonce: r.nonce }, guardado.id, r.datos.motivo);
-          return Astro.redirect(`/cortes/${periodo}?ok=corte`, 303);
+          return Astro.redirect(`/cortes/${periodo}?ok=reabierto`, 303);
         }
       } else if (entrada.accion === 'ajustar') {
         const r = await validar(entrada, {
@@ -163,8 +172,21 @@ if (Astro.request.method === 'POST') {
 const calculado = await corteDelPeriodo(periodo);
 if (!calculado) return new Response('Ese mes no pertenece a ningún ejercicio', { status: 404 });
 
-const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo, control, mensaje] =
-  await Promise.all([
+const [
+  guardado,
+  movimientos,
+  totales,
+  porComprobar,
+  especie,
+  pagosGT,
+  aplomo,
+  control,
+  mensaje,
+  primerAbierto,
+  caja,
+  egresosEnTramite,
+  evidencias,
+] = await Promise.all([
     corteGuardado(periodo),
     listarMovimientos({ periodo }),
     totalesPorConcepto(periodo),
@@ -174,6 +196,10 @@ const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo, c
     estadoAplomo(),
     controlBolsas(calculado.anio),
     mensajeDelInforme(periodo),
+    primerMesAbierto(calculado.anio),
+    saldoDeCaja(calculado.anio),
+    listarEgresos({ anio: calculado.anio, pendientes: true }),
+    pendientesDeEvidencia(),
   ]);
 
 const reaperturas = guardado ? await reaperturasDe(guardado.id) : [];
@@ -186,7 +212,22 @@ const ajustados = new Map(
     a.ajustado,
   ]),
 );
-const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const claveAviso = Astro.url.searchParams.get('ok');
+const aviso = avisoDe(claveAviso);
+const avisoEnlaces =
+  claveAviso === 'corte'
+    ? [
+        { href: `/cortes/${periodo}/imprimir`, texto: 'Imprimir el corte' },
+        { href: `/cortes/${periodo}/informe`, texto: 'Ver el informe de tenida' },
+        { href: `/cortes/${periodoSiguiente(periodo)}`, texto: `Ir a ${nombrePeriodo(periodoSiguiente(periodo))}` },
+      ]
+    : claveAviso === 'arqueo'
+      ? [{ href: '#cerrar', texto: 'Seguir con el cierre del mes' }]
+      : [];
+
+/* Valor enviado si el formulario de esa sección volvió con error; si no, el de siempre. */
+const previo = (accion: string, campo: string, porDefecto: string): string =>
+  seccion === accion && valores[campo] !== undefined ? valores[campo]! : porDefecto;
 
 const cerrado = guardado?.estado === 'cerrado';
 const esFuturo = periodo > periodoActual();
@@ -200,6 +241,23 @@ const arqueoDeEsteMes = control.desde === periodo ? control.arqueo : null;
 const arrastres = porComprobar.filter(
   (p) => p.fecha_entrega.slice(0, 7) < periodo,
 );
+
+/*
+ * Lo que la base rechazaría al cerrar, dicho antes de apretar el botón. Las
+ * reglas viven en fn_cerrar_corte y en el trigger del arqueo; aquí solo se
+ * anticipan para no mostrar un botón que va a fallar.
+ */
+const mesAnteriorAbierto = primerAbierto !== null && primerAbierto < periodo ? primerAbierto : null;
+const faltaArqueo = pideArqueo;
+const sePuedeCerrar = !mesAnteriorAbierto && !faltaArqueo && arrastres.length === 0;
+
+/* Revisión que no impide cerrar, pero conviene ver antes. */
+const finDelMes = `${periodo}-31`;
+const egresosSinTerminar = egresosEnTramite.filter(
+  (e) => (e.estado === 'registrado' || e.estado === 'autorizado') && e.fecha_solicitud <= finDelMes,
+);
+const evidenciasDelMes = evidencias.filter((e) => e.fecha.startsWith(periodo));
+const gtSinCubrir = !aplomo.cubierto_hasta || aplomo.cubierto_hasta.slice(0, 7) < periodo;
 
 const nonceCierre = await emitirNonce(sesion.idHash, 'corte_cerrar');
 const nonceReapertura = await emitirNonce(sesion.idHash, 'corte_reabrir');
@@ -225,7 +283,7 @@ Astro.response.status = estado;
     <span><a href={`/cortes/${periodo}/informe`}>Informe de tenida</a></span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} enlaces={avisoEnlaces} />
   {seccion === null && <ResumenErrores errores={errores} />}
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
@@ -356,6 +414,7 @@ Astro.response.status = estado;
               {ingresos.length === 0 ? (
                 <p class="apagado">Sin ingresos.</p>
               ) : (
+                <div class="tabla-envoltura">
                 <table class="tabla">
                   <tbody>
                     {ingresos.map((t) => (
@@ -372,6 +431,7 @@ Astro.response.status = estado;
                     </tr>
                   </tfoot>
                 </table>
+                </div>
               )}
             </div>
             <div style="flex: 1; min-width: 15rem;">
@@ -379,6 +439,7 @@ Astro.response.status = estado;
               {egresos.length === 0 ? (
                 <p class="apagado">Sin egresos.</p>
               ) : (
+                <div class="tabla-envoltura">
                 <table class="tabla">
                   <tbody>
                     {egresos.map((t) => (
@@ -395,6 +456,7 @@ Astro.response.status = estado;
                     </tr>
                   </tfoot>
                 </table>
+                </div>
               )}
             </div>
           </div>
@@ -410,13 +472,14 @@ Astro.response.status = estado;
           : 'Hay obligaciones ordinarias pendientes con la Gran Tesorería'}
         {aplomo.cubierto_hasta && <>, cubierta hasta {nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}</>}
         {aplomo.regularizaciones_pendientes > 0 && (
-          <>, {aplomo.regularizaciones_pendientes} regularización(es) pendiente(s)</>
+          <>, {cuenta(aplomo.regularizaciones_pendientes, 'regularización pendiente', 'regularizaciones pendientes')}</>
         )}. El detalle vive en <a href="/gran-tesoreria">Gran Tesorería</a>.
       </p>
       {
         pagosGT.length === 0 ? (
           <p class="apagado">Sin pagos a la Gran Tesorería en este mes.</p>
         ) : (
+          <div class="tabla-envoltura">
           <table class="tabla">
             <thead>
               <tr>
@@ -437,6 +500,7 @@ Astro.response.status = estado;
               ))}
             </tbody>
           </table>
+          </div>
         )
       }
     </section>
@@ -470,7 +534,7 @@ Astro.response.status = estado;
                     <td>{a.aportante_nombre}</td>
                     <td>
                       {a.descripcion}
-                      {a.cantidad && <> · {Number(a.cantidad)} {a.unidad ?? 'pieza(s)'}</>}
+                      {a.cantidad && <> · {Number(a.cantidad)} {a.unidad ?? (Number(a.cantidad) === 1 ? 'pieza' : 'piezas')}</>}
                       {a.destino && <> · {a.destino}</>}
                     </td>
                     <td class="num">
@@ -491,7 +555,7 @@ Astro.response.status = estado;
       <h2>Movimientos del mes</h2>
       <TablaMovimientos
         movimientos={movimientos}
-        titulo={`${movimientos.length} movimiento(s)`}
+        titulo={cuenta(movimientos.length, 'movimiento', 'movimientos')}
         conSigno
         ajustados={ajustados}
         imagenes={imagenes}
@@ -604,7 +668,7 @@ Astro.response.status = estado;
               <Campo
                 nombre="mensaje"
                 etiqueta="Mensaje del tesorero"
-                valor={mensaje?.mensaje ?? ''}
+                valor={previo('mensaje', 'mensaje', mensaje?.mensaje ?? '')}
                 error={errores.mensaje}
                 ayuda={
                   mensaje
@@ -626,7 +690,7 @@ Astro.response.status = estado;
 
     {
       pideArqueo && (
-        <section class="tarjeta">
+        <section class="tarjeta" id="arqueo">
           <h2>Arqueo inicial</h2>
           <p class="apagado" style="font-size: 0.9rem;">
             Desde {nombrePeriodo(periodo)} se lleva por separado lo que hay en el banco y lo
@@ -635,9 +699,10 @@ Astro.response.status = estado;
             que haga falta para que el desglose quede igual a lo contado. El total no cambia.
           </p>
           <p class="apagado" style="font-size: 0.9rem;">
-            Las dos cantidades deben sumar lo que el sistema tiene registrado del ejercicio.
-            Si no suman, falta capturar algo o registrar un ajuste. Este mes no se puede
-            cerrar sin el arqueo, y el arqueo se hace una sola vez.
+            Las dos cantidades deben sumar <strong>{formatoMXN(caja.saldo)}</strong>, que es
+            lo que el sistema tiene registrado del ejercicio. Si no suman, falta capturar
+            algo o registrar un ajuste. Este mes no se puede cerrar sin el arqueo, y el
+            arqueo se hace una sola vez.
           </p>
 
           {seccion === 'arqueo' && <ResumenErrores errores={errores} />}
@@ -648,13 +713,14 @@ Astro.response.status = estado;
                 nombre="fecha"
                 etiqueta="Fecha del arqueo"
                 tipo="date"
-                valor={hoyISO().startsWith(periodo) ? hoyISO() : `${periodo}-01`}
+                valor={previo('arqueo', 'fecha', hoyISO().startsWith(periodo) ? hoyISO() : `${periodo}-01`)}
                 error={errores.fecha}
                 requerido
               />
               <Campo
                 nombre="banco"
                 etiqueta="En el banco"
+                valor={previo('arqueo', 'banco', '')}
                 modoTeclado="decimal"
                 monto
                 error={errores.banco}
@@ -664,6 +730,7 @@ Astro.response.status = estado;
               <Campo
                 nombre="efectivo"
                 etiqueta="En efectivo"
+                valor={previo('arqueo', 'efectivo', '')}
                 modoTeclado="decimal"
                 monto
                 error={errores.efectivo}
@@ -699,52 +766,102 @@ Astro.response.status = estado;
 
     {
       !cerrado && !esFuturo && (
-        <section class="tarjeta">
+        <section class="tarjeta" id="cerrar">
           <h2>Cerrar el mes</h2>
           <p class="apagado" style="font-size: 0.9rem;">
-            Al cerrar, los {movimientos.length} movimiento(s) de {nombrePeriodo(periodo)}
-            quedan sellados y el mes deja de admitir capturas. El saldo final de
-            {' '}{formatoMXN(calculado.saldo_final_centavos)} pasa a ser el saldo inicial del
-            mes siguiente.
+            {movimientos.length === 0
+              ? `Al cerrar, ${nombrePeriodo(periodo)} queda sellado sin movimientos y deja de admitir capturas.`
+              : movimientos.length === 1
+                ? `Al cerrar, el único movimiento de ${nombrePeriodo(periodo)} queda sellado y el mes deja de admitir capturas.`
+                : `Al cerrar, los ${movimientos.length} movimientos de ${nombrePeriodo(periodo)} quedan sellados y el mes deja de admitir capturas.`}
+            El saldo final de {formatoMXN(calculado.saldo_final_centavos)} pasa a ser el
+            saldo inicial del mes siguiente.
           </p>
 
-          {arrastres.length > 0 && (
+          {!sePuedeCerrar && (
             <div class="aviso aviso--error">
-              <p style="margin: 0;">
-                No se puede cerrar mientras haya dinero entregado y sin comprobar de meses
-                anteriores:
-              </p>
+              <p>Todavía no se puede cerrar {nombrePeriodo(periodo)}:</p>
               <ul>
+                {mesAnteriorAbierto && (
+                  <li>
+                    Antes hay que cerrar{' '}
+                    <a href={`/cortes/${mesAnteriorAbierto}`}>{nombrePeriodo(mesAnteriorAbierto)}</a>.
+                  </li>
+                )}
+                {faltaArqueo && (
+                  <li>
+                    Falta el <a href="#arqueo">arqueo inicial</a>: contar el efectivo y anotar
+                    el saldo del banco.
+                  </li>
+                )}
                 {arrastres.map((a) => (
                   <li>
-                    <a href={`/egresos/${a.id}`}>{a.folio}</a>, entregado el{' '}
-                    {formatoFechaCorta(a.fecha_entrega)}, faltan{' '}
-                    {formatoMXN(a.pendiente_centavos)}
+                    Falta comprobar el egreso <a href={`/egresos/${a.id}`}>{a.folio}</a>,
+                    entregado el {formatoFechaCorta(a.fecha_entrega)}: faltan{' '}
+                    {formatoMXN(a.pendiente_centavos)} entre recibos y devolución.
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
+          {sePuedeCerrar && (egresosSinTerminar.length > 0 || evidenciasDelMes.length > 0 || gtSinCubrir) && (
+            <div class="aviso">
+              <p>Antes de cerrar, revisa:</p>
+              <ul>
+                {egresosSinTerminar.length > 0 && (
+                  <li>
+                    {egresosSinTerminar.length === 1
+                      ? 'Hay un egreso esperando firma o entrega'
+                      : `Hay ${egresosSinTerminar.length} egresos esperando firma o entrega`}
+                    {' '}(<a href="/egresos">ver egresos</a>). Si el dinero ya salió este mes,
+                    registra la entrega antes de cerrar.
+                  </li>
+                )}
+                {evidenciasDelMes.length > 0 && (
+                  <li>
+                    {evidenciasDelMes.length === 1
+                      ? 'Un movimiento del mes no tiene comprobante'
+                      : `${evidenciasDelMes.length} movimientos del mes no tienen comprobante`}{' '}
+                    (<a href="/pendientes">ver pendientes</a>). Se puede adjuntar después.
+                  </li>
+                )}
+                {gtSinCubrir && (
+                  <li>
+                    La cuota ordinaria de {nombrePeriodo(periodo)} con la Gran Tesorería
+                    todavía no está pagada (<a href="/gran-tesoreria">ver Gran Tesorería</a>).
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
           {seccion === 'cerrar' && <ResumenErrores errores={errores} />}
 
-          <div style="max-width: 30rem;">
-            <Formulario csrf={sesion.csrfToken} nonce={nonceCierre} accionInterna="cerrar">
-              <Campo
-                nombre="observaciones"
-                etiqueta="Observaciones del corte"
-                error={errores.observaciones}
-                ayuda="Opcional. Se imprime en la hoja del corte."
-                largo
-                filas={3}
-              />
-              <div class="formulario__acciones">
-                <button class="btn btn--primary" type="submit">
-                  Cerrar {nombrePeriodo(periodo)}
-                </button>
-              </div>
-            </Formulario>
-          </div>
+          {sePuedeCerrar && (
+            <div style="max-width: 30rem;">
+              <Formulario csrf={sesion.csrfToken} nonce={nonceCierre} accionInterna="cerrar">
+                <Campo
+                  nombre="observaciones"
+                  etiqueta="Observaciones del corte"
+                  valor={previo('cerrar', 'observaciones', '')}
+                  error={errores.observaciones}
+                  ayuda="Opcional. Se imprime en la hoja del corte."
+                  largo
+                  filas={3}
+                />
+                <Confirmacion
+                  texto={`Revisé los movimientos y entiendo que, una vez cerrado, ${nombrePeriodo(periodo)} ya no se puede cambiar. Solo el V∴M∴ puede reabrirlo.`}
+                  error={seccion === 'cerrar' ? errores.confirmo : undefined}
+                />
+                <div class="formulario__acciones">
+                  <button class="btn btn--primary" type="submit">
+                    Cerrar {nombrePeriodo(periodo)}
+                  </button>
+                </div>
+              </Formulario>
+            </div>
+          )}
         </section>
       )
     }
@@ -781,6 +898,7 @@ Astro.response.status = estado;
                   <Campo
                     nombre="motivo"
                     etiqueta="Motivo de la reapertura"
+                    valor={previo('reabrir', 'motivo', '')}
                     error={errores.motivo}
                     requerido
                   />

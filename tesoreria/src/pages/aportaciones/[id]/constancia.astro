@@ -25,7 +25,7 @@ if (!aportacion || aportacion.tipo !== 'especie') {
 }
 
 const cantidadTexto = aportacion.cantidad
-  ? `${Number(aportacion.cantidad)} ${aportacion.unidad ?? 'pieza(s)'}`
+  ? `${Number(aportacion.cantidad)} ${aportacion.unidad ?? (Number(aportacion.cantidad) === 1 ? 'pieza' : 'piezas')}`
   : null;
 ---
 

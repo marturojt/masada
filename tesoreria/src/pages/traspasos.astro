@@ -5,6 +5,7 @@
  * solo el lugar donde está el dinero.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -59,7 +60,7 @@ if (Astro.request.method === 'POST') {
         resultado.datos,
         resultado.archivos.ficha,
       );
-      return Astro.redirect('/traspasos?ok=pago', 303);
+      return Astro.redirect('/traspasos?ok=traspaso', 303);
     } catch (error) {
       if (!(error instanceof ErrorDeNegocio)) throw error;
       errores = { [error.campo ?? '_general']: error.message };
@@ -89,10 +90,10 @@ Astro.response.status = estado;
     <span>Total: {formatoMXN(caja.saldo)}</span>
   </div>
 
-  {aviso && <div class="aviso">Traspaso registrado.</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
-  <h1>Traspasos entre bolsas</h1>
+  <h1>Traspasos entre banco y efectivo</h1>
   <p class="apagado">
     El depósito del efectivo de las tenidas al banco, o un retiro de la cuenta. El total
     de la caja no cambia, solo el lugar del dinero. Un traspaso equivocado se corrige

@@ -74,7 +74,7 @@ Astro.response.status = estado;
   <div class="barra__contexto" slot="contexto">
     <span><a href="/conceptos">← Catálogo</a></span>
     <span>Clave: {concepto.clave}</span>
-    <span>{usos} movimiento(s) lo usan</span>
+    <span>{usos === 1 ? '1 movimiento lo usa' : `${usos} movimientos lo usan`}</span>
   </div>
 
   <h1>Editar concepto</h1>

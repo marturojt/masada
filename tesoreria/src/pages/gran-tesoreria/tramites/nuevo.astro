@@ -220,6 +220,7 @@ Astro.response.status = estado;
       tarifasTramite.length > 0 && (
         <details style="margin-bottom: 1rem;">
           <summary style="cursor: pointer;">Montos de la Ley de Ingresos</summary>
+          <div class="tabla-envoltura">
           <table class="tabla" style="margin-top: 0.5rem; font-size: 0.85rem;">
             <tbody>
               {tarifasTramite.map((t) => (
@@ -230,6 +231,7 @@ Astro.response.status = estado;
               ))}
             </tbody>
           </table>
+          </div>
           {desdeLey && (
             <p class="apagado" style="font-size: 0.8rem;">
               Vigentes desde el {formatoFechaCorta(desdeLey)}. Para un trámite anterior, los

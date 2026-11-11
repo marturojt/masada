@@ -427,3 +427,24 @@ export const planesVigentes = (anio: number): Promise<PlanConHistoria[]> =>
       where p.ejercicio_anio = $1 and p.vigente`,
     [anio],
   );
+
+/**
+ * Qué cubrió un pago de cápita, para el aviso después de registrarlo. Solo
+ * responde si el movimiento es de ese hermano: el id llega por la URL.
+ */
+export const detalleDePago = (
+  movimientoId: number,
+  hermanoId: number,
+): Promise<{ monto: number; aplicado: number; periodos: string[] } | null> =>
+  unaFila(
+    `select m.monto_centavos as monto,
+            coalesce(sum(ca.monto_aplicado_centavos), 0)::int as aplicado,
+            coalesce(array_agg(to_char(cc.periodo, 'YYYY-MM') order by cc.periodo)
+                       filter (where cc.id is not null), '{}') as periodos
+       from movimiento m
+       left join capita_aplicacion ca on ca.movimiento_id = m.id
+       left join capita_cargo cc on cc.id = ca.capita_cargo_id
+      where m.id = $1 and m.hermano_id = $2 and m.tipo = 'ingreso'
+      group by m.id`,
+    [movimientoId, hermanoId],
+  );

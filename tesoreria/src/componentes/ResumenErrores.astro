@@ -11,6 +11,38 @@ interface Props {
 
 const { errores, etiquetas = {} } = Astro.props;
 
+/*
+ * Nombres legibles de los campos más comunes, para que el resumen nunca muestre
+ * el nombre técnico del campo cuando la página no pasa sus etiquetas.
+ */
+const COMUNES: Record<string, string> = {
+  confirmo: 'Confirmación',
+  motivo: 'Motivo',
+  fecha: 'Fecha',
+  monto: 'Monto',
+  descripcion: 'Descripción',
+  observaciones: 'Observaciones',
+  archivo: 'Archivo',
+  comprobante: 'Comprobante',
+  bolsa: 'Dónde quedó el dinero',
+  mensaje: 'Mensaje',
+  banco: 'En el banco',
+  efectivo: 'En efectivo',
+  tipo: 'Tipo',
+  fecha_entrega: 'Fecha de entrega',
+  monto_entregado: 'Monto entregado',
+  descripcion_pago: 'Descripción del pago',
+  motivo_suplencia: 'Motivo de la suplencia',
+  hermano_id: 'Hermano',
+  concepto_id: 'Concepto',
+};
+const nombreDe = (campo: string): string => {
+  const conocido = etiquetas[campo] ?? COMUNES[campo];
+  if (conocido) return conocido;
+  const t = campo.replace(/_/g, ' ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
 const general = errores._general;
 const porCampo = Object.entries(errores).filter(([campo]) => campo !== '_general');
 const hayAlgo = Boolean(general) || porCampo.length > 0;
@@ -26,7 +58,7 @@ const hayAlgo = Boolean(general) || porCampo.length > 0;
           <ul>
             {porCampo.map(([campo, mensaje]) => (
               <li>
-                <a href={`#campo-${campo}`}>{etiquetas[campo] ?? campo}</a>: {mensaje}
+                <a href={`#campo-${campo}`}>{nombreDe(campo)}</a>: {mensaje}
               </li>
             ))}
           </ul>

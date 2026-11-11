@@ -6,12 +6,14 @@
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import TablaMovimientos from '@componentes/TablaMovimientos.astro';
+import Aviso from '@componentes/Aviso.astro';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { sonImagenes } from '@lib/archivos';
 import { ajustadosDeVarios, foliosDeRecibo, listarMovimientos } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
-import { avisoDe } from '@lib/formulario';
+import { avisoDe, idDeUrl } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -50,6 +52,15 @@ for (const m of movimientos) {
   porTipo.set(m.concepto_nombre, (porTipo.get(m.concepto_nombre) ?? 0) + netoDe(m));
 }
 const total = movimientos.reduce((s, m) => s + netoDe(m), 0);
+
+/* Tras registrar: el recibo del ingreso recién guardado, si es de esta lista y lleva folio. */
+const movAviso = idDeUrl(Astro.url, 'mov');
+const avisoEnlaces = [
+  ...(movAviso && folios.has(movAviso)
+    ? [{ href: `/recibos/${movAviso}`, texto: `Ver e imprimir el recibo ${folios.get(movAviso)}` }]
+    : []),
+  ...(aviso ? [{ href: '/ingresos/nuevo', texto: 'Registrar otro ingreso' }] : []),
+];
 const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0), 0);
 ---
 
@@ -62,7 +73,7 @@ const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0
     </span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} enlaces={avisoEnlaces} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
     <h1>Ingresos</h1>
@@ -106,7 +117,7 @@ const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0
     ajustados={ajustados}
     imagenes={imagenes}
     movimientos={movimientos}
-    titulo={`${movimientos.length} movimiento(s) de ingreso en ${anio}`}
+    titulo={`${cuenta(movimientos.length, 'movimiento', 'movimientos')} de ingreso en ${anio}`}
     folios={folios}
     vacio="Todavía no hay ingresos distintos de cápita en este ejercicio."
   />

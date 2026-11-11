@@ -5,6 +5,7 @@
  * cerrarlo como "sin evidencia formal", con motivo que queda en la bitácora.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -18,6 +19,7 @@ import { z } from 'zod';
 import { formatoFechaCorta, formatoMomento } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -85,10 +87,10 @@ Astro.response.status = estado;
 
 <LayoutAdmin titulo="Pendientes de evidencia" sesion={sesion}>
   <div class="barra__contexto" slot="contexto">
-    <span>{pendientes.length} pendiente(s) de evidencia</span>
+    <span>{cuenta(pendientes.length, 'pendiente', 'pendientes')} de evidencia</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   {conError === null && <ResumenErrores errores={errores} />}
 
   <h1>Pendientes de evidencia</h1>

@@ -1,6 +1,7 @@
 ---
 /* Padrón de hermanos, con filtros por estatus y grado en la barra de direcciones. */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { listarCandidatos, listarHermanos, resumenPadron } from '@lib/datos/hermanos';
@@ -10,6 +11,7 @@ import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejerci
 import { formatoFechaCorta } from '@lib/fechas';
 import { NOMBRE_GRADO, NOMBRE_GRADO_PLURAL, type Grado } from '@lib/tipos';
 import { NOMBRE_MOTIVO_BAJA } from '@lib/esquemas/hermano';
+import { cuenta } from '@lib/texto';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -61,7 +63,7 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
     }
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
     <h1>Padrón</h1>
@@ -124,7 +126,7 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
       <div class="tabla-envoltura">
         <table class="tabla">
           <caption>
-            {hermanos.length} hermano(s)
+            {cuenta(hermanos.length, 'hermano', 'hermanos')}
           </caption>
           <thead>
             <tr>

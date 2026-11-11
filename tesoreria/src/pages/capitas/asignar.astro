@@ -12,7 +12,7 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { asignarModalidad } from '@lib/casos/capitas';
 import { emitirNonce } from '@lib/csrf';
-import { NOMBRE_MODALIDAD, estadosDeCuenta, sinPlan } from '@lib/datos/capitas';
+import { NOMBRE_MODALIDAD, estadosDeCuenta, planVigente, sinPlan } from '@lib/datos/capitas';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { hermanosActivos } from '@lib/datos/hermanos';
 import { formatoMXN } from '@lib/dinero';
@@ -86,7 +86,7 @@ const opcionesHermano: Opcion[] = hermanos.map((h) => ({
   grupo: NOMBRE_GRADO_PLURAL[h.grado],
 }));
 
-const opcionesModalidad: Opcion[] = [
+const opcionesTodas: Opcion[] = [
   { valor: 'mensual', texto: `Mensual, ${formatoMXN(ejercicio.capita_mensual_centavos)} al mes` },
   {
     valor: 'promocion',
@@ -101,6 +101,16 @@ const opcionesModalidad: Opcion[] = [
     texto: `Prorrateo, ${formatoMXN(ejercicio.capita_mensual_centavos)} por mes restante`,
   },
 ];
+/* La anual preferencial solo la habilita el V∴M∴: a los demás ni se les ofrece. */
+const opcionesModalidad = puedePromocion
+  ? opcionesTodas
+  : opcionesTodas.filter((o) => !o.valor.startsWith('promocion'));
+
+/* La modalidad que ya tiene el hermano elegido, para que se vea qué se va a cambiar. */
+const idElegido = Number(valores.hermano_id);
+const planActual =
+  Number.isInteger(idElegido) && idElegido > 0 ? await planVigente(idElegido, anio) : null;
+const nombreElegido = hermanos.find((h) => h.id === idElegido)?.nombre_completo ?? null;
 
 Astro.response.status = estado;
 ---
@@ -144,11 +154,22 @@ Astro.response.status = estado;
     {
       !puedePromocion && (
         <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
-          La promoción la habilita el Venerable Maestro, con su propia sesión.
+          La anual preferencial la habilita el Venerable Maestro con su propia sesión, por
+          eso no aparece en la lista.
         </p>
       )
     }
   </div>
+
+  {
+    nombreElegido && (
+      <div class="aviso">
+        {planActual
+          ? `${nombreElegido} tiene hoy la modalidad «${NOMBRE_MODALIDAD[planActual.modalidad]}» en ${anio}. Si la cambias, lo que ya pagó se conserva y se descuenta del nuevo total.`
+          : `${nombreElegido} todavía no tiene modalidad para ${anio}.`}
+      </div>
+    )
+  }
 
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
@@ -170,7 +191,7 @@ Astro.response.status = estado;
       valor={valores.modalidad}
       error={errores.modalidad}
       requerido
-      ayuda="Si eliges una que no corresponde al mes de ingreso, el sistema lo dirá."
+      ayuda="Mensual o anual preferencial si viene desde enero; prorrateo si entró a mitad del año. Si no corresponde, el sistema lo dirá antes de guardar."
     />
 
     <Campo

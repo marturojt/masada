@@ -4,6 +4,7 @@
  * contraseña y activarlo o desactivarlo. Una página, varias acciones (_accion).
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Aviso from '@componentes/Aviso.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -130,7 +131,7 @@ Astro.response.status = estado;
     <span>{usuario.correo}</span>
   </div>
 
-  {aviso && <div class="aviso">{aviso}</div>}
+  <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
