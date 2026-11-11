@@ -9,7 +9,7 @@ import GraficaSaldo from '@componentes/graficas/GraficaSaldo.astro';
 import { estadoAplomo } from '@lib/datos/gt';
 import { pendientesDeEvidencia } from '@lib/datos/pendientes';
 import { resumenCapitas, sinPlan } from '@lib/datos/capitas';
-import { cortesDelAnio, primerMesAbierto } from '@lib/datos/cortes';
+import { bolsasAlDia, controlBolsas, cortesDelAnio, primerMesAbierto } from '@lib/datos/cortes';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
 import { listarEgresos, pendientesDeComprobar } from '@lib/datos/egresos';
 import { flujoPorMes, saldoDeCaja } from '@lib/datos/movimientos';
@@ -38,6 +38,7 @@ const [
   aplomo,
   evidencias,
   cuotas,
+  control,
 ] = await Promise.all([
     saldoDeCaja(anio),
     resumenCapitas(anio),
@@ -50,7 +51,11 @@ const [
     estadoAplomo(),
     pendientesDeEvidencia(),
     cuotasPorCobrar(),
+    controlBolsas(anio),
   ]);
+
+/* Hasta el arqueo inicial, el desglose banco y efectivo no es confiable. */
+const conBolsas = bolsasAlDia(control);
 
 const porCobrarCuotas = cuotas.reduce((s, c) => s + c.saldo_centavos, 0);
 
@@ -77,8 +82,8 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
   <div class="barra__contexto" slot="contexto">
     <span>Hoy es {formatoFechaLarga(hoyISO())}</span>
     <span>Ejercicio {anio}</span>
-    <span>Banco: {formatoMXN(caja.banco)}</span>
-    <span>Efectivo: {formatoMXN(caja.efectivo)}</span>
+    {conBolsas && <span>Banco: {formatoMXN(caja.banco)}</span>}
+    {conBolsas && <span>Efectivo: {formatoMXN(caja.efectivo)}</span>}
     <span>Total: {formatoMXN(caja.saldo)}</span>
   </div>
 
@@ -127,7 +132,11 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
           {formatoMXN(caja.saldo)}
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}
+          {conBolsas ? (
+            <>Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}</>
+          ) : control.desde ? (
+            <>Banco y efectivo: falta el <a href={`/cortes/${control.desde}`}>arqueo inicial</a></>
+          ) : null}
         </p>
       </section>
 

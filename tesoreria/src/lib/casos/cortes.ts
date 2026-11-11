@@ -11,7 +11,7 @@ import { registrarEn } from '../bitacora';
 import { consumirNonce } from '../csrf';
 import { enTransaccion, unaFila } from '../db';
 import { conceptoPorClave } from '../datos/conceptos';
-import { cerrarCorteEnBase, reabrirCorteEnBase } from '../datos/cortes';
+import { cerrarCorteEnBase, reabrirCorteEnBase, registrarArqueoEnBase } from '../datos/cortes';
 import { insertarMovimiento, ligarAjuste, obtenerMovimiento, ajustadoDe } from '../datos/movimientos';
 import { formatoMXN } from '../dinero';
 import { ErrorDeNegocio } from '../errores';
@@ -274,5 +274,46 @@ export async function registrarAjuste(
     });
 
     return ajusteId;
+  }, usuarioId);
+}
+
+/**
+ * Arqueo inicial del control por bolsa: el tesorero cuenta lo que hay en el
+ * banco y en el sobre, y la base registra el traspaso que acomoda el desglose.
+ * La regla completa (que sume el total, que sea uno solo, en qué mes va) vive
+ * en fn_registrar_arqueo_inicial.
+ */
+export async function registrarArqueoInicial(
+  ctx: Contexto,
+  anio: number,
+  datos: { fecha: string; banco: number; efectivo: number },
+): Promise<number | null> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  return enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'arqueo_inicial');
+
+    let traspasoId: number | null;
+    try {
+      traspasoId = await registrarArqueoEnBase(tx, anio, datos, usuarioId);
+    } catch (error) {
+      comoErrorDeNegocio(error);
+    }
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'arqueo_inicial',
+      entidad: 'ejercicio',
+      entidadId: anio,
+      detalle: {
+        fecha: datos.fecha,
+        banco: formatoMXN(datos.banco),
+        efectivo: formatoMXN(datos.efectivo),
+        traspaso_id: traspasoId,
+      },
+    });
+
+    return traspasoId;
   }, usuarioId);
 }

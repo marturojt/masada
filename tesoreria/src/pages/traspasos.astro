@@ -11,13 +11,14 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { registrarTraspaso } from '@lib/casos/traspasos';
 import { emitirNonce } from '@lib/csrf';
+import { bolsasAlDia, controlBolsas } from '@lib/datos/cortes';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { saldoDeCaja } from '@lib/datos/movimientos';
 import { listarTraspasos } from '@lib/datos/traspasos';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaTraspaso } from '@lib/esquemas/corte';
-import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { formatoFechaCorta, hoyISO, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, procesarFormulario } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_BOLSA } from '@lib/tipos';
@@ -68,7 +69,12 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [traspasos, caja] = await Promise.all([listarTraspasos(anio), saldoDeCaja(anio)]);
+const [traspasos, caja, control] = await Promise.all([
+  listarTraspasos(anio),
+  saldoDeCaja(anio),
+  controlBolsas(anio),
+]);
+const conBolsas = bolsasAlDia(control);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 const nonce = await emitirNonce(sesion.idHash, 'traspaso_nuevo');
 
@@ -78,8 +84,8 @@ Astro.response.status = estado;
 <LayoutAdmin titulo="Traspasos" sesion={sesion}>
   <div class="barra__contexto" slot="contexto">
     <span>Ejercicio {anio}</span>
-    <span>Banco: {formatoMXN(caja.banco)}</span>
-    <span>Efectivo: {formatoMXN(caja.efectivo)}</span>
+    {conBolsas && <span>Banco: {formatoMXN(caja.banco)}</span>}
+    {conBolsas && <span>Efectivo: {formatoMXN(caja.efectivo)}</span>}
     <span>Total: {formatoMXN(caja.saldo)}</span>
   </div>
 
@@ -92,6 +98,16 @@ Astro.response.status = estado;
     de la caja no cambia, solo el lugar del dinero. Un traspaso equivocado se corrige
     registrando el inverso.
   </p>
+
+  {
+    !conBolsas && control.desde && (
+      <div class="aviso">
+        Banco y efectivo se empiezan a llevar en {nombrePeriodo(control.desde)}, con el{' '}
+        <a href={`/cortes/${control.desde}`}>arqueo inicial</a>. Hasta entonces no hace
+        falta registrar traspasos: el arqueo deja cada bolsa como se cuente.
+      </div>
+    )
+  }
 
   <div class="pila">
     <section class="tarjeta">
@@ -125,7 +141,7 @@ Astro.response.status = estado;
             modoTeclado="decimal"
             monto
             requerido
-            ayuda={`Hoy hay ${formatoMXN(caja.efectivo)} en efectivo y ${formatoMXN(caja.banco)} en banco.`}
+            ayuda={conBolsas ? `Hoy hay ${formatoMXN(caja.efectivo)} en efectivo y ${formatoMXN(caja.banco)} en banco.` : undefined}
           />
           <Campo
             nombre="descripcion"

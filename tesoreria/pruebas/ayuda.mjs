@@ -59,6 +59,13 @@ export async function enPrueba(cuerpo) {
 
     await cliente.query('select set_config($1, $2, true)', ['app.usuario_id', String(vm)]);
 
+    /*
+     * La migración 033 fija el arranque de bolsas de 2026 en noviembre, que es
+     * un dato de producción. Las pruebas parten de un ejercicio con control por
+     * bolsa desde enero; la que necesite arranque lo fija ella misma.
+     */
+    await cliente.query('update ejercicio set bolsas_desde = null');
+
     await cuerpo({ cliente, tesorero, vm });
   } finally {
     await cliente.query('rollback').catch(() => {});

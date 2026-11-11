@@ -7,10 +7,12 @@ import LayoutImpresion from '@layouts/LayoutImpresion.astro';
 import {
   NOMBRE_CLASIFICACION,
   aportacionesEspecieDelPeriodo,
+  controlBolsas,
   corteDelPeriodo,
   corteGuardado,
   informeMensual,
   pagosGTDelPeriodo,
+  vistaBolsas,
 } from '@lib/datos/cortes';
 import { estadoAplomo } from '@lib/datos/gt';
 import { listarMovimientos } from '@lib/datos/movimientos';
@@ -31,7 +33,7 @@ if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) {
 const calculado = await corteDelPeriodo(periodo);
 if (!calculado) return new Response('Ese mes no pertenece a ningún ejercicio', { status: 404 });
 
-const [guardado, movimientos, traspasos, informe, especie, pagosGT, aplomo] = await Promise.all([
+const [guardado, movimientos, traspasos, informe, especie, pagosGT, aplomo, control] = await Promise.all([
   corteGuardado(periodo),
   listarMovimientos({ periodo }),
   traspasosDelPeriodo(periodo),
@@ -39,7 +41,11 @@ const [guardado, movimientos, traspasos, informe, especie, pagosGT, aplomo] = aw
   aportacionesEspecieDelPeriodo(periodo),
   pagosGTDelPeriodo(periodo),
   estadoAplomo(),
+  controlBolsas(calculado.anio),
 ]);
+
+/* Antes del arranque del control por bolsa, el corte informa solo el total. */
+const conBolsas = vistaBolsas(control, periodo) !== 'oculta';
 
 const cerrado = guardado?.estado === 'cerrado';
 const ingresos = movimientos.filter((m) => m.tipo === 'ingreso');
@@ -74,14 +80,20 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
           <strong>{formatoMXN(calculado.saldo_final_centavos)}</strong>
         </td>
       </tr>
-      <tr>
-        <td>En banco</td>
-        <td class="num">{formatoMXN(calculado.banco_final_centavos)}</td>
-      </tr>
-      <tr>
-        <td>En efectivo</td>
-        <td class="num">{formatoMXN(calculado.efectivo_final_centavos)}</td>
-      </tr>
+      {
+        conBolsas && (
+          <>
+            <tr>
+              <td>En banco</td>
+              <td class="num">{formatoMXN(calculado.banco_final_centavos)}</td>
+            </tr>
+            <tr>
+              <td>En efectivo</td>
+              <td class="num">{formatoMXN(calculado.efectivo_final_centavos)}</td>
+            </tr>
+          </>
+        )
+      }
     </tbody>
   </table>
 
@@ -193,7 +205,7 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
   }
 
   {
-    traspasos.length > 0 && (
+    conBolsas && traspasos.length > 0 && (
       <>
         <h2>Traspasos entre bolsas</h2>
         <table>

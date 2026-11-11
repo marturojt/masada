@@ -203,3 +203,74 @@ export const pagosGTDelPeriodo = (periodo: string): Promise<PagoGTInforme[]> =>
       order by p.fecha_pago, p.id`,
     [`${periodo}-01`],
   );
+
+// ── Control por bolsa ────────────────────────────────────────────────────────
+
+export interface ArqueoInicial {
+  fecha: string;
+  banco_contado_centavos: number;
+  efectivo_contado_centavos: number;
+  banco_sistema_centavos: number;
+  traspaso_id: number | null;
+  creado_nombre: string;
+  creado_en: string;
+}
+
+/**
+ * Desde qué mes vale el desglose banco y efectivo, y el arqueo con que arrancó.
+ * `desde` vacío quiere decir que el ejercicio lleva bolsas desde enero.
+ */
+export interface ControlBolsas {
+  desde: string | null;
+  arqueo: ArqueoInicial | null;
+}
+
+export async function controlBolsas(anio: number): Promise<ControlBolsas> {
+  const [ej, arqueo] = await Promise.all([
+    unaFila<{ desde: string | null }>(
+      "select to_char(bolsas_desde, 'YYYY-MM') as desde from ejercicio where anio = $1",
+      [anio],
+    ),
+    unaFila<ArqueoInicial>(
+      `select a.fecha::text, a.banco_contado_centavos, a.efectivo_contado_centavos,
+              a.banco_sistema_centavos, a.traspaso_id, u.nombre as creado_nombre,
+              a.creado_en::text
+         from arqueo_inicial a
+         join usuario u on u.id = a.creado_por
+        where a.ejercicio_anio = $1`,
+      [anio],
+    ),
+  ]);
+  return { desde: ej?.desde ?? null, arqueo };
+}
+
+/**
+ * Qué se puede mostrar del desglose de un mes:
+ * - oculta: antes del arranque, o mientras falte el arqueo; solo vale el total.
+ * - solo_final: el mes de arranque, donde el inicial todavía no era confiable.
+ * - completa: inicial y final.
+ */
+export type VistaBolsas = 'oculta' | 'solo_final' | 'completa';
+
+export function vistaBolsas(control: ControlBolsas, periodo: string): VistaBolsas {
+  if (control.desde === null) return 'completa';
+  if (control.arqueo === null || periodo < control.desde) return 'oculta';
+  return periodo === control.desde ? 'solo_final' : 'completa';
+}
+
+/** Si el desglose de hoy refleja lo que de verdad hay en banco y en efectivo. */
+export const bolsasAlDia = (control: ControlBolsas): boolean =>
+  control.desde === null || control.arqueo !== null;
+
+export async function registrarArqueoEnBase(
+  tx: Tx,
+  anio: number,
+  datos: { fecha: string; banco: number; efectivo: number },
+  usuarioId: number,
+): Promise<number | null> {
+  const fila = await tx.laFila<{ traspaso_id: number | null }>(
+    'select fn_registrar_arqueo_inicial($1, $2, $3, $4, $5) as traspaso_id',
+    [anio, datos.fecha, datos.banco, datos.efectivo, usuarioId],
+  );
+  return fila.traspaso_id;
+}

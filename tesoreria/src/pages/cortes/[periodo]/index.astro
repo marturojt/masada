@@ -9,14 +9,21 @@ import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import TablaMovimientos from '@componentes/TablaMovimientos.astro';
-import { cerrarCorte, reabrirCorte, registrarAjuste } from '@lib/casos/cortes';
+import {
+  cerrarCorte,
+  reabrirCorte,
+  registrarAjuste,
+  registrarArqueoInicial,
+} from '@lib/casos/cortes';
 import { emitirNonce, emitirNonces } from '@lib/csrf';
 import {
   aportacionesEspecieDelPeriodo,
+  controlBolsas,
   corteDelPeriodo,
   corteGuardado,
   pagosGTDelPeriodo,
   reaperturasDe,
+  vistaBolsas,
 } from '@lib/datos/cortes';
 import { estadoAplomo } from '@lib/datos/gt';
 import { sonImagenes } from '@lib/archivos';
@@ -24,7 +31,12 @@ import { ajustadosDeVarios, listarMovimientos, totalesPorConcepto } from '@lib/d
 import { pendientesDeComprobar } from '@lib/datos/egresos';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
-import { esquemaAjuste, esquemaCierre, esquemaReapertura } from '@lib/esquemas/corte';
+import {
+  esquemaAjuste,
+  esquemaArqueo,
+  esquemaCierre,
+  esquemaReapertura,
+} from '@lib/esquemas/corte';
 import {
   formatoFechaCorta,
   formatoMomento,
@@ -103,6 +115,23 @@ if (Astro.request.method === 'POST') {
           });
           return Astro.redirect(`/cortes/${periodo}?ok=ajuste`, 303);
         }
+      } else if (entrada.accion === 'arqueo') {
+        const r = await validar(entrada, {
+          esquema: esquemaArqueo,
+          proposito: 'arqueo_inicial',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await registrarArqueoInicial(
+            { ...ctxBase, nonce: r.nonce },
+            Number(periodo.slice(0, 4)),
+            r.datos,
+          );
+          return Astro.redirect(`/cortes/${periodo}?ok=arqueo`, 303);
+        }
       } else {
         errores = { _general: 'Acción no reconocida.' };
         estado = 400;
@@ -118,7 +147,7 @@ if (Astro.request.method === 'POST') {
 const calculado = await corteDelPeriodo(periodo);
 if (!calculado) return new Response('Ese mes no pertenece a ningún ejercicio', { status: 404 });
 
-const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo] =
+const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo, control] =
   await Promise.all([
     corteGuardado(periodo),
     listarMovimientos({ periodo }),
@@ -127,6 +156,7 @@ const [guardado, movimientos, totales, porComprobar, especie, pagosGT, aplomo] =
     aportacionesEspecieDelPeriodo(periodo),
     pagosGTDelPeriodo(periodo),
     estadoAplomo(),
+    controlBolsas(calculado.anio),
   ]);
 
 const reaperturas = guardado ? await reaperturasDe(guardado.id) : [];
@@ -144,6 +174,11 @@ const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 const cerrado = guardado?.estado === 'cerrado';
 const esFuturo = periodo > periodoActual();
 
+/* Banco y efectivo solo se muestran desde el arranque del control por bolsa. */
+const vista = vistaBolsas(control, periodo);
+const pideArqueo = control.desde === periodo && control.arqueo === null && !cerrado;
+const arqueoDeEsteMes = control.desde === periodo ? control.arqueo : null;
+
 /* Arrastres que impiden cerrar: entregados sin comprobar de meses anteriores. */
 const arrastres = porComprobar.filter(
   (p) => p.fecha_entrega.slice(0, 7) < periodo,
@@ -151,6 +186,7 @@ const arrastres = porComprobar.filter(
 
 const nonceCierre = await emitirNonce(sesion.idHash, 'corte_cerrar');
 const nonceReapertura = await emitirNonce(sesion.idHash, 'corte_reabrir');
+const nonceArqueo = pideArqueo ? await emitirNonce(sesion.idHash, 'arqueo_inicial') : '';
 const noncesAjuste = await emitirNonces(
   sesion.idHash,
   'movimiento_ajuste',
@@ -225,20 +261,39 @@ Astro.response.status = estado;
                 <strong>{formatoMXN(calculado.saldo_final_centavos)}</strong>
               </td>
             </tr>
-            <tr>
-              <th scope="row">En banco</th>
-              <td class="num">
-                {formatoMXN(calculado.banco_inicial_centavos)} →{' '}
-                {formatoMXN(calculado.banco_final_centavos)}
-              </td>
-            </tr>
-            <tr>
-              <th scope="row">En efectivo</th>
-              <td class="num">
-                {formatoMXN(calculado.efectivo_inicial_centavos)} →{' '}
-                {formatoMXN(calculado.efectivo_final_centavos)}
-              </td>
-            </tr>
+            {
+              vista === 'oculta' ? (
+                <tr>
+                  <th scope="row">Banco y efectivo</th>
+                  <td class="num apagado">
+                    {control.desde && periodo < control.desde
+                      ? `Se llevan desde ${nombrePeriodo(control.desde)}`
+                      : 'Pendiente del arqueo inicial'}
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  <tr>
+                    <th scope="row">En banco</th>
+                    <td class="num">
+                      {vista === 'completa' && (
+                        <>{formatoMXN(calculado.banco_inicial_centavos)} →{' '}</>
+                      )}
+                      {formatoMXN(calculado.banco_final_centavos)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">En efectivo</th>
+                    <td class="num">
+                      {vista === 'completa' && (
+                        <>{formatoMXN(calculado.efectivo_inicial_centavos)} →{' '}</>
+                      )}
+                      {formatoMXN(calculado.efectivo_final_centavos)}
+                    </td>
+                  </tr>
+                </>
+              )
+            }
             {
               guardado && cerrado && (
                 <>
@@ -514,6 +569,79 @@ Astro.response.status = estado;
         )
       }
     </section>
+
+    {
+      pideArqueo && (
+        <section class="tarjeta">
+          <h2>Arqueo inicial</h2>
+          <p class="apagado" style="font-size: 0.9rem;">
+            Desde {nombrePeriodo(periodo)} se lleva por separado lo que hay en el banco y lo
+            que hay en efectivo. Para arrancar, cuenta el sobre y revisa el saldo del banco
+            el mismo día, y anota aquí las dos cantidades. El sistema registra el traspaso
+            que haga falta para que el desglose quede igual a lo contado. El total no cambia.
+          </p>
+          <p class="apagado" style="font-size: 0.9rem;">
+            Las dos cantidades deben sumar lo que el sistema tiene registrado del ejercicio.
+            Si no suman, falta capturar algo o registrar un ajuste. Este mes no se puede
+            cerrar sin el arqueo, y el arqueo se hace una sola vez.
+          </p>
+
+          {seccion === 'arqueo' && <ResumenErrores errores={errores} />}
+
+          <div style="max-width: 30rem;">
+            <Formulario csrf={sesion.csrfToken} nonce={nonceArqueo} accionInterna="arqueo">
+              <Campo
+                nombre="fecha"
+                etiqueta="Fecha del arqueo"
+                tipo="date"
+                valor={hoyISO().startsWith(periodo) ? hoyISO() : `${periodo}-01`}
+                error={errores.fecha}
+                requerido
+              />
+              <Campo
+                nombre="banco"
+                etiqueta="En el banco"
+                modoTeclado="decimal"
+                monto
+                error={errores.banco}
+                ayuda="El saldo del estado de cuenta o de la banca en línea ese día."
+                requerido
+              />
+              <Campo
+                nombre="efectivo"
+                etiqueta="En efectivo"
+                modoTeclado="decimal"
+                monto
+                error={errores.efectivo}
+                ayuda="Lo que hay contado en el sobre."
+                requerido
+              />
+              <div class="formulario__acciones">
+                <button class="btn btn--primary" type="submit">Registrar arqueo</button>
+              </div>
+            </Formulario>
+          </div>
+        </section>
+      )
+    }
+
+    {
+      arqueoDeEsteMes && (
+        <section class="tarjeta">
+          <h2>Arqueo inicial</h2>
+          <p class="apagado" style="font-size: 0.9rem; margin-bottom: 0;">
+            El {formatoFechaCorta(arqueoDeEsteMes.fecha)} se contaron{' '}
+            {formatoMXN(arqueoDeEsteMes.banco_contado_centavos)} en el banco y{' '}
+            {formatoMXN(arqueoDeEsteMes.efectivo_contado_centavos)} en efectivo. El sistema
+            traía {formatoMXN(arqueoDeEsteMes.banco_sistema_centavos)} en el banco
+            {arqueoDeEsteMes.traspaso_id
+              ? ', así que se registró un traspaso por la diferencia.'
+              : ', así que no hizo falta traspaso.'}{' '}
+            Lo registró {arqueoDeEsteMes.creado_nombre}.
+          </p>
+        </section>
+      )
+    }
 
     {
       !cerrado && !esFuturo && (

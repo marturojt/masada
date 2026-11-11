@@ -1,10 +1,10 @@
 ---
 /* Cortes del ejercicio, mes por mes, con los saldos encadenados. */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
-import { cortesDelAnio } from '@lib/datos/cortes';
+import { controlBolsas, cortesDelAnio, vistaBolsas } from '@lib/datos/cortes';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { formatoMXN } from '@lib/dinero';
-import { formatoMomento, nombrePeriodo, periodoActual } from '@lib/fechas';
+import { formatoFechaCorta, formatoMomento, nombrePeriodo, periodoActual } from '@lib/fechas';
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 
@@ -16,7 +16,7 @@ const vigente = await ejercicioVigente();
 const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
 const ejercicio = ejercicios.find((e) => e.anio === anio) ?? vigente;
 
-const cortes = await cortesDelAnio(anio);
+const [cortes, control] = await Promise.all([cortesDelAnio(anio), controlBolsas(anio)]);
 const hoy = periodoActual();
 
 const cerrados = cortes.filter((c) => c.estado_corte === 'cerrado');
@@ -51,6 +51,18 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
     )
   }
 
+  {
+    control.desde && (
+      <p class="apagado" style="font-size: 0.9rem;">
+        Banco y efectivo se llevan por separado desde {nombrePeriodo(control.desde)}
+        {control.arqueo
+          ? `, con el arqueo inicial del ${formatoFechaCorta(control.arqueo.fecha)}.`
+          : '. Falta el arqueo inicial, que se registra en el corte de ese mes.'}{' '}
+        Antes de eso el corte informa solo el total.
+      </p>
+    )
+  }
+
   <div class="tabla-envoltura">
     <table class="tabla">
       <caption>Saldos encadenados</caption>
@@ -81,8 +93,17 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
                 <td class="num">{formatoMXN(c.total_ingresos_centavos)}</td>
                 <td class="num">{formatoMXN(c.total_egresos_centavos)}</td>
                 <td class="num">{formatoMXN(c.saldo_final_centavos)}</td>
-                <td class="num">{formatoMXN(c.banco_final_centavos)}</td>
-                <td class="num">{formatoMXN(c.efectivo_final_centavos)}</td>
+                {vistaBolsas(control, periodo) === 'oculta' ? (
+                  <>
+                    <td class="num apagado">—</td>
+                    <td class="num apagado">—</td>
+                  </>
+                ) : (
+                  <>
+                    <td class="num">{formatoMXN(c.banco_final_centavos)}</td>
+                    <td class="num">{formatoMXN(c.efectivo_final_centavos)}</td>
+                  </>
+                )}
                 <td>
                   {c.estado_corte === 'cerrado' ? (
                     <>

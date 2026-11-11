@@ -24,6 +24,13 @@ export const esquemaAjuste = z.object({
   motivo: texto('El motivo', 400),
 });
 
+/** Arqueo inicial: lo que de verdad hay en banco y en efectivo al arrancar. */
+export const esquemaArqueo = z.object({
+  fecha: fechaISO('La fecha del arqueo'),
+  banco: montoEnCentavos('Lo que hay en el banco', { permitirCero: true }),
+  efectivo: montoEnCentavos('Lo que hay en efectivo', { permitirCero: true }),
+});
+
 /** Saldo de apertura del ejercicio por bolsa, que en 2026 se captura a mano. */
 export const esquemaApertura = z.object({
   apertura_banco: montoEnCentavos('El saldo en banco', { permitirCero: true }),
