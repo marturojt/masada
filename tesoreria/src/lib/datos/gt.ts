@@ -234,14 +234,6 @@ export const listarMembresias = (): Promise<Membresia[]> =>
       order by m.periodo_referencia desc, m.id desc`,
   );
 
-export const membresiaActual = (): Promise<Membresia | null> =>
-  unaFila<Membresia>(
-    `select id, periodo_referencia::text, fecha_documento::text,
-            null::text as fecha_recepcion, archivo_id, null as observaciones,
-            renglones, con_capita, sin_ligar
-       from v_gt_membresia_actual`,
-  );
-
 export const obtenerMembresia = (id: number): Promise<Membresia | null> =>
   unaFila<Membresia>(
     `select m.id, m.fecha_documento::text, m.fecha_recepcion::text,

@@ -135,8 +135,8 @@ conviene confirmar o corregir:
    efectivo "efectivo". Si un pago fue con tarjeta u otro medio, se corrige a mano.
 5. **Conceptos gl_***: los conceptos viejos de Gran Logia quedaron desactivados;
    el histórico los sigue mostrando.
-6. **Renglones de membresía**: se capturan tal como GT los reporta y no se editan
-   ni se ligan con el padrón: la membresía es respaldo de consulta.
+6. **Membresías**: solo se guarda el documento de la GT, sin renglones; es
+   respaldo de consulta.
 7. **Tarifas anteriores a la Ley 2026-2027**: el sistema trae cargada la ley
    vigente desde el 21 de septiembre de 2026. Las de antes, si se quieren en el
    historial, se capturan en Tarifas GT con su fecha y su fundamento.
@@ -197,7 +197,12 @@ queda como ambiente de desarrollo.
       primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.
 - [ ] **Comentarios de Arturo sobre las pestañas**: se atendieron el 6 (egresos)
       y el 7 (Gran Tesorería). Seguir con los que siguen.
-- [ ] **Desplegar el nombre del concepto GT** (migración 029): "Pago de cápitas
+- [ ] **Desplegar membresías solo como documento** (migración 030): sin captura
+      de renglones, documento obligatorio, y eliminar una registrada por error
+      (nivel V∴M∴, con motivo). Exige `npm run migrar`. Después de desplegar,
+      Arturo elimina la membresía de octubre 2026 duplicada (la que no dice
+      "Más reciente").
+- [x] **Desplegar el nombre del concepto GT** (migración 029): "Pago de cápitas
       a la Gran Tesorería" pasa a "Pago a la Gran Tesorería", porque por ahí
       salen también trámites, ajustes y regularizaciones. Solo el nombre, y
       solo si no se había renombrado. Exige `npm run migrar`.

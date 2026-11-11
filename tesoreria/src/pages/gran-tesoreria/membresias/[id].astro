@@ -1,87 +1,77 @@
 ---
 /*
- * Ficha de una membresía: los hermanos tal como los reporta la Gran Tesorería.
- * Es respaldo de consulta, lo que GT entiende de Masada en esa fecha: no se
- * concilia ni se gestiona desde aquí.
+ * Ficha de una membresía: el documento que mandó la Gran Tesorería, para
+ * consultarlo. Es respaldo de lo que GT entiende de Masada en esa fecha: no se
+ * concilia ni se gestiona desde aquí. Una registrada por error se elimina.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import VisorImagen from '@componentes/VisorImagen.astro';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
-import { agregarRenglonMembresia } from '@lib/casos/gt';
+import { eliminarMembresia } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
 import { obtenerMembresia, renglonesDeMembresia } from '@lib/datos/gt';
 import { ErrorDeNegocio } from '@lib/errores';
-import { esquemaRenglonMembresia } from '@lib/esquemas/gt';
+import { esquemaMotivo } from '@lib/esquemas/egreso';
 import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
 import { avisoDe, leerFormulario, validar } from '@lib/formulario';
 import { sonImagenes } from '@lib/archivos';
-import { requerirSesion } from '@lib/sesion';
+import { esVM, requerirSesion } from '@lib/sesion';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const soyVM = esVM(sesion);
 
 const id = Number(Astro.params.id);
 if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
 
-const ETIQUETAS: Record<string, string> = {
-  nombre_reportado: 'Nombre tal como lo reporta GT',
-  clave_mason: 'Clave masónica',
-  grado_reportado: 'Grado reportado',
-  estatus_reportado: 'Estatus reportado',
-  genera_capita: 'Genera cápita',
-};
-
 let errores: Record<string, string> = {};
-let valores: Record<string, string> = {};
 let estado = 200;
-let seccion: string | null = null;
 
 if (Astro.request.method === 'POST') {
   const entrada = await leerFormulario(Astro);
-  const ctxBase = { sesion, idPeticion: Astro.locals.idPeticion };
-
   if (!entrada.ok) {
     errores = entrada.errores;
     estado = entrada.estado;
-  } else {
-    seccion = entrada.accion;
-    try {
-      if (entrada.accion === 'renglon') {
-        const r = await validar(entrada, {
-          esquema: esquemaRenglonMembresia,
-          proposito: 'gt_renglon',
-          sesion,
-        });
-        if (!r.ok) {
-          errores = r.errores;
-          valores = r.valores;
-          estado = r.estado;
-        } else {
-          await agregarRenglonMembresia({ ...ctxBase, nonce: r.nonce }, id, r.datos);
-          return Astro.redirect(`/gran-tesoreria/membresias/${id}?ok=renglon`, 303);
-        }
-      } else {
-        errores = { _general: 'Acción no reconocida.' };
-        estado = 400;
+  } else if (entrada.accion === 'eliminar') {
+    const r = await validar(entrada, {
+      esquema: esquemaMotivo,
+      proposito: 'gt_membresia_eliminar',
+      sesion,
+    });
+    if (!r.ok) {
+      errores = r.errores;
+      estado = r.estado;
+    } else {
+      try {
+        await eliminarMembresia(
+          { sesion, nonce: r.nonce, idPeticion: Astro.locals.idPeticion },
+          id,
+          r.datos.motivo,
+        );
+        return Astro.redirect('/gran-tesoreria/membresias?ok=membresia_eliminada', 303);
+      } catch (error) {
+        if (!(error instanceof ErrorDeNegocio)) throw error;
+        errores = { [error.campo ?? '_general']: error.message };
+        estado = 422;
       }
-    } catch (error) {
-      if (!(error instanceof ErrorDeNegocio)) throw error;
-      errores = { [error.campo ?? '_general']: error.message };
-      estado = 422;
     }
+  } else {
+    errores = { _general: 'Acción no reconocida.' };
+    estado = 400;
   }
 }
 
 const membresia = await obtenerMembresia(id);
 if (!membresia) return new Response('No encontrado', { status: 404 });
 
+/* Los renglones ya no se capturan; los que haya de antes se muestran. */
 const renglones = await renglonesDeMembresia(id);
 const imagenes = membresia.archivo_id
   ? await sonImagenes([membresia.archivo_id])
   : new Map<number, boolean>();
-const nonceRenglon = await emitirNonce(sesion.idHash, 'gt_renglon');
+const nonceEliminar = soyVM ? await emitirNonce(sesion.idHash, 'gt_membresia_eliminar') : '';
 
 Astro.response.status = estado;
 ---
@@ -93,28 +83,59 @@ Astro.response.status = estado;
   </div>
 
   {aviso && <div class="aviso">{aviso}</div>}
-  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+  <ResumenErrores errores={errores} />
 
   <h1>Membresía de {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</h1>
-  <p class="apagado">
-    {membresia.renglones} hermano(s) reportados, {membresia.con_capita} generan cápita.
-    {membresia.archivo_id && (
-      <VisorImagen
-        archivoId={membresia.archivo_id}
-        texto="Ver documento"
-        esImagen={imagenes.get(membresia.archivo_id) ?? false}
-      />
-    )}
-  </p>
-  {membresia.observaciones && <p class="apagado">{membresia.observaciones}</p>}
 
   <div class="pila" style="margin-top: 1.25rem;">
     <section class="tarjeta">
-      <h2>Hermanos reportados</h2>
-      {
-        renglones.length === 0 ? (
-          <p class="apagado">Sin renglones capturados todavía.</p>
-        ) : (
+      <h2>Documento</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <tbody>
+            <tr>
+              <th scope="row">Fecha del documento</th>
+              <td>{formatoFechaCorta(membresia.fecha_documento)}</td>
+            </tr>
+            {membresia.fecha_recepcion && (
+              <tr>
+                <th scope="row">Recibido el</th>
+                <td>{formatoFechaCorta(membresia.fecha_recepcion)}</td>
+              </tr>
+            )}
+            <tr>
+              <th scope="row">Archivo</th>
+              <td>
+                {membresia.archivo_id ? (
+                  <VisorImagen
+                    archivoId={membresia.archivo_id}
+                    texto="Ver documento"
+                    esImagen={imagenes.get(membresia.archivo_id) ?? false}
+                  />
+                ) : (
+                  <span class="apagado">Sin documento adjunto</span>
+                )}
+              </td>
+            </tr>
+            {membresia.observaciones && (
+              <tr>
+                <th scope="row">Observaciones</th>
+                <td style="white-space: pre-line;">{membresia.observaciones}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {
+      renglones.length > 0 && (
+        <section class="tarjeta">
+          <h2>Hermanos reportados</h2>
+          <p class="apagado" style="font-size: 0.85rem;">
+            Capturados cuando la membresía se llevaba renglón por renglón. Se conservan para
+            consulta; ya no se agregan.
+          </p>
           <div class="tabla-envoltura">
             <table class="tabla">
               <thead>
@@ -139,60 +160,34 @@ Astro.response.status = estado;
               </tbody>
             </table>
           </div>
-        )
-      }
-    </section>
+        </section>
+      )
+    }
 
-    <section class="tarjeta">
-      <h2>Agregar hermano reportado</h2>
-      <p class="apagado">
-        Captura el renglón tal como viene en el documento de la Gran Tesorería, aunque
-        el nombre no coincida con el padrón: es el respaldo de lo que GT entiende de
-        Masada, no se concilia.
-      </p>
-      <details open={seccion === 'renglon'}>
-        <summary>Capturar renglón</summary>
-        <Formulario csrf={sesion.csrfToken} nonce={nonceRenglon} accionInterna="renglon">
-          <Campo
-            nombre="nombre_reportado"
-            etiqueta={ETIQUETAS.nombre_reportado!}
-            valor={valores.nombre_reportado}
-            error={seccion === 'renglon' ? errores.nombre_reportado : undefined}
-            requerido
-          />
-          <Campo
-            nombre="clave_mason"
-            etiqueta={ETIQUETAS.clave_mason!}
-            valor={valores.clave_mason}
-            error={seccion === 'renglon' ? errores.clave_mason : undefined}
-          />
-          <Campo
-            nombre="grado_reportado"
-            etiqueta={ETIQUETAS.grado_reportado!}
-            valor={valores.grado_reportado}
-            error={seccion === 'renglon' ? errores.grado_reportado : undefined}
-          />
-          <Campo
-            nombre="estatus_reportado"
-            etiqueta={ETIQUETAS.estatus_reportado!}
-            valor={valores.estatus_reportado}
-            error={seccion === 'renglon' ? errores.estatus_reportado : undefined}
-          />
-          <div class="campo">
-            <label class="campo__etiqueta" for="campo-genera_capita">
-              <input
-                type="checkbox"
-                id="campo-genera_capita"
-                name="genera_capita"
-                checked
-              />
-              {ETIQUETAS.genera_capita}
-            </label>
-            <span class="campo__ayuda">Desmárcalo si GT lo reporta pero no cobra por él.</span>
-          </div>
-          <button class="btn btn--primary" type="submit">Agregar renglón</button>
-        </Formulario>
-      </details>
-    </section>
+    {
+      soyVM && (
+        <section class="tarjeta">
+          <details open={errores.motivo !== undefined}>
+            <summary style="cursor: pointer;">Eliminar esta membresía</summary>
+            <div style="margin-top: 0.75rem; max-width: 26rem;">
+              <p class="apagado" style="font-size: 0.85rem;">
+                Solo si se registró por error, por ejemplo dos veces. Es un documento de
+                consulta: no afecta cuentas ni obligaciones. Queda en la bitácora con su motivo.
+              </p>
+              <Formulario csrf={sesion.csrfToken} nonce={nonceEliminar} accionInterna="eliminar">
+                <Campo
+                  nombre="motivo"
+                  etiqueta="Motivo"
+                  error={errores.motivo}
+                  marcador="Registrada dos veces"
+                  requerido
+                />
+                <button class="btn btn--ghost" type="submit">Eliminar membresía</button>
+              </Formulario>
+            </div>
+          </details>
+        </section>
+      )
+    }
   </div>
 </LayoutAdmin>

@@ -5,6 +5,8 @@
  * Masada: no se concilian ni modifican el padrón.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import VisorImagen from '@componentes/VisorImagen.astro';
+import { sonImagenes } from '@lib/archivos';
 import Campo from '@componentes/Campo.astro';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
@@ -63,6 +65,9 @@ if (Astro.request.method === 'POST') {
 }
 
 const membresias = await listarMembresias();
+const imagenes = await sonImagenes(
+  membresias.map((m) => m.archivo_id).filter((a): a is number => a !== null),
+);
 const nonce = await emitirNonce(sesion.idHash, 'gt_membresia');
 
 Astro.response.status = estado;
@@ -79,8 +84,8 @@ Astro.response.status = estado;
   <h1>Membresías</h1>
   <p class="apagado">
     Cada membresía es el documento con el que la Gran Tesorería dice a quién reconoce
-    y por quién cobra: el histórico de lo que GT entiende de Masada. Se guarda como
-    respaldo para consultarlo. No modifica el padrón ni se concilia desde aquí.
+    y por quién cobra: el histórico de lo que GT entiende de Masada. Se guarda la imagen
+    o el PDF como respaldo para consultarlo. No modifica el padrón ni se concilia.
   </p>
 
   <div class="pila" style="margin-top: 1.25rem;">
@@ -96,8 +101,7 @@ Astro.response.status = estado;
                 <tr>
                   <th>Periodo de referencia</th>
                   <th>Fecha del documento</th>
-                  <th class="num">Hermanos reportados</th>
-                  <th class="num">Generan cápita</th>
+                  <th>Documento</th>
                 </tr>
               </thead>
               <tbody>
@@ -110,8 +114,17 @@ Astro.response.status = estado;
                       {i === 0 && <span class="insignia" style="margin-left: 0.5rem;">Más reciente</span>}
                     </td>
                     <td>{formatoFechaCorta(m.fecha_documento)}</td>
-                    <td class="num">{m.renglones}</td>
-                    <td class="num">{m.con_capita}</td>
+                    <td>
+                      {m.archivo_id ? (
+                        <VisorImagen
+                          archivoId={m.archivo_id}
+                          texto="Ver"
+                          esImagen={imagenes.get(m.archivo_id) ?? false}
+                        />
+                      ) : (
+                        <span class="apagado">Sin documento</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -154,7 +167,8 @@ Astro.response.status = estado;
           tipo="file"
           error={errores.documento}
           aceptar="image/jpeg,image/png,image/webp,image/heic,application/pdf"
-          ayuda="El oficio o listado que envió la Gran Tesorería, si se tiene."
+          requerido
+          ayuda="La imagen o el PDF que envió la Gran Tesorería. Es lo que se guarda."
         />
         <Campo
           nombre="observaciones"

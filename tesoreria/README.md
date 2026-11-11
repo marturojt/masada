@@ -209,8 +209,10 @@ en su ficha como consulta.
 
 - **Membresías**: el documento con el que GT dice a quién reconoce y por quién
   cobra. Es respaldo de consulta, el histórico de lo que GT entiende de Masada:
-  se captura tal como llega, renglón por renglón, y no se liga ni se concilia
-  con el padrón.
+  se guarda la imagen o el PDF tal como llega (obligatorio), con su periodo y
+  fechas. No se capturan renglones (los de antes se conservan para consulta) ni
+  se liga o concilia con el padrón. Una registrada por error la elimina el
+  V∴M∴ con motivo; no afecta cuentas ni obligaciones (migración 030).
 - **Tarifas GT**: las de la Ley de Ingresos de la Gran Logia, columna de logias
   del edificio sede (la de Masada): cápita, movimientos de grado, regularización
   y afiliación, talleres, lockers, auditorio y reconocimientos. Cada tarifa

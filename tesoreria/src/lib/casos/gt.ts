@@ -164,11 +164,15 @@ export async function crearMembresia(
 ): Promise<number> {
   const usuarioId = ctx.sesion.usuario.id;
 
-  let archivoId: number | null = null;
-  if (documento) {
-    const guardado = await guardarComprobante(documento, usuarioId, datos.fecha_documento);
-    archivoId = guardado.id;
+  /* La membresía es el respaldo del documento: sin documento no hay qué guardar. */
+  if (!documento) {
+    throw new ErrorDeNegocio(
+      'Sube la imagen o el PDF que mandó la Gran Tesorería: la membresía es ese documento.',
+      'documento',
+    );
   }
+  const guardado = await guardarComprobante(documento, usuarioId, datos.fecha_documento);
+  const archivoId = guardado.id;
 
   return enTransaccion(async (tx) => {
     await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_membresia');
@@ -192,53 +196,48 @@ export async function crearMembresia(
       accion: 'gt_membresia_registrada',
       entidad: 'gt_membresia',
       entidadId: fila.id,
-      detalle: { periodo: datos.periodo_referencia, con_documento: archivoId !== null },
+      detalle: { periodo: datos.periodo_referencia, archivo_id: archivoId },
     });
     return fila.id;
   }, usuarioId);
 }
 
 /**
- * Renglón tal como lo reporta la Gran Tesorería. La membresía es respaldo de
- * consulta: no se liga con el padrón ni cambia nada del hermano.
+ * Elimina una membresía registrada por error, como una capturada dos veces.
+ * Es un documento de consulta que no alimenta nada: se puede eliminar, del
+ * nivel V∴M∴ y con motivo. La bitácora guarda qué era y su archivo, que no se
+ * borra del disco.
  */
-export async function agregarRenglonMembresia(
+export async function eliminarMembresia(
   ctx: Contexto,
   membresiaId: number,
-  datos: {
-    nombre_reportado: string;
-    clave_mason?: string | undefined;
-    grado_reportado?: string | undefined;
-    estatus_reportado?: string | undefined;
-    genera_capita: boolean;
-  },
+  motivo: string,
 ): Promise<void> {
+  if (!esNivelVM(ctx.sesion.usuario.rol)) {
+    throw new ErrorDeNegocio('Eliminar una membresía lo autoriza el Venerable Maestro.');
+  }
   const usuarioId = ctx.sesion.usuario.id;
 
   await enTransaccion(async (tx) => {
-    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_renglon');
-    await tx.consulta(
-      `insert into gt_membresia_hermano
-         (membresia_id, nombre_reportado, clave_mason_reportada, grado_reportado,
-          estatus_reportado, genera_capita, creado_por)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        membresiaId,
-        datos.nombre_reportado,
-        datos.clave_mason ?? null,
-        datos.grado_reportado ?? null,
-        datos.estatus_reportado ?? null,
-        datos.genera_capita,
-        usuarioId,
-      ],
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'gt_membresia_eliminar');
+    const fila = await tx.unaFila<{
+      periodo: string;
+      fecha_documento: string;
+      archivo_id: number | null;
+    }>(
+      `delete from gt_membresia where id = $1
+       returning to_char(periodo_referencia, 'YYYY-MM') as periodo,
+                 fecha_documento::text, archivo_id`,
+      [membresiaId],
     );
+    if (!fila) throw new ErrorDeNegocio('Esa membresía ya no existe.');
     await registrarEn(tx, {
       usuarioId,
       idPeticion: ctx.idPeticion,
-      accion: 'gt_membresia_renglon',
+      accion: 'gt_membresia_eliminada',
       entidad: 'gt_membresia',
       entidadId: membresiaId,
-      detalle: { nombre: datos.nombre_reportado },
+      detalle: { ...fila, motivo },
     });
   }, usuarioId);
 }

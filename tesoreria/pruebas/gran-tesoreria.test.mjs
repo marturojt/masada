@@ -389,3 +389,35 @@ test('el ajuste de cápitas es un trámite con meses que no cuentan para el a pl
     assert.equal(cubiertos[0].n, 0);
   });
 });
+
+test('eliminar una membresía deja sin referencia a sus obligaciones y quita su dispensa', async () => {
+  await enPrueba(async ({ cliente, tesorero, vm }) => {
+    const { rows: m } = await cliente.query(
+      `insert into gt_membresia (fecha_documento, periodo_referencia, creado_por)
+       values ('2026-11-04', '2026-10-01', $1) returning id`,
+      [tesorero],
+    );
+    const obligacion = await nuevaObligacion(cliente, tesorero);
+    await cliente.query('update gt_obligacion set membresia_id = $1 where id = $2', [
+      m[0].id,
+      obligacion.id,
+    ]);
+    await cliente.query(
+      `insert into evidencia_dispensa (entidad, entidad_id, motivo, creado_por)
+       values ('gt_membresia', $1, 'Prueba', $2)`,
+      [m[0].id, vm],
+    );
+
+    await cliente.query('delete from gt_membresia where id = $1', [m[0].id]);
+
+    const { rows: o } = await cliente.query('select membresia_id from gt_obligacion where id = $1', [
+      obligacion.id,
+    ]);
+    assert.equal(o[0].membresia_id, null);
+    const { rows: d } = await cliente.query(
+      "select count(*)::int as n from evidencia_dispensa where entidad = 'gt_membresia' and entidad_id = $1",
+      [m[0].id],
+    );
+    assert.equal(d[0].n, 0);
+  });
+});

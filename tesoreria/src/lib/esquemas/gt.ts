@@ -39,14 +39,6 @@ export const esquemaMembresia = z.object({
   observaciones: notas(500),
 });
 
-export const esquemaRenglonMembresia = z.object({
-  nombre_reportado: texto('El nombre reportado', 150),
-  clave_mason: textoOpcional('La clave masónica', 40),
-  grado_reportado: textoOpcional('El grado reportado', 40),
-  estatus_reportado: textoOpcional('El estatus reportado', 40),
-  genera_capita: z.preprocess((v) => v === 'on' || v === 'true', z.boolean()),
-});
-
 export const esquemaObligacion = z.object({
   tipo: opcionDe(
     ['ordinaria', 'regularizacion', 'tramite', 'extraordinaria'],

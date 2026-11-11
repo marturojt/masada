@@ -244,6 +244,7 @@ const AVISOS: Record<string, string> = {
   candidato: 'Candidato dado de alta.',
   iniciado: 'Ya es hermano activo. Falta asignarle su modalidad en Cápitas.',
   cuota: 'Cuota de grado guardada.',
+  membresia_eliminada: 'Membresía eliminada. Queda constancia en la bitácora.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>
