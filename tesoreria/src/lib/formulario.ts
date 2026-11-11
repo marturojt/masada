@@ -241,6 +241,9 @@ const AVISOS: Record<string, string> = {
   corregido: 'Corrección de captura guardada.',
   suplencia: 'Motivo de la suplencia actualizado.',
   beneficiario: 'Beneficiario unificado en todos sus egresos.',
+  candidato: 'Candidato dado de alta.',
+  iniciado: 'Ya es hermano activo. Falta asignarle su modalidad en Cápitas.',
+  cuota: 'Cuota de grado guardada.',
 };
 
 export const avisoDe = (clave: string | null): string | null =>

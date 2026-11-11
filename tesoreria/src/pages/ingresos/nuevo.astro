@@ -9,7 +9,7 @@ import { registrarIngreso } from '@lib/casos/ingresos';
 import { emitirNonce } from '@lib/csrf';
 import { listarConceptos } from '@lib/datos/conceptos';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
-import { hermanosActivos } from '@lib/datos/hermanos';
+import { personasParaCobro } from '@lib/datos/hermanos';
 import { NOMBRE_TARIFA, tarifasVigentes } from '@lib/datos/tarifas';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
@@ -26,7 +26,8 @@ const conceptos = await listarConceptos({
   naturaleza: 'ingreso',
   soloSeleccionables: true,
 });
-const hermanos = await hermanosActivos();
+/* Los candidatos también pagan su cuota antes de la ceremonia. */
+const hermanos = await personasParaCobro();
 const tarifas = await tarifasVigentes();
 
 const ETIQUETAS: Record<string, string> = {
@@ -81,7 +82,7 @@ const opcionesConcepto: Opcion[] = conceptos.map((c) => ({
 const opcionesHermano: Opcion[] = hermanos.map((h) => ({
   valor: String(h.id),
   texto: h.nombre_completo,
-  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+  grupo: h.grado ? NOMBRE_GRADO_PLURAL[h.grado] : 'Candidatos',
 }));
 
 Astro.response.status = estado;

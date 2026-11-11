@@ -11,10 +11,15 @@ import { enTransaccion } from '../db';
 import {
   actualizarHermano,
   cambiarEstatus,
+  insertarCandidato,
   insertarHermano,
   registrarEventoGrado,
+  type CandidatoPara,
   type DatosHermano,
 } from '../datos/hermanos';
+import { insertarCuota } from '../datos/cuotas';
+import { formatoMXN } from '../dinero';
+import { hoyISO } from '../fechas';
 import { asignarCargo } from '../datos/cargos';
 import { ErrorDeNegocio } from '../errores';
 import type { Sesion } from '../sesion';
@@ -248,6 +253,165 @@ export async function agregarEventoGrado(
       entidad: 'hermano',
       entidadId: id,
       detalle: { tipo: datos.tipo_evento, fecha: datos.fecha, grado: datos.grado },
+    });
+  }, usuarioId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Candidatos
+// ─────────────────────────────────────────────────────────────────────────────
+
+/*
+ * Un candidato nace en el padrón antes de su ceremonia: sin grado, sin fecha de
+ * ingreso y sin cápitas. Si se captura su cuota, nace también lo que debe, y
+ * cualquier pago de esa cuota se le aplica solo.
+ */
+export async function crearCandidato(
+  ctx: Contexto,
+  datos: {
+    nombre_completo: string;
+    candidato_para: CandidatoPara;
+    fecha_programada?: string | undefined;
+    correo?: string | undefined;
+    telefono?: string | undefined;
+    notas?: string | undefined;
+    cuota?: number | null | undefined;
+  },
+): Promise<number> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  return enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'candidato_nuevo');
+
+    let id: number;
+    try {
+      id = await insertarCandidato(tx, datos, usuarioId);
+    } catch (error) {
+      traducirError(error);
+    }
+
+    if (datos.cuota) {
+      await insertarCuota(
+        tx,
+        {
+          hermanoId: id,
+          tipoEvento: datos.candidato_para,
+          montoCentavos: datos.cuota,
+          fecha: hoyISO(),
+          notas: 'Registrada al dar de alta al candidato',
+        },
+        usuarioId,
+      );
+    }
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: 'candidato_alta',
+      entidad: 'hermano',
+      entidadId: id,
+      detalle: {
+        nombre: datos.nombre_completo,
+        para: datos.candidato_para,
+        fecha_programada: datos.fecha_programada ?? null,
+        cuota: datos.cuota ? formatoMXN(datos.cuota) : null,
+      },
+    });
+
+    return id;
+  }, usuarioId);
+}
+
+/**
+ * El día de la ceremonia el candidato pasa a hermano activo: iniciado entra
+ * como aprendiz, afiliado con el grado que trae. Su fecha de ingreso es la de
+ * la ceremonia y desde ahí corren sus cápitas. Lo que ya tenía (cuotas, pagos,
+ * trámite GT) se queda con él, porque es la misma fila.
+ */
+export async function ingresarCandidato(
+  ctx: Contexto,
+  id: number,
+  datos: { fecha: string; grado?: Grado | undefined },
+): Promise<void> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  if (datos.fecha > hoyISO()) {
+    throw new ErrorDeNegocio('La ceremonia no puede tener fecha futura: se registra cuando ya pasó.', 'fecha');
+  }
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'candidato_ingreso');
+
+    const actual = await tx.unaFila<{ estatus: string; candidato_para: CandidatoPara; nombre_completo: string }>(
+      'select estatus, candidato_para, nombre_completo from hermano where id = $1 for update',
+      [id],
+    );
+    if (!actual || actual.estatus !== 'candidato') {
+      throw new ErrorDeNegocio('Esa persona ya no es candidato.');
+    }
+
+    const esIniciacion = actual.candidato_para === 'iniciacion';
+    const grado: Grado | undefined = esIniciacion ? 'aprendiz' : datos.grado;
+    if (!grado) {
+      throw new ErrorDeNegocio('Indica el grado con el que llega de su logia.', 'grado');
+    }
+
+    await tx.consulta(
+      `update hermano
+          set estatus = 'activo', grado = $2::grado_masonico, fecha_ingreso = $3,
+              motivo_ingreso = candidato_para,
+              fecha_iniciacion = case when candidato_para = 'iniciacion' then $3::date
+                                      else fecha_iniciacion end,
+              fecha_afiliacion = case when candidato_para = 'afiliacion' then $3::date
+                                      else fecha_afiliacion end,
+              fecha_programada = null, actualizado_por = $4
+        where id = $1`,
+      [id, grado, datos.fecha, usuarioId],
+    );
+
+    await registrarEventoGrado(
+      tx,
+      id,
+      { grado, fecha: datos.fecha, tipoEvento: actual.candidato_para },
+      usuarioId,
+    );
+
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: esIniciacion ? 'candidato_iniciado' : 'candidato_afiliado',
+      entidad: 'hermano',
+      entidadId: id,
+      detalle: { nombre: actual.nombre_completo, fecha: datos.fecha, grado },
+    });
+  }, usuarioId);
+}
+
+/** El candidato desiste, o vuelve a serlo. No se borra: sus pagos lo siguen. */
+export async function cambiarCandidatura(
+  ctx: Contexto,
+  id: number,
+  desiste: boolean,
+  motivo?: string | undefined,
+): Promise<void> {
+  const usuarioId = ctx.sesion.usuario.id;
+
+  await enTransaccion(async (tx) => {
+    await consumirNonce(tx, ctx.nonce, ctx.sesion.idHash, 'candidato_estatus');
+    const fila = await tx.unaFila<{ nombre_completo: string }>(
+      `update hermano set estatus = $2, actualizado_por = $3
+        where id = $1 and estatus = $4
+        returning nombre_completo`,
+      [id, desiste ? 'desistio' : 'candidato', usuarioId, desiste ? 'candidato' : 'desistio'],
+    );
+    if (!fila) throw new ErrorDeNegocio('Ese candidato ya cambió de estatus.');
+    await registrarEn(tx, {
+      usuarioId,
+      idPeticion: ctx.idPeticion,
+      accion: desiste ? 'candidato_desistio' : 'candidato_retomado',
+      entidad: 'hermano',
+      entidadId: id,
+      detalle: { nombre: fila.nombre_completo, motivo: motivo ?? null },
     });
   }, usuarioId);
 }

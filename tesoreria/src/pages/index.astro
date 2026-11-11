@@ -18,6 +18,7 @@ import { formatoFechaCorta, formatoFechaLarga, hoyISO, nombrePeriodo, periodoAct
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
 import { NOMBRE_ESTADO_EGRESO, CLASE_ESTADO_EGRESO } from '@lib/datos/egresos';
+import { cuotasPorCobrar } from '@lib/datos/cuotas';
 
 const sesion = requerirSesion(Astro);
 const aviso = avisoDe(Astro.url.searchParams.get('ok'));
@@ -25,8 +26,19 @@ const aviso = avisoDe(Astro.url.searchParams.get('ok'));
 const ejercicio = await ejercicioVigente();
 const anio = ejercicio.anio;
 
-const [caja, capitas, faltantes, pendientes, porComprobar, cortes, mesAbierto, flujo, aplomo, evidencias] =
-  await Promise.all([
+const [
+  caja,
+  capitas,
+  faltantes,
+  pendientes,
+  porComprobar,
+  cortes,
+  mesAbierto,
+  flujo,
+  aplomo,
+  evidencias,
+  cuotas,
+] = await Promise.all([
     saldoDeCaja(anio),
     resumenCapitas(anio),
     sinPlan(anio),
@@ -37,7 +49,10 @@ const [caja, capitas, faltantes, pendientes, porComprobar, cortes, mesAbierto, f
     flujoPorMes(anio),
     estadoAplomo(),
     pendientesDeEvidencia(),
+    cuotasPorCobrar(),
   ]);
+
+const porCobrarCuotas = cuotas.reduce((s, c) => s + c.saldo_centavos, 0);
 
 /* La barra de avance de cápitas: cobrado, vencido y lo que falta del año. */
 const capEsperado = Math.max(1, capitas?.esperado ?? 0);
@@ -149,6 +164,17 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
           documento(s) por adjuntar · <a href="/pendientes">atender</a>
+        </p>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Cuotas de grado</h2>
+        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
+          {formatoMXN(porCobrarCuotas)}
+        </p>
+        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
+          por cobrar a {new Set(cuotas.map((c) => c.hermano_id)).size} persona(s) ·{' '}
+          <a href="/hermanos#cuotas">ver</a>
         </p>
       </section>
 

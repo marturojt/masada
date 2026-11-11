@@ -1,0 +1,246 @@
+---
+/*
+ * Candidatos: las personas antes de su iniciación o afiliación. Ya mueven
+ * dinero (la logia aparta la fecha ante la Gran Tesorería y ellos cubren su
+ * cuota), pero todavía no tienen grado ni cápitas. El día de la ceremonia
+ * pasan al padrón desde su ficha.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { crearCandidato } from '@lib/casos/hermanos';
+import { emitirNonce } from '@lib/csrf';
+import { tarifaGradoVigente } from '@lib/datos/cuotas';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { listarCandidatos } from '@lib/datos/hermanos';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaCandidato } from '@lib/esquemas/hermano';
+import { formatoFechaCorta } from '@lib/fechas';
+import { avisoDe, procesarFormulario } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const ejercicio = await ejercicioVigente();
+
+const ETIQUETAS: Record<string, string> = {
+  nombre_completo: 'Nombre completo',
+  candidato_para: 'Candidato a',
+  fecha_programada: 'Fecha programada',
+  correo: 'Correo',
+  telefono: 'Teléfono',
+  notas: 'Notas',
+  cuota: 'Cuota que debe a la logia',
+};
+
+const [tarifaIniciacion, tarifaAfiliacion] = await Promise.all([
+  tarifaGradoVigente('iniciacion'),
+  tarifaGradoVigente('afiliacion'),
+]);
+
+let errores: Record<string, string> = {};
+let valores: Record<string, string> = {
+  candidato_para: 'iniciacion',
+  cuota: tarifaIniciacion ? aPesosTexto(tarifaIniciacion) : '',
+};
+let estado = 200;
+
+if (Astro.request.method === 'POST') {
+  const resultado = await procesarFormulario(Astro, {
+    esquema: esquemaCandidato,
+    proposito: 'candidato_nuevo',
+    sesion,
+  });
+  if (!resultado.ok) {
+    errores = resultado.errores;
+    valores = { ...valores, ...resultado.valores };
+    estado = resultado.estado;
+  } else {
+    try {
+      const id = await crearCandidato(
+        {
+          sesion,
+          nonce: resultado.nonce,
+          anio: ejercicio.anio,
+          idPeticion: Astro.locals.idPeticion,
+        },
+        resultado.datos,
+      );
+      return Astro.redirect(`/hermanos/candidatos/${id}?ok=candidato`, 303);
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      valores = { ...valores, ...resultado.valores };
+      estado = 422;
+    }
+  }
+}
+
+const candidatos = await listarCandidatos();
+const vigentes = candidatos.filter((c) => c.estatus === 'candidato');
+const desistieron = candidatos.filter((c) => c.estatus === 'desistio');
+const nonce = await emitirNonce(sesion.idHash, 'candidato_nuevo');
+
+const tarifas = [
+  tarifaIniciacion && `iniciación ${formatoMXN(tarifaIniciacion)}`,
+  tarifaAfiliacion && `afiliación ${formatoMXN(tarifaAfiliacion)}`,
+].filter(Boolean);
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo="Candidatos" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/hermanos">← Padrón</a></span>
+    <span>{vigentes.length} candidato(s)</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
+
+  <h1>Candidatos</h1>
+  <p class="apagado" style="max-width: 46rem;">
+    Quienes van a iniciarse o afiliarse. Todavía no tienen grado ni cápitas, pero ya
+    pueden tener su cuota por cobrar, sus pagos y el trámite de la Gran Tesorería a su
+    nombre. El día de la ceremonia pasan al padrón desde su ficha, con todo eso.
+  </p>
+
+  <div class="pila" style="margin-top: 1.25rem;">
+    <section class="tarjeta">
+      <h2>En proceso</h2>
+      {
+        vigentes.length === 0 ? (
+          <p class="apagado">Sin candidatos en proceso.</p>
+        ) : (
+          <div class="tabla-envoltura">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">A</th>
+                  <th scope="col">Fecha programada</th>
+                  <th scope="col" class="num">Debe de su cuota</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vigentes.map((c) => (
+                  <tr>
+                    <td>
+                      <a href={`/hermanos/candidatos/${c.id}`}>{c.nombre_completo}</a>
+                    </td>
+                    <td>{c.candidato_para === 'iniciacion' ? 'Iniciación' : 'Afiliación'}</td>
+                    <td>
+                      {c.fecha_programada ? formatoFechaCorta(c.fecha_programada) : (
+                        <span class="apagado">Sin fecha</span>
+                      )}
+                    </td>
+                    <td class="num">
+                      {c.saldo_cuotas_centavos > 0 ? (
+                        <strong>{formatoMXN(c.saldo_cuotas_centavos)}</strong>
+                      ) : (
+                        formatoMXN(0)
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </section>
+
+    <section class="tarjeta">
+      <h2>Alta de candidato</h2>
+      <div style="max-width: 28rem;">
+        <Formulario csrf={sesion.csrfToken} nonce={nonce}>
+          <Campo
+            nombre="nombre_completo"
+            etiqueta={ETIQUETAS.nombre_completo!}
+            valor={valores.nombre_completo}
+            error={errores.nombre_completo}
+            requerido
+            ayuda="Como irá en el padrón y en el cuadro cuando se inicie."
+          />
+          <Selector
+            nombre="candidato_para"
+            etiqueta={ETIQUETAS.candidato_para!}
+            opciones={[
+              { valor: 'iniciacion', texto: 'Iniciación' },
+              { valor: 'afiliacion', texto: 'Afiliación' },
+            ]}
+            valor={valores.candidato_para}
+            error={errores.candidato_para}
+            requerido
+          />
+          <Campo
+            nombre="fecha_programada"
+            etiqueta={ETIQUETAS.fecha_programada!}
+            tipo="date"
+            valor={valores.fecha_programada}
+            error={errores.fecha_programada}
+          />
+          <Campo
+            nombre="cuota"
+            etiqueta={ETIQUETAS.cuota!}
+            valor={valores.cuota}
+            error={errores.cuota}
+            modoTeclado="decimal"
+            monto
+            ayuda={`Su cuota de iniciación o afiliación. En blanco no se registra deuda.${tarifas.length > 0 ? ` Tarifas vigentes: ${tarifas.join(', ')}.` : ''}`}
+          />
+          <Campo
+            nombre="correo"
+            etiqueta={ETIQUETAS.correo!}
+            tipo="email"
+            valor={valores.correo}
+            error={errores.correo}
+          />
+          <Campo
+            nombre="telefono"
+            etiqueta={ETIQUETAS.telefono!}
+            tipo="tel"
+            valor={valores.telefono}
+            error={errores.telefono}
+          />
+          <Campo
+            nombre="notas"
+            etiqueta={ETIQUETAS.notas!}
+            valor={valores.notas}
+            error={errores.notas}
+            largo
+            filas={2}
+          />
+          <div class="formulario__acciones">
+            <button class="btn btn--primary" type="submit">Dar de alta</button>
+          </div>
+        </Formulario>
+      </div>
+    </section>
+
+    {
+      desistieron.length > 0 && (
+        <section class="tarjeta">
+          <details>
+            <summary style="cursor: pointer;">
+              <h2 style="display: inline; margin: 0;">Desistieron ({desistieron.length})</h2>
+            </summary>
+            <ul style="margin-top: 0.75rem;">
+              {desistieron.map((c) => (
+                <li>
+                  <a href={`/hermanos/candidatos/${c.id}`}>{c.nombre_completo}</a>
+                  {c.saldo_cuotas_centavos > 0 && (
+                    <span class="apagado"> · debe {formatoMXN(c.saldo_cuotas_centavos)}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )
+    }
+  </div>
+</LayoutAdmin>

@@ -3,7 +3,9 @@
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
-import { listarHermanos, resumenPadron } from '@lib/datos/hermanos';
+import { listarCandidatos, listarHermanos, resumenPadron } from '@lib/datos/hermanos';
+import { NOMBRE_EVENTO_CUOTA, cuotasPorCobrar } from '@lib/datos/cuotas';
+import { formatoMXN } from '@lib/dinero';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { formatoFechaCorta } from '@lib/fechas';
 import { NOMBRE_GRADO, NOMBRE_GRADO_PLURAL, type Grado } from '@lib/tipos';
@@ -27,7 +29,12 @@ const grado = (['aprendiz', 'companero', 'maestro'] as const).includes(gradoCrud
   : undefined;
 
 const hermanos = await listarHermanos({ anio, estatus, grado });
-const resumen = await resumenPadron();
+const [resumen, candidatos, cuotas] = await Promise.all([
+  resumenPadron(),
+  listarCandidatos(),
+  cuotasPorCobrar(),
+]);
+const enProceso = candidatos.filter((c) => c.estatus === 'candidato').length;
 const totalActivos = resumen.reduce((suma, r) => suma + r.activos, 0);
 
 const conFiltro = (cambios: Record<string, string | undefined>): string => {
@@ -58,7 +65,10 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
 
   <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
     <h1>Padrón</h1>
-    <a class="btn btn--primary" href="/hermanos/nuevo">Alta de hermano</a>
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+      <a class="btn btn--primary" href="/hermanos/nuevo">Alta de hermano</a>
+      <a class="btn btn--ghost" href="/hermanos/candidatos">Candidatos ({enProceso})</a>
+    </div>
   </div>
 
   <p class="apagado" style="font-size: 0.85rem;">
@@ -148,6 +158,45 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
           </tbody>
         </table>
       </div>
+    )
+  }
+
+  {
+    cuotas.length > 0 && (
+      <section class="tarjeta" id="cuotas" style="margin-top: 1.5rem;">
+        <h2>Cuotas de grado por cobrar</h2>
+        <p class="apagado" style="font-size: 0.85rem;">
+          Lo que hermanos y candidatos deben a la logia por su iniciación, afiliación,
+          aumento o exaltación. Se salda capturando el ingreso de la cuota a su nombre.
+        </p>
+        <div class="tabla-envoltura">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Nombre</th>
+                <th scope="col">Cuota</th>
+                <th scope="col">Desde</th>
+                <th scope="col" class="num">Pagado</th>
+                <th scope="col" class="num">Debe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cuotas.map((c) => (
+                <tr>
+                  <td>
+                    <a href={`/hermanos/${c.hermano_id}#cuotas`}>{c.nombre_completo}</a>
+                    {c.hermano_estatus === 'candidato' && <span class="apagado"> · candidato</span>}
+                  </td>
+                  <td>{NOMBRE_EVENTO_CUOTA[c.tipo_evento]}</td>
+                  <td>{formatoFechaCorta(c.fecha)}</td>
+                  <td class="num">{formatoMXN(c.pagado_centavos)}</td>
+                  <td class="num"><strong>{formatoMXN(c.saldo_centavos)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     )
   }
 </LayoutAdmin>

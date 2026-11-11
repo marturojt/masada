@@ -73,7 +73,7 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 | Sección | Para qué |
 |---|---|
 | Tablero | Indicadores y gráficas: caja, flujo mensual, saldo al cierre, avance de cápitas |
-| Hermanos | Padrón, grados, cargos del cuadro, altas y bajas |
+| Hermanos | Padrón, candidatos, grados, cargos del cuadro, altas y bajas, cuotas de grado por cobrar |
 | Cápitas | Modalidad de cada hermano, pagos, quién está al corriente, exenciones |
 | Ingresos | Cuotas de grado del candidato, donativos |
 | Aportaciones | Aportaciones extraordinarias: monetarias con recibo y en especie con constancia |
@@ -95,6 +95,26 @@ logia, y hay que completar a mano las fechas reales de iniciación y el contacto
 3. Captura ingresos y egresos conforme ocurren.
 4. **Cierra cada mes** cuando ya no falte nada. Un mes cerrado deja de admitir
    capturas.
+
+### Candidatos y cuotas de grado
+
+Una persona entra al sistema como **candidato** antes de su iniciación o
+afiliación (Hermanos → Candidatos): sin grado, sin fecha de ingreso y sin
+cápitas, pero ya puede tener su cuota por cobrar, sus pagos y el trámite de la
+Gran Tesorería a su nombre (la logia suele pagar para apartar la fecha). El día
+de la ceremonia, desde su ficha, pasa a hermano activo (aprendiz si se inicia,
+con su grado si se afilia) y conserva todo lo que tenía, porque es la misma
+fila del padrón. Si desiste queda registrado, no se borra, y se puede retomar.
+Los candidatos no aparecen en el padrón, las cápitas ni el cuadro.
+
+La **cuota de grado por cobrar** (iniciación, afiliación, aumento de salario o
+exaltación) es lo que una persona debe a la logia cuando la logia ya pagó el
+trámite a la Gran Tesorería y ella no ha cubierto su parte. Se registra en su
+ficha (o al dar de alta al candidato) y se salda sola: cada ingreso del
+concepto de esa cuota a su nombre se le aplica en la base, en uno o varios
+abonos, aunque el pago se haya capturado antes que la cuota. Una cuota con
+pagos no se cancela; sin pagos la cancela el V∴M∴ con motivo. Lo que se debe
+se ve en la ficha, en el padrón y en el tablero.
 
 ### Las tres modalidades de cápita
 

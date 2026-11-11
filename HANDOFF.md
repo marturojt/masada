@@ -197,7 +197,15 @@ queda como ambiente de desarrollo.
       primer ejercicio). Hoy está abierta a propósito, nivel V∴M∴.
 - [ ] **Comentarios de Arturo sobre las pestañas**: se atendieron el 6 (egresos)
       y el 7 (Gran Tesorería). Seguir con los que siguen.
-- [ ] **Desplegar el ajuste de cápitas** (migración 027): clase de trámite
+- [ ] **Desplegar candidatos y cuotas de grado** (migración 028): candidatos en
+      el padrón como etapa previa (sin grado, fecha de ingreso ni cápitas) que
+      pasan a hermano el día de su ceremonia; cuotas de grado por cobrar que se
+      saldan solas con los ingresos de su concepto. Exige `npm run migrar`.
+      Después de desplegar, el caso de Ricardo Acosta Monarrez (iniciado el
+      11 de mayo de 2026 con Diego Joseph y Mauricio Homer): alta como hermano
+      iniciado, cuota de iniciación por cobrar de 4,500 desde su ficha, su
+      trámite de iniciación en GT con su recibo individual y su egreso.
+- [x] **Desplegar el ajuste de cápitas** (migración 027): clase de trámite
       propia con los meses que cubre; los trámites "otro" llamados "Ajuste de
       cápitas" se reclasifican solos (caso GT-2026-0011 de Cristian Colín,
       recibo Aju-124396). Corrección de obligaciones desde su ficha (meses,

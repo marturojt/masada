@@ -5,6 +5,8 @@
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Campo from '@componentes/Campo.astro';
+import CuotasGrado from '@componentes/CuotasGrado.astro';
+import { ACCIONES_CUOTA, atenderAccionCuota } from '@lib/acciones-cuotas';
 import Formulario from '@componentes/Formulario.astro';
 import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
@@ -17,7 +19,7 @@ import { actualizarRegistroExterno } from '@lib/casos/gt';
 import { NOMBRE_ESTATUS_EXTERNO, registrosExternosDe } from '@lib/datos/gt';
 import { esquemaRegistroExterno } from '@lib/esquemas/gt';
 import { ejercicioVigente } from '@lib/datos/ejercicios';
-import { historialGrados, obtenerHermano } from '@lib/datos/hermanos';
+import { estatusDe, historialGrados, obtenerHermano } from '@lib/datos/hermanos';
 import { emitirNonce } from '@lib/csrf';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaVacio } from '@lib/esquemas/comunes';
@@ -38,11 +40,23 @@ const sesion = requerirSesion(Astro);
 const id = Number(Astro.params.id);
 if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
 
+/* Un candidato todavía no es hermano: tiene su propia ficha. */
+const estatusPersona = await estatusDe(id);
+if (estatusPersona === 'candidato' || estatusPersona === 'desistio') {
+  return Astro.redirect(`/hermanos/candidatos/${id}`, 303);
+}
+
 const ejercicio = await ejercicioVigente();
 
 let errores: Record<string, string> = {};
 let estado = 200;
-let seccion: 'baja' | 'grado' | 'registro_gran_secretaria' | 'registro_gran_tesoreria' | null = null;
+let seccion:
+  | 'baja'
+  | 'grado'
+  | 'cuota'
+  | 'registro_gran_secretaria'
+  | 'registro_gran_tesoreria'
+  | null = null;
 
 if (Astro.request.method === 'POST') {
   const entrada = await leerFormulario(Astro);
@@ -58,7 +72,13 @@ if (Astro.request.method === 'POST') {
     };
 
     try {
-      if (entrada.accion === 'baja') {
+      if (ACCIONES_CUOTA.includes(entrada.accion as (typeof ACCIONES_CUOTA)[number])) {
+        seccion = 'cuota';
+        const r = await atenderAccionCuota(entrada, sesion, id, Astro.locals.idPeticion);
+        if (r.ok) return Astro.redirect(`/hermanos/${id}?ok=cuota#cuotas`, 303);
+        errores = r.errores;
+        estado = r.estado;
+      } else if (entrada.accion === 'baja') {
         seccion = 'baja';
         const r = await validar(entrada, {
           esquema: esquemaBaja,
@@ -163,6 +183,13 @@ const ORGANISMOS = [
     nonce: nonceRegistroGT,
   },
 ];
+
+/* La cuota más probable es la de su ceremonia más reciente. */
+const CUOTA_DE_SU_GRADO = {
+  aprendiz: 'iniciacion',
+  companero: 'aumento_salario',
+  maestro: 'exaltacion',
+} as const;
 
 const opcionesEvento: Opcion[] = Object.entries(NOMBRE_EVENTO_GRADO).map(([valor, texto]) => ({
   valor,
@@ -275,6 +302,14 @@ Astro.response.status = estado;
         </table>
       </div>
     </section>
+
+    <CuotasGrado
+      hermanoId={id}
+      sesion={sesion}
+      errores={errores}
+      abierto={seccion === 'cuota'}
+      eventoSugerido={CUOTA_DE_SU_GRADO[hermano.grado]}
+    />
 
     <section class="tarjeta">
       <h2>Registros externos</h2>

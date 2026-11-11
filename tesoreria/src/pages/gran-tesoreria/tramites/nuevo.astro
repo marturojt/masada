@@ -16,7 +16,7 @@ import { capturarObligacion } from '@lib/casos/gt';
 import { emitirNonce } from '@lib/csrf';
 import { NOMBRE_CLASE_TRAMITE, estadoAplomo, tarifasGTVigentes } from '@lib/datos/gt';
 import { formatoMXN } from '@lib/dinero';
-import { hermanosActivos } from '@lib/datos/hermanos';
+import { personasParaCobro } from '@lib/datos/hermanos';
 import { ErrorDeNegocio } from '@lib/errores';
 import { esquemaTramite } from '@lib/esquemas/gt';
 import { formatoFechaCorta, hoyISO, nombrePeriodo } from '@lib/fechas';
@@ -39,7 +39,8 @@ const ETIQUETAS: Record<string, string> = {
 };
 
 const [hermanos, aplomo, tarifas] = await Promise.all([
-  hermanosActivos(),
+  /* Por un candidato se aparta fecha antes de su ceremonia. */
+  personasParaCobro(),
   estadoAplomo(),
   tarifasGTVigentes(),
 ]);
@@ -112,7 +113,7 @@ const nonce = await emitirNonce(sesion.idHash, 'gt_obligacion');
 const opcionesHermano: Opcion[] = hermanos.map((h) => ({
   valor: String(h.id),
   texto: h.nombre_completo,
-  grupo: NOMBRE_GRADO_PLURAL[h.grado],
+  grupo: h.grado ? NOMBRE_GRADO_PLURAL[h.grado] : 'Candidatos',
 }));
 const opcionesClase: Opcion[] = Object.entries(NOMBRE_CLASE_TRAMITE).map(([valor, texto]) => ({
   valor,

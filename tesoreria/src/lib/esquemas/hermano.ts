@@ -4,6 +4,9 @@ import {
   fechaISOOpcional,
   grado,
   idOpcional,
+  idPositivo,
+  montoEnCentavos,
+  montoEnCentavosOpcional,
   notas,
   opcionDe,
   texto,
@@ -138,3 +141,44 @@ export const NOMBRE_EVENTO_GRADO: Record<string, string> = {
   afiliacion: 'Afiliación',
   regularizacion: 'Regularización',
 };
+
+/*
+ * Candidato: la persona antes de su iniciación o afiliación. La cuota es lo
+ * que debe a la logia; en blanco no se registra deuda.
+ */
+export const esquemaCandidato = z.object({
+  nombre_completo: texto('El nombre completo', 120),
+  candidato_para: opcionDe(['iniciacion', 'afiliacion'], 'Elige si es a iniciación o a afiliación.'),
+  fecha_programada: fechaISOOpcional('La fecha programada'),
+  correo: textoOpcional('El correo', 120).refine(
+    (v) => v === undefined || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+    'El correo no tiene un formato válido.',
+  ),
+  telefono: textoOpcional('El teléfono', 40),
+  notas: notas(2000),
+  cuota: montoEnCentavosOpcional('La cuota'),
+});
+
+/** El día de la ceremonia: el candidato pasa a hermano. */
+export const esquemaIngresoCandidato = z.object({
+  fecha: fechaISO('La fecha de la ceremonia'),
+  /* Solo en afiliación: el grado que trae de su logia. */
+  grado: grado.optional(),
+});
+
+/** Cuota de grado por cobrar. */
+export const esquemaCuotaGrado = z.object({
+  tipo_evento: opcionDe(
+    ['iniciacion', 'afiliacion', 'aumento_salario', 'exaltacion'],
+    'Elige de qué es la cuota.',
+  ),
+  monto: montoEnCentavos('El monto'),
+  fecha: fechaISO('La fecha'),
+  notas: textoOpcional('Las notas', 300),
+});
+
+/** Cancelar una cuota capturada por error. */
+export const esquemaCancelarCuota = z.object({
+  cuota_id: idPositivo('La cuota'),
+  motivo: texto('El motivo', 300),
+});

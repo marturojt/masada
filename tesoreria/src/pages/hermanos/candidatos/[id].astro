@@ -1,0 +1,248 @@
+---
+/*
+ * Ficha del candidato: sus datos, su cuota y el paso al padrón el día de la
+ * ceremonia. Si desiste, queda registrado; no se borra.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Campo from '@componentes/Campo.astro';
+import CuotasGrado from '@componentes/CuotasGrado.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { ACCIONES_CUOTA, atenderAccionCuota } from '@lib/acciones-cuotas';
+import { cambiarCandidatura, ingresarCandidato } from '@lib/casos/hermanos';
+import { emitirNonce } from '@lib/csrf';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { obtenerCandidato } from '@lib/datos/hermanos';
+import { ErrorDeNegocio } from '@lib/errores';
+import { esquemaVacio } from '@lib/esquemas/comunes';
+import { esquemaIngresoCandidato } from '@lib/esquemas/hermano';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { avisoDe, leerFormulario, validar } from '@lib/formulario';
+import { requerirSesion } from '@lib/sesion';
+import { NOMBRE_GRADO, type Opcion } from '@lib/tipos';
+
+const sesion = requerirSesion(Astro);
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { status: 404 });
+
+const ejercicio = await ejercicioVigente();
+
+let errores: Record<string, string> = {};
+let estado = 200;
+let seccion: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const entrada = await leerFormulario(Astro);
+  if (!entrada.ok) {
+    errores = entrada.errores;
+    estado = entrada.estado;
+  } else {
+    seccion = entrada.accion;
+    const contexto = { sesion, anio: ejercicio.anio, idPeticion: Astro.locals.idPeticion };
+    try {
+      if (ACCIONES_CUOTA.includes(entrada.accion as (typeof ACCIONES_CUOTA)[number])) {
+        seccion = 'cuota';
+        const r = await atenderAccionCuota(entrada, sesion, id, Astro.locals.idPeticion);
+        if (r.ok) return Astro.redirect(`/hermanos/candidatos/${id}?ok=cuota#cuotas`, 303);
+        errores = r.errores;
+        estado = r.estado;
+      } else if (entrada.accion === 'ingresar') {
+        const r = await validar(entrada, {
+          esquema: esquemaIngresoCandidato,
+          proposito: 'candidato_ingreso',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await ingresarCandidato({ ...contexto, nonce: r.nonce }, id, r.datos);
+          return Astro.redirect(`/hermanos/${id}?ok=iniciado`, 303);
+        }
+      } else if (entrada.accion === 'desistio' || entrada.accion === 'retomar') {
+        const r = await validar(entrada, {
+          esquema: esquemaVacio,
+          proposito: 'candidato_estatus',
+          sesion,
+        });
+        if (!r.ok) {
+          errores = r.errores;
+          estado = r.estado;
+        } else {
+          await cambiarCandidatura(
+            { ...contexto, nonce: r.nonce },
+            id,
+            entrada.accion === 'desistio',
+            entrada.crudos.motivo?.trim() || undefined,
+          );
+          return Astro.redirect(`/hermanos/candidatos/${id}?ok=hermano`, 303);
+        }
+      } else {
+        errores = { _general: 'Acción no reconocida.' };
+        estado = 400;
+      }
+    } catch (error) {
+      if (!(error instanceof ErrorDeNegocio)) throw error;
+      errores = { [error.campo ?? '_general']: error.message };
+      estado = 422;
+    }
+  }
+}
+
+const candidato = await obtenerCandidato(id);
+/* Si ya se inició, su lugar es la ficha del hermano. */
+if (!candidato) return Astro.redirect(`/hermanos/${id}`, 303);
+
+const aviso = avisoDe(Astro.url.searchParams.get('ok'));
+const esIniciacion = candidato.candidato_para === 'iniciacion';
+const enProceso = candidato.estatus === 'candidato';
+
+const [nonceIngreso, nonceEstatus] = await Promise.all([
+  enProceso ? emitirNonce(sesion.idHash, 'candidato_ingreso') : Promise.resolve(''),
+  emitirNonce(sesion.idHash, 'candidato_estatus'),
+]);
+
+const opcionesGrado: Opcion[] = (['aprendiz', 'companero', 'maestro'] as const).map((g) => ({
+  valor: g,
+  texto: NOMBRE_GRADO[g],
+}));
+
+Astro.response.status = estado;
+---
+
+<LayoutAdmin titulo={candidato.nombre_completo} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/hermanos/candidatos">← Candidatos</a></span>
+    <span>Candidato a {esIniciacion ? 'iniciación' : 'afiliación'}</span>
+  </div>
+
+  {aviso && <div class="aviso">{aviso}</div>}
+  {seccion !== 'cuota' && <ResumenErrores errores={errores} />}
+
+  <h1 style="margin-bottom: 0.2rem;">{candidato.nombre_completo}</h1>
+  <p class="apagado" style="margin: 0;">
+    Candidato a {esIniciacion ? 'iniciación' : 'afiliación'}
+    {!enProceso && (
+      <>
+        {' '}
+        <span class="insignia insignia--alerta">Desistió</span>
+      </>
+    )}
+  </p>
+
+  <div class="pila" style="margin-top: 1.5rem;">
+    <section class="tarjeta">
+      <h2>Datos</h2>
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <tbody>
+            <tr>
+              <th scope="row">Fecha programada</th>
+              <td>
+                {candidato.fecha_programada ? formatoFechaCorta(candidato.fecha_programada) : (
+                  <span class="apagado">Sin fecha</span>
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Correo</th>
+              <td>{candidato.correo ?? <span class="apagado">Sin dato</span>}</td>
+            </tr>
+            <tr>
+              <th scope="row">Teléfono</th>
+              <td>{candidato.telefono ?? <span class="apagado">Sin dato</span>}</td>
+            </tr>
+            {candidato.notas && (
+              <tr>
+                <th scope="row">Notas</th>
+                <td style="white-space: pre-line;">{candidato.notas}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+        El trámite ante la Gran Tesorería (para apartar la fecha) se captura en
+        <a href="/gran-tesoreria/tramites/nuevo">Capturar trámite</a>, a su nombre.
+      </p>
+    </section>
+
+    <CuotasGrado
+      hermanoId={id}
+      sesion={sesion}
+      errores={errores}
+      abierto={seccion === 'cuota'}
+      eventoSugerido={candidato.candidato_para}
+      admiteNuevas={enProceso}
+    />
+
+    {
+      enProceso && (
+        <section class="tarjeta">
+          <h2>{esIniciacion ? 'Registrar su iniciación' : 'Registrar su afiliación'}</h2>
+          <p class="apagado" style="font-size: 0.85rem;">
+            Cuando la ceremonia ya pasó. Pasa al padrón como hermano activo
+            {esIniciacion ? ' con grado de aprendiz' : ' con el grado que trae de su logia'},
+            con esa fecha de ingreso, y conserva su cuota, sus pagos y su trámite GT.
+            Después se le asigna su modalidad en Cápitas.
+          </p>
+          <div style="max-width: 26rem;">
+            <Formulario csrf={sesion.csrfToken} nonce={nonceIngreso} accionInterna="ingresar">
+              <Campo
+                nombre="fecha"
+                etiqueta="Fecha de la ceremonia"
+                tipo="date"
+                valor={candidato.fecha_programada ?? hoyISO()}
+                error={seccion === 'ingresar' ? errores.fecha : undefined}
+                requerido
+              />
+              {!esIniciacion && (
+                <Selector
+                  nombre="grado"
+                  etiqueta="Grado con el que llega"
+                  opciones={opcionesGrado}
+                  valor="maestro"
+                  error={seccion === 'ingresar' ? errores.grado : undefined}
+                  requerido
+                />
+              )}
+              <div class="formulario__acciones">
+                <button class="btn btn--primary" type="submit">
+                  {esIniciacion ? 'Registrar iniciación' : 'Registrar afiliación'}
+                </button>
+              </div>
+            </Formulario>
+          </div>
+        </section>
+      )
+    }
+
+    <section class="tarjeta">
+      {
+        enProceso ? (
+          <details open={seccion === 'desistio'}>
+            <summary style="cursor: pointer;">El candidato desistió</summary>
+            <div style="margin-top: 0.75rem; max-width: 26rem;">
+              <p class="apagado" style="font-size: 0.85rem;">
+                Queda registrado y sale de la lista de candidatos. No se borra: lo que pagó y
+                lo que debe siguen a su nombre. Si regresa, se retoma.
+              </p>
+              <Formulario csrf={sesion.csrfToken} nonce={nonceEstatus} accionInterna="desistio">
+                <Campo nombre="motivo" etiqueta="Motivo" />
+                <button class="btn btn--ghost" type="submit">Registrar que desistió</button>
+              </Formulario>
+            </div>
+          </details>
+        ) : (
+          <Formulario csrf={sesion.csrfToken} nonce={nonceEstatus} accionInterna="retomar">
+            <p class="apagado" style="font-size: 0.85rem;">
+              Si el candidato regresa, vuelve a la lista de candidatos con todo lo que tenía.
+            </p>
+            <button class="btn btn--primary" type="submit">Retomar candidatura</button>
+          </Formulario>
+        )
+      }
+    </section>
+  </div>
+</LayoutAdmin>

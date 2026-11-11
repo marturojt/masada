@@ -19,6 +19,10 @@ if (!Number.isInteger(id) || id <= 0) return new Response('No encontrado', { sta
 
 const hermano = await obtenerHermano(id);
 if (!hermano) return new Response('No encontrado', { status: 404 });
+/* Un candidato se edita desde su propia ficha, sin grado ni fecha de ingreso. */
+if (hermano.estatus === 'candidato' || hermano.estatus === 'desistio') {
+  return Astro.redirect(`/hermanos/candidatos/${id}`, 303);
+}
 
 const ejercicio = await ejercicioVigente();
 const cargos = await listarCargos();

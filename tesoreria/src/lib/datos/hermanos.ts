@@ -13,7 +13,11 @@ export interface HermanoFila {
   motivo_ingreso: string;
   fecha_iniciacion: string | null;
   fecha_afiliacion: string | null;
-  estatus: 'activo' | 'baja';
+  /*
+   * Las consultas del padrón solo traen activo y baja; candidato y desistio
+   * viven en su propia lista (listarCandidatos), sin grado ni fecha de ingreso.
+   */
+  estatus: 'activo' | 'baja' | 'candidato' | 'desistio';
   fecha_baja: string | null;
   motivo_baja: string | null;
   correo: string | null;
@@ -44,6 +48,9 @@ export async function listarHermanos(filtro: FiltroPadron): Promise<HermanoLista
   if (filtro.estatus && filtro.estatus !== 'todos') {
     params.push(filtro.estatus);
     condiciones.push(`h.estatus = $${params.length}`);
+  } else {
+    /* "Todos" es el padrón: activos y bajas. Los candidatos tienen su lista. */
+    condiciones.push(`h.estatus in ('activo', 'baja')`);
   }
   if (filtro.grado) {
     params.push(filtro.grado);
@@ -210,6 +217,98 @@ export const resumenPadron = (): Promise<
             count(*) filter (where estatus = 'activo')::int as activos,
             count(*) filter (where estatus = 'baja')::int as bajas
        from hermano
+      where estatus in ('activo', 'baja')
       group by grado
       order by grado desc`,
   );
+
+// ── Candidatos ───────────────────────────────────────────────────────────────
+
+export type CandidatoPara = 'iniciacion' | 'afiliacion';
+
+export interface CandidatoFila {
+  id: number;
+  nombre_completo: string;
+  estatus: 'candidato' | 'desistio';
+  candidato_para: CandidatoPara;
+  fecha_programada: string | null;
+  correo: string | null;
+  telefono: string | null;
+  notas: string | null;
+  creado_en: string;
+  /** Lo que debe de cuotas de grado vigentes. */
+  saldo_cuotas_centavos: number;
+}
+
+const COLUMNAS_CANDIDATO = `h.id, h.nombre_completo, h.estatus, h.candidato_para,
+       h.fecha_programada::text, h.correo, h.telefono, h.notas, h.creado_en::text,
+       coalesce((select sum(s.saldo_centavos) from v_cuota_grado_saldo s
+                  where s.hermano_id = h.id and s.estatus = 'vigente'), 0)::int
+         as saldo_cuotas_centavos`;
+
+export const listarCandidatos = (): Promise<CandidatoFila[]> =>
+  consulta<CandidatoFila>(
+    `select ${COLUMNAS_CANDIDATO}
+       from hermano h
+      where h.estatus in ('candidato', 'desistio')
+      order by h.estatus, h.fecha_programada nulls last, h.nombre_completo`,
+  );
+
+export const obtenerCandidato = (id: number): Promise<CandidatoFila | null> =>
+  unaFila<CandidatoFila>(
+    `select ${COLUMNAS_CANDIDATO}
+       from hermano h
+      where h.id = $1 and h.estatus in ('candidato', 'desistio')`,
+    [id],
+  );
+
+/** Estatus de una persona del padrón, para decidir a qué ficha mandarla. */
+export const estatusDe = async (id: number): Promise<HermanoFila['estatus'] | null> =>
+  (await unaFila<{ estatus: HermanoFila['estatus'] }>('select estatus from hermano where id = $1', [id]))
+    ?.estatus ?? null;
+
+/**
+ * Quienes pueden pagar o tener un trámite: los hermanos activos y los
+ * candidatos, que pagan su cuota y por quienes se aparta fecha antes de la
+ * ceremonia. El grupo distingue unos de otros en el selector.
+ */
+export const personasParaCobro = (): Promise<
+  { id: number; nombre_completo: string; grado: Grado | null }[]
+> =>
+  consulta(
+    `select id, nombre_completo, grado
+       from hermano
+      where estatus in ('activo', 'candidato')
+      order by grado desc nulls last, nombre_completo`,
+  );
+
+export async function insertarCandidato(
+  tx: Tx,
+  datos: {
+    nombre_completo: string;
+    candidato_para: CandidatoPara;
+    fecha_programada?: string | undefined;
+    correo?: string | undefined;
+    telefono?: string | undefined;
+    notas?: string | undefined;
+  },
+  usuarioId: number,
+): Promise<number> {
+  const fila = await tx.laFila<{ id: number }>(
+    `insert into hermano
+       (nombre_completo, estatus, candidato_para, motivo_ingreso, fecha_programada,
+        correo, telefono, notas, creado_por, actualizado_por)
+     values ($1, 'candidato', $2, $2, $3, $4, $5, $6, $7, $7)
+     returning id`,
+    [
+      datos.nombre_completo,
+      datos.candidato_para,
+      datos.fecha_programada ?? null,
+      datos.correo ?? null,
+      datos.telefono ?? null,
+      datos.notas ?? null,
+      usuarioId,
+    ],
+  );
+  return fila.id;
+}

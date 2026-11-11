@@ -1,0 +1,192 @@
+---
+/*
+ * Cuotas de grado de una persona: lo que debe por su iniciación, afiliación,
+ * aumento o exaltación, lo que ha pagado y lo que le falta. Los pagos se
+ * capturan en Ingresos con el concepto de la cuota y se aplican solos.
+ */
+import Campo from '@componentes/Campo.astro';
+import Formulario from '@componentes/Formulario.astro';
+import ResumenErrores from '@componentes/ResumenErrores.astro';
+import Selector from '@componentes/Selector.astro';
+import { emitirNonce } from '@lib/csrf';
+import { NOMBRE_EVENTO_CUOTA, cuotasDe, tarifaGradoVigente, type EventoCuota } from '@lib/datos/cuotas';
+import { aPesosTexto, formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, hoyISO } from '@lib/fechas';
+import { esVM, type Sesion } from '@lib/sesion';
+import type { Opcion } from '@lib/tipos';
+
+interface Props {
+  hermanoId: number;
+  sesion: Sesion;
+  /** Errores de la última acción de cuotas, si la hubo. */
+  errores?: Record<string, string>;
+  abierto?: boolean;
+  /** Evento que se propone al registrar una cuota nueva. */
+  eventoSugerido?: EventoCuota;
+  /** Un candidato que desistió ya no recibe cuotas nuevas. */
+  admiteNuevas?: boolean;
+}
+
+const {
+  hermanoId,
+  sesion,
+  errores = {},
+  abierto = false,
+  eventoSugerido = 'iniciacion',
+  admiteNuevas = true,
+} = Astro.props;
+
+const cuotas = await cuotasDe(hermanoId);
+const soyVM = esVM(sesion);
+const saldo = cuotas
+  .filter((c) => c.estatus === 'vigente')
+  .reduce((s, c) => s + c.saldo_centavos, 0);
+const tarifa = await tarifaGradoVigente(eventoSugerido);
+
+const nonceCuota = admiteNuevas ? await emitirNonce(sesion.idHash, 'cuota_grado') : '';
+const noncesCancelar = new Map<number, string>();
+if (soyVM) {
+  for (const c of cuotas.filter((x) => x.estatus === 'vigente' && x.pagado_centavos === 0)) {
+    noncesCancelar.set(c.id, await emitirNonce(sesion.idHash, 'cuota_grado_cancelar'));
+  }
+}
+
+const opcionesEvento: Opcion[] = (Object.entries(NOMBRE_EVENTO_CUOTA) as [string, string][]).map(
+  ([valor, texto]) => ({ valor, texto }),
+);
+---
+
+<section class="tarjeta" id="cuotas">
+  <h2>Cuotas de grado</h2>
+  <p class="apagado" style="font-size: 0.85rem;">
+    Lo que debe a la logia por su iniciación, afiliación, aumento de salario o exaltación.
+    Los pagos se capturan en <a href="/ingresos/nuevo">Ingresos</a> con el concepto de la
+    cuota y a su nombre: se aplican solos, en uno o varios abonos.
+  </p>
+  {abierto && <ResumenErrores errores={errores} />}
+
+  {
+    cuotas.length === 0 ? (
+      <p class="apagado">Sin cuotas por cobrar registradas.</p>
+    ) : (
+      <div class="tabla-envoltura">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th scope="col">Cuota</th>
+              <th scope="col">Desde</th>
+              <th scope="col" class="num">Monto</th>
+              <th scope="col" class="num">Pagado</th>
+              <th scope="col" class="num">Debe</th>
+              <th scope="col">Notas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cuotas.map((c) => (
+              <tr>
+                <td>
+                  {NOMBRE_EVENTO_CUOTA[c.tipo_evento]}
+                  {c.estatus === 'cancelado' && (
+                    <>
+                      {' '}
+                      <span class="insignia">Cancelada</span>
+                    </>
+                  )}
+                  {c.estatus === 'vigente' && c.saldo_centavos === 0 && (
+                    <>
+                      {' '}
+                      <span class="insignia insignia--ok">Pagada</span>
+                    </>
+                  )}
+                </td>
+                <td>{formatoFechaCorta(c.fecha)}</td>
+                <td class="num">{formatoMXN(c.monto_centavos)}</td>
+                <td class="num">{formatoMXN(c.pagado_centavos)}</td>
+                <td class="num">
+                  {c.estatus === 'vigente' ? <strong>{formatoMXN(c.saldo_centavos)}</strong> : '—'}
+                </td>
+                <td class="apagado" style="font-size: 0.85rem;">
+                  {c.motivo_cancelacion ?? c.notas ?? ''}
+                  {noncesCancelar.has(c.id) && (
+                    <details>
+                      <summary style="cursor: pointer;">Cancelar</summary>
+                      <Formulario
+                        csrf={sesion.csrfToken}
+                        nonce={noncesCancelar.get(c.id)!}
+                        accionInterna="cuota_cancelar"
+                      >
+                        <input type="hidden" name="cuota_id" value={String(c.id)} />
+                        <Campo nombre="motivo" etiqueta="Motivo" requerido />
+                        <button class="btn btn--ghost" type="submit">Cancelar cuota</button>
+                      </Formulario>
+                    </details>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {saldo > 0 && (
+            <tfoot>
+              <tr>
+                <td colspan="4">Debe en total</td>
+                <td class="num"><strong>{formatoMXN(saldo)}</strong></td>
+                <td></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    )
+  }
+
+  {
+    admiteNuevas && (
+      <details style="margin-top: 1rem;" open={abierto}>
+        <summary style="cursor: pointer;">Registrar cuota por cobrar</summary>
+        <div style="margin-top: 0.75rem; max-width: 26rem;">
+          <p class="apagado" style="font-size: 0.85rem;">
+            Cuando la logia ya pagó el trámite a la Gran Tesorería y la persona todavía no
+            cubre su parte. Si ya hay pagos de esa cuota, se aplican solos.
+          </p>
+          <Formulario csrf={sesion.csrfToken} nonce={nonceCuota} accionInterna="cuota">
+            <Selector
+              nombre="tipo_evento"
+              etiqueta="Cuota de"
+              opciones={opcionesEvento}
+              valor={eventoSugerido}
+              error={abierto ? errores.tipo_evento : undefined}
+              requerido
+            />
+            <Campo
+              nombre="monto"
+              etiqueta="Monto"
+              valor={tarifa ? aPesosTexto(tarifa) : ''}
+              error={abierto ? errores.monto : undefined}
+              modoTeclado="decimal"
+              monto
+              requerido
+              ayuda={tarifa ? `Tarifa vigente de ${NOMBRE_EVENTO_CUOTA[eventoSugerido].toLowerCase()}: ${formatoMXN(tarifa)}. Ajústalo si se acordó otro monto.` : 'Lo que debe a la logia por esta cuota.'}
+            />
+            <Campo
+              nombre="fecha"
+              etiqueta="Fecha"
+              tipo="date"
+              valor={hoyISO()}
+              error={abierto ? errores.fecha : undefined}
+              requerido
+              ayuda="Desde cuándo la debe, por ejemplo el día de su ceremonia."
+            />
+            <Campo
+              nombre="notas"
+              etiqueta="Notas"
+              error={abierto ? errores.notas : undefined}
+            />
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">Registrar cuota</button>
+            </div>
+          </Formulario>
+        </div>
+      </details>
+    )
+  }
+</section>
