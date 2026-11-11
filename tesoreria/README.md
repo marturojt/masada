@@ -160,7 +160,8 @@ que no han llegado.
 
 En la matriz y el estado por hermano, la **modalidad cuenta su historia al pasar
 el cursor** (quién autorizó una promoción y con qué motivo, o qué pasó en un plan
-convertido, que además lleva su insignia "Plan ajustado"), y un mes vencido con
+convertido, que además lleva su insignia "Plan ajustado"; esa insignia solo
+marca un cambio real de modalidad, no un recálculo que deja la misma), y un mes vencido con
 pago parcial se pinta ámbar, no rojo: hay pago, falta parte. Las gráficas del
 tablero son SVG dibujado en el servidor, sin JavaScript, con paleta validada
 para el tema oscuro.
