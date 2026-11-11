@@ -41,7 +41,7 @@ export async function actualizarApertura(
     );
     if (cerrados.total > 0) {
       throw new ErrorDeNegocio(
-        `El ejercicio ${anio} ya tiene ${cerrados.total} mes(es) cerrados. Cambiar el ` +
+        `El ejercicio ${anio} ya tiene ${cerrados.total} ${cerrados.total === 1 ? 'mes cerrado' : 'meses cerrados'}. Cambiar el ` +
           'saldo de apertura movería todos los saldos ya leídos en tenida: primero hay ' +
           'que reabrir los cortes.',
         'saldo_apertura',

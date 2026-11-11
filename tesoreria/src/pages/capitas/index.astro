@@ -6,10 +6,12 @@ import MatrizCapitas from '@componentes/MatrizCapitas.astro';
 import {
   NOMBRE_MODALIDAD,
   adeudosDelAnio,
+  cargosVencidos,
   estadosDeCuenta,
   planesVigentes,
   resumenCapitas,
   sinPlan,
+  textoSituacion,
 } from '@lib/datos/capitas';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { formatoMXN } from '@lib/dinero';
@@ -136,7 +138,7 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                         <span class="insignia insignia--ok">Al corriente</span>
                       ) : (
                         <span class="insignia insignia--alerta">
-                          Debe {e.meses_vencidos} mes(es)
+                          {textoSituacion(e.modalidad, e.meses_vencidos)}
                         </span>
                       )}
                       {e.saldo_a_favor_centavos > 0 && (
@@ -173,8 +175,8 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
               {conAdeudo.map((e) => (
                 <li>
                   <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>:{' '}
-                  {formatoMXN(e.vencido_centavos)} vencido(s)
-                  {e.meses_vencidos > 0 && <> · {e.meses_vencidos} mes(es)</>}
+                  {formatoMXN(e.vencido_centavos)} vencido
+                  {e.meses_vencidos > 0 && <> · {cargosVencidos(e.modalidad, e.meses_vencidos)}</>}
                   {e.por_vencer_centavos > 0 && (
                     <span class="apagado"> · más {formatoMXN(e.por_vencer_centavos)} por vencer en el año</span>
                   )}

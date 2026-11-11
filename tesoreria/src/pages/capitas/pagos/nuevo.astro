@@ -10,7 +10,7 @@ import ResumenErrores from '@componentes/ResumenErrores.astro';
 import Selector from '@componentes/Selector.astro';
 import { registrarPagoCapita } from '@lib/casos/capitas';
 import { emitirNonce } from '@lib/csrf';
-import { estadosDeCuenta } from '@lib/datos/capitas';
+import { cargosVencidosConAdjetivo, estadosDeCuenta } from '@lib/datos/capitas';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { formatoMXN } from '@lib/dinero';
 import { ErrorDeNegocio } from '@lib/errores';
@@ -108,7 +108,7 @@ Astro.response.status = estado;
       <div class="aviso">
         {elegido.nombre_completo}:{' '}
         {elegido.adeudo_centavos > 0
-          ? `debe ${formatoMXN(elegido.adeudo_centavos)} de ${elegido.meses_vencidos} mes(es) vencido(s)`
+          ? `debe ${formatoMXN(elegido.adeudo_centavos)} de ${cargosVencidosConAdjetivo(elegido.modalidad, elegido.meses_vencidos)}`
           : 'está al corriente'}
         {elegido.saldo_a_favor_centavos > 0 && (
           <> · saldo a favor {formatoMXN(elegido.saldo_a_favor_centavos)}</>

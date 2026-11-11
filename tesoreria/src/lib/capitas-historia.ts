@@ -27,7 +27,7 @@ export function historiaDelPlan(plan: PlanConHistoria | undefined): string {
   } else if (plan.modalidad === 'prorrateo') {
     partes.push(
       `Prorrateo de ${nombreMes(plan.mes_desde)} a ${nombreMes(plan.mes_hasta)}: ` +
-        `${plan.mes_hasta - plan.mes_desde + 1} mes(es) de ${formatoMXN(plan.monto_mensual_centavos)}, ` +
+        `${plan.mes_hasta - plan.mes_desde + 1} ${plan.mes_hasta === plan.mes_desde ? 'mes' : 'meses'} de ${formatoMXN(plan.monto_mensual_centavos)}, ` +
         `total ${formatoMXN(plan.monto_total_centavos)}`,
     );
   } else if (plan.reemplazo_de === 'promocion') {

@@ -137,7 +137,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
           {formatoMXN(capitas?.vencido ?? 0)}
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          {capitas?.con_adeudo ?? 0} hermano(s) deben meses · <a href="/capitas">ver</a>
+          {capitas?.con_adeudo ?? 0} {(capitas?.con_adeudo ?? 0) === 1 ? 'hermano con adeudo' : 'hermanos con adeudo'} · <a href="/capitas">ver</a>
         </p>
       </section>
 
@@ -147,7 +147,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
           {aplomo.ordinario_a_plomo ? (
             <span class="insignia insignia--ok">A plomo</span>
           ) : (
-            <span class="insignia insignia--alerta">{aplomo.meses_pendientes} mes(es) pendientes</span>
+            <span class="insignia insignia--alerta">{aplomo.meses_pendientes} {aplomo.meses_pendientes === 1 ? 'mes pendiente' : 'meses pendientes'}</span>
           )}
         </p>
         <p class="apagado" style="font-size: 0.82rem; margin: 0.5rem 0 0;">

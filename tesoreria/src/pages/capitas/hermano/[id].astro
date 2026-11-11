@@ -25,6 +25,7 @@ import {
   pagosDeHermano,
   planVigente,
   saldoAFavorDisponible,
+  textoSituacion,
 } from '@lib/datos/capitas';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import { obtenerHermano } from '@lib/datos/hermanos';
@@ -330,7 +331,7 @@ Astro.response.status = estado;
                     <span class="insignia insignia--ok">Al corriente</span>
                   ) : (
                     <span class="insignia insignia--alerta">
-                      Debe {cuenta.meses_vencidos} mes(es)
+                      {textoSituacion(cuenta.modalidad, cuenta.meses_vencidos)}
                     </span>
                   )}
                 </td>

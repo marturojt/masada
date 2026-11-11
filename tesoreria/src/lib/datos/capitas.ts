@@ -13,6 +13,50 @@ export const NOMBRE_MODALIDAD: Record<Modalidad, string> = {
   prorrateo: 'Prorrateo por meses restantes',
 };
 
+/*
+ * Unidad en que se cuentan los cargos vencidos según la modalidad. La anual
+ * preferencial es un solo cargo por ejercicio, así que cada cargo vencido es
+ * una anualidad; mensual y prorrateo llevan un cargo por mes. Una modalidad
+ * nueva se agrega aquí y el compilador avisa si falta.
+ */
+const UNIDAD_MODALIDAD: Record<
+  Modalidad,
+  { singular: string; plural: string; femenina: boolean }
+> = {
+  mensual: { singular: 'mes', plural: 'meses', femenina: false },
+  prorrateo: { singular: 'mes', plural: 'meses', femenina: false },
+  promocion: { singular: 'anualidad', plural: 'anualidades', femenina: true },
+};
+
+const unidadDe = (modalidad: Modalidad | null) =>
+  UNIDAD_MODALIDAD[modalidad ?? 'mensual'];
+
+/** "1 mes", "10 meses", "1 anualidad", "2 anualidades". */
+export function cargosVencidos(modalidad: Modalidad | null, cantidad: number): string {
+  const u = unidadDe(modalidad);
+  return `${cantidad} ${cantidad === 1 ? u.singular : u.plural}`;
+}
+
+/**
+ * Texto de la situación de un hermano con adeudo: "Debe 1 mes", "Debe 10 meses",
+ * "Debe la anualidad", "Debe 2 anualidades".
+ */
+export function textoSituacion(modalidad: Modalidad | null, cantidad: number): string {
+  if (modalidad === 'promocion' && cantidad === 1) return 'Debe la anualidad';
+  return `Debe ${cargosVencidos(modalidad, cantidad)}`;
+}
+
+/** "la anualidad vencida", "10 meses vencidos", "1 mes vencido". */
+export function cargosVencidosConAdjetivo(
+  modalidad: Modalidad | null,
+  cantidad: number,
+): string {
+  const u = unidadDe(modalidad);
+  if (modalidad === 'promocion' && cantidad === 1) return 'la anualidad vencida';
+  const adjetivo = (u.femenina ? 'vencida' : 'vencido') + (cantidad === 1 ? '' : 's');
+  return `${cargosVencidos(modalidad, cantidad)} ${adjetivo}`;
+}
+
 export type EstadoPago =
   | 'cubierto'
   | 'parcial'
