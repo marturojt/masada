@@ -27,7 +27,9 @@ const liga = (href: string) => (impresion ? undefined : href);
 const suma = <T,>(lista: T[], f: (x: T) => number): number => lista.reduce((s, x) => s + f(x), 0);
 const porcentaje = (parte: number, total: number): string =>
   total > 0 ? `${((parte / total) * 100).toLocaleString('es-MX', { maximumFractionDigits: 1 })}%` : '—';
-const conSigno = (v: number): string => (v < 0 ? `−${formatoMXN(-v)}` : formatoMXN(v));
+const conSigno = (v: number): string => (v < 0 ? `−${formatoMXN(-v)}` : formatoMXN(Math.abs(v)));
+/* Una resta: con su signo de menos, o una raya si no hubo nada que restar. */
+const resta = (v: number): string => (v === 0 ? '—' : `−${formatoMXN(v)}`);
 
 /* Libro agrupado por mes, con su subtotal. */
 const porMes = (lista: MovimientoDetalle[]) => {
@@ -36,29 +38,33 @@ const porMes = (lista: MovimientoDetalle[]) => {
     const mes = m.periodo.slice(0, 7);
     grupos.set(mes, [...(grupos.get(mes) ?? []), m]);
   }
-  return [...grupos.entries()].map(([mes, movs]) => ({ mes, movs, total: suma(movs, (x) => x.monto_centavos) }));
+  return [...grupos.entries()].map(([mes, movs]) => ({ mes, movs, total: suma(movs, (x) => x.monto_centavos - x.ajustado_centavos) }));
 };
 
 const librosIngresos = porMes(d.ingresos);
 const librosEgresos = porMes(d.egresos);
 
 const r = d.resumen;
-const totalIngConcepto = suma(d.porConcepto.ingresos, (c) => c.monto_centavos);
-const totalEgrConcepto = suma(d.porConcepto.egresos, (c) => c.monto_centavos);
+const totalIngConcepto = suma(d.porConcepto.ingresos, (c) => c.neto_centavos);
+const totalEgrConcepto = suma(d.porConcepto.egresos, (c) => c.neto_centavos);
 const sinComprobanteEgr = d.egresos.filter((m) => !m.tiene_comprobante).length;
 const sinComprobanteIng = d.ingresos.filter((m) => !m.tiene_comprobante).length;
-const ajustes = [...d.ingresos, ...d.egresos].filter((m) => m.ajusta_a);
-const mejorMes = [...d.meses].sort(
-  (a, b) => (b.total_ingresos_centavos - b.total_egresos_centavos) - (a.total_ingresos_centavos - a.total_egresos_centavos),
-)[0];
-const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.total_egresos_centavos > 0);
+const resultadoMes = (m: (typeof d.meses)[number]) =>
+  m.ingresos_centavos - m.egresos_centavos + m.correcciones_centavos;
+const mejorMes = [...d.meses].sort((a, b) => resultadoMes(b) - resultadoMes(a))[0];
+const conMovimiento = d.meses.filter((m) => m.ingresos_centavos !== 0 || m.egresos_centavos !== 0);
+const hayCorrecciones = d.correcciones.length > 0;
+/* En el libro, el total del mes es lo real: lo capturado menos lo corregido después. */
+const netoLibro = (m: MovimientoDetalle) => m.monto_centavos - m.ajustado_centavos;
 ---
 
 <section class={bloque} id="ingresos-egresos">
   <h2>Ingresos y egresos {anio}</h2>
   <p class="apagado">
-    Todo el dinero que entró y salió en el ejercicio, del primer movimiento al último. Los
-    traspasos entre banco y efectivo no son ingresos ni egresos y van aparte, al final.
+    Todo el dinero que entró y salió en el ejercicio, del primer movimiento al último. Las
+    correcciones de captura no son dinero que entró o salió: se restan del movimiento que
+    corrigen y se listan al final. Los traspasos entre banco y efectivo tampoco son
+    ingresos ni egresos y van aparte.
   </p>
 
   <h3>El año en cifras</h3>
@@ -66,8 +72,20 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
     <table class={tabla}>
       <tbody>
         <tr><th scope="row">Saldo de apertura</th><td class="num">{formatoMXN(r.apertura)}</td></tr>
-        <tr><th scope="row">Ingresos ({cuenta(r.movIngresos, 'movimiento', 'movimientos')})</th><td class="num">{formatoMXN(r.ingresos)}</td></tr>
-        <tr><th scope="row">Egresos ({cuenta(r.movEgresos, 'movimiento', 'movimientos')})</th><td class="num">{formatoMXN(r.egresos)}</td></tr>
+        {r.ingresosCorregidos > 0 && (
+          <>
+            <tr><th scope="row" class="sangria">Ingresos capturados ({cuenta(r.movIngresos, 'movimiento', 'movimientos')})</th><td class="num">{formatoMXN(r.ingresosCapturados)}</td></tr>
+            <tr><th scope="row" class="sangria">Menos correcciones de captura</th><td class="num">{resta(r.ingresosCorregidos)}</td></tr>
+          </>
+        )}
+        <tr><th scope="row">Ingresos{r.ingresosCorregidos > 0 ? ' reales' : ` (${cuenta(r.movIngresos, 'movimiento', 'movimientos')})`}</th><td class="num">{formatoMXN(r.ingresos)}</td></tr>
+        {r.egresosCorregidos > 0 && (
+          <>
+            <tr><th scope="row" class="sangria">Egresos capturados ({cuenta(r.movEgresos, 'movimiento', 'movimientos')})</th><td class="num">{formatoMXN(r.egresosCapturados)}</td></tr>
+            <tr><th scope="row" class="sangria">Menos correcciones de captura</th><td class="num">{resta(r.egresosCorregidos)}</td></tr>
+          </>
+        )}
+        <tr><th scope="row">Egresos{r.egresosCorregidos > 0 ? ' reales' : ` (${cuenta(r.movEgresos, 'movimiento', 'movimientos')})`}</th><td class="num">{formatoMXN(r.egresos)}</td></tr>
         <tr><th scope="row">Resultado del ejercicio</th><td class="num"><strong>{conSigno(r.resultado)}</strong></td></tr>
         <tr class="saldo-final"><th scope="row">Saldo a hoy</th><td class="num"><strong>{formatoMXN(r.saldo)}</strong></td></tr>
         {conMovimiento.length > 0 && (
@@ -84,19 +102,27 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
             <th scope="row">Mes con mejor resultado</th>
             <td class="num">
               {nombrePeriodo(mejorMes.periodo.slice(0, 7))},{' '}
-              {conSigno(mejorMes.total_ingresos_centavos - mejorMes.total_egresos_centavos)}
+              {conSigno(resultadoMes(mejorMes))}
             </td>
           </tr>
         )}
         <tr>
           <th scope="row">Sin comprobante adjunto</th>
-          <td class="num">{sinComprobanteIng} ingresos, {sinComprobanteEgr} egresos</td>
+          <td class="num">
+            {cuenta(sinComprobanteIng, 'ingreso', 'ingresos')}, {cuenta(sinComprobanteEgr, 'egreso', 'egresos')}
+          </td>
         </tr>
       </tbody>
     </table>
   </div>
 
   <h3>Mes por mes</h3>
+  {hayCorrecciones && (
+    <p class="apagado letra-media">
+      Las correcciones de captura van en su propia columna, en el mes en que se
+      registraron, para que el resultado y los saldos sean los mismos que en el corte.
+    </p>
+  )}
   <div class={envoltura}>
     <table class={tabla}>
       <thead>
@@ -105,6 +131,7 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
           <th scope="col" class="num">Saldo inicial</th>
           <th scope="col" class="num">Ingresos</th>
           <th scope="col" class="num">Egresos</th>
+          {hayCorrecciones && <th scope="col" class="num">Correcciones</th>}
           <th scope="col" class="num">Resultado</th>
           <th scope="col" class="num">Saldo final</th>
           <th scope="col">Corte</th>
@@ -117,9 +144,12 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
             <tr>
               <td><a href={liga(`/cortes/${mes}`)}>{nombrePeriodo(mes)}</a></td>
               <td class="num">{formatoMXN(m.saldo_inicial_centavos)}</td>
-              <td class="num">{formatoMXN(m.total_ingresos_centavos)}</td>
-              <td class="num">{formatoMXN(m.total_egresos_centavos)}</td>
-              <td class="num">{conSigno(m.total_ingresos_centavos - m.total_egresos_centavos)}</td>
+              <td class="num">{formatoMXN(m.ingresos_centavos)}</td>
+              <td class="num">{formatoMXN(m.egresos_centavos)}</td>
+              {hayCorrecciones && (
+                <td class="num">{m.correcciones_centavos === 0 ? '—' : conSigno(m.correcciones_centavos)}</td>
+              )}
+              <td class="num">{conSigno(resultadoMes(m))}</td>
               <td class="num">{formatoMXN(m.saldo_final_centavos)}</td>
               <td>{m.estado_corte === 'cerrado' ? 'Cerrado' : 'Abierto'}</td>
             </tr>
@@ -129,9 +159,10 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
       <tfoot>
         <tr>
           <td colspan="2">Total del ejercicio</td>
-          <td class="num">{formatoMXN(suma(d.meses, (m) => m.total_ingresos_centavos))}</td>
-          <td class="num">{formatoMXN(suma(d.meses, (m) => m.total_egresos_centavos))}</td>
-          <td class="num">{conSigno(suma(d.meses, (m) => m.total_ingresos_centavos - m.total_egresos_centavos))}</td>
+          <td class="num">{formatoMXN(suma(d.meses, (m) => m.ingresos_centavos))}</td>
+          <td class="num">{formatoMXN(suma(d.meses, (m) => m.egresos_centavos))}</td>
+          {hayCorrecciones && <td class="num">{conSigno(suma(d.meses, (m) => m.correcciones_centavos))}</td>}
+          <td class="num">{conSigno(suma(d.meses, resultadoMes))}</td>
           <td colspan="2"></td>
         </tr>
       </tfoot>
@@ -153,6 +184,8 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
               <tr>
                 <th scope="col">Concepto</th>
                 <th scope="col" class="num">Movimientos</th>
+                {hayCorrecciones && <th scope="col" class="num">Capturado</th>}
+                {hayCorrecciones && <th scope="col" class="num">Corregido</th>}
                 <th scope="col" class="num">Banco</th>
                 <th scope="col" class="num">Efectivo</th>
                 <th scope="col" class="num">Total</th>
@@ -164,10 +197,12 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
                 <tr>
                   <td>{c.concepto_nombre}</td>
                   <td class="num">{c.movimientos}</td>
+                  {hayCorrecciones && <td class="num">{formatoMXN(c.capturado_centavos)}</td>}
+                  {hayCorrecciones && <td class="num">{resta(c.corregido_centavos)}</td>}
                   <td class="num">{formatoMXN(c.banco_centavos)}</td>
                   <td class="num">{formatoMXN(c.efectivo_centavos)}</td>
-                  <td class="num">{formatoMXN(c.monto_centavos)}</td>
-                  <td class="num">{porcentaje(c.monto_centavos, g.total)}</td>
+                  <td class="num">{formatoMXN(c.neto_centavos)}</td>
+                  <td class="num">{porcentaje(c.neto_centavos, g.total)}</td>
                 </tr>
               ))}
             </tbody>
@@ -175,6 +210,8 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
               <tr>
                 <td>Total</td>
                 <td class="num">{suma(g.lista, (c) => c.movimientos)}</td>
+                {hayCorrecciones && <td class="num">{formatoMXN(suma(g.lista, (c) => c.capturado_centavos))}</td>}
+                {hayCorrecciones && <td class="num">{resta(suma(g.lista, (c) => c.corregido_centavos))}</td>}
                 <td class="num">{formatoMXN(suma(g.lista, (c) => c.banco_centavos))}</td>
                 <td class="num">{formatoMXN(suma(g.lista, (c) => c.efectivo_centavos))}</td>
                 <td class="num">{formatoMXN(g.total)}</td>
@@ -200,6 +237,7 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
             <th scope="col" class="num">Cápitas</th>
             <th scope="col" class="num">Cuotas de grado</th>
             <th scope="col" class="num">Otros</th>
+            {hayCorrecciones && <th scope="col" class="num">Corregido</th>}
             <th scope="col" class="num">Total</th>
           </tr>
         </thead>
@@ -211,6 +249,7 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
               <td class="num">{h.capitas_centavos > 0 ? formatoMXN(h.capitas_centavos) : '—'}</td>
               <td class="num">{h.cuotas_centavos > 0 ? formatoMXN(h.cuotas_centavos) : '—'}</td>
               <td class="num">{h.otros_centavos > 0 ? formatoMXN(h.otros_centavos) : '—'}</td>
+              {hayCorrecciones && <td class="num">{resta(h.corregido_centavos)}</td>}
               <td class="num">{formatoMXN(h.total_centavos)}</td>
             </tr>
           ))}
@@ -222,6 +261,7 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
             <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.capitas_centavos))}</td>
             <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.cuotas_centavos))}</td>
             <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.otros_centavos))}</td>
+            {hayCorrecciones && <td class="num">{resta(suma(d.porHermano, (h) => h.corregido_centavos))}</td>}
             <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.total_centavos))}</td>
           </tr>
         </tfoot>
@@ -329,7 +369,16 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
                     <td>{NOMBRE_BOLSA[m.bolsa]}</td>
                     <td>{m.tiene_comprobante ? 'Sí' : 'No'}</td>
                     <td>{m.capturado_por ?? '—'}</td>
-                    <td class="num">{formatoMXN(m.monto_centavos)}</td>
+                    <td class="num">
+                      {m.ajustado_centavos !== 0 ? (
+                        <>
+                          <s class="apagado">{formatoMXN(m.monto_centavos)}</s>
+                          <span class="en-bloque">{formatoMXN(netoLibro(m))}</span>
+                        </>
+                      ) : (
+                        formatoMXN(m.monto_centavos)
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -420,7 +469,7 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
 </section>
 
 <section class={bloque} id="traspasos-ajustes">
-  <h2>Traspasos y ajustes</h2>
+  <h2>Traspasos y correcciones</h2>
   <h3>Traspasos entre banco y efectivo</h3>
   {d.traspasos.length === 0 ? (
     <p class="apagado">Sin traspasos en el ejercicio.</p>
@@ -453,32 +502,61 @@ const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.t
     </div>
   )}
 
-  <h3>Ajustes por corrección</h3>
-  {ajustes.length === 0 ? (
-    <p class="apagado">Ningún movimiento del ejercicio se corrigió con un ajuste.</p>
+  <h3 id="correcciones">Correcciones de captura</h3>
+  <p class="apagado">
+    Cuando un monto se capturó mal, se corrige con un movimiento en sentido contrario
+    ligado al original. No es dinero que entró o salió: arriba ya se restó del movimiento
+    que corrige.
+  </p>
+  {d.correcciones.length === 0 ? (
+    <p class="apagado">Ningún movimiento del ejercicio se corrigió.</p>
   ) : (
     <div class={envoltura}>
-      <table class={tabla}>
+      <table class:list={[tabla, 'libro']}>
         <thead>
           <tr>
             <th scope="col">Fecha</th>
-            <th scope="col">Tipo</th>
-            <th scope="col">Concepto</th>
+            <th scope="col">Corrige</th>
+            <th scope="col">Persona</th>
             <th scope="col">Motivo</th>
-            <th scope="col" class="num">Monto</th>
+            <th scope="col">Capturó</th>
+            <th scope="col" class="num">Capturado</th>
+            <th scope="col" class="num">Corrección</th>
+            <th scope="col" class="num">Real</th>
           </tr>
         </thead>
         <tbody>
-          {ajustes.map((m) => (
+          {d.correcciones.map(({ ajuste: a, origen: o }) => (
             <tr>
-              <td>{formatoFechaCorta(m.fecha)}</td>
-              <td>{m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</td>
-              <td>{m.concepto_nombre}</td>
-              <td>{m.motivo_ajuste ?? '—'}</td>
-              <td class="num">{formatoMXN(m.monto_centavos)}</td>
+              <td class="sin-corte">{formatoFechaCorta(a.fecha)}</td>
+              <td>
+                {o ? (
+                  <>
+                    {o.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de {o.concepto_nombre}
+                    <span class="nota-linea en-bloque letra-menor apagado">
+                      {o.folio ? `${o.folio}, ` : ''}del {formatoFechaCorta(o.fecha)}
+                    </span>
+                  </>
+                ) : (
+                  'Un movimiento de otro ejercicio'
+                )}
+              </td>
+              <td>{o ? (o.tipo === 'ingreso' ? o.hermano_nombre : (o.beneficiario ?? o.hermano_nombre)) ?? '—' : '—'}</td>
+              <td>{a.motivo_ajuste ?? '—'}</td>
+              <td>{a.capturado_por ?? '—'}</td>
+              <td class="num">{o ? formatoMXN(o.monto_centavos) : '—'}</td>
+              <td class="num">{resta(a.monto_centavos)}</td>
+              <td class="num">{o ? formatoMXN(o.monto_centavos - o.ajustado_centavos) : '—'}</td>
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="6">Total corregido</td>
+            <td class="num">{resta(suma(d.correcciones, (c) => c.ajuste.monto_centavos))}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   )}
