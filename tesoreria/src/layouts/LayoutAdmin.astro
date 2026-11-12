@@ -1,8 +1,12 @@
 ---
-/* Shell del panel. Nunca indexable, sin OG, sin RSS, sin analítica. */
+/*
+ * Shell del panel: barra arriba, menú a la izquierda y el contenido a la
+ * derecha. Nunca indexable, sin OG, sin RSS, sin analítica.
+ */
 import '@styles/fuentes.css';
 import '@styles/admin.css';
 import NavAdmin from '@componentes/NavAdmin.astro';
+import MenuLateral from '@componentes/MenuLateral.astro';
 import type { Sesion } from '@lib/sesion';
 
 interface Props {
@@ -24,12 +28,17 @@ const { titulo, sesion, angosto = false } = Astro.props;
     <title>{titulo} · Tesorería Masada 324</title>
   </head>
   <body>
-    <NavAdmin sesion={sesion}>
-      <slot name="contexto" slot="contexto" />
-    </NavAdmin>
+    <NavAdmin sesion={sesion} />
 
-    <main class:list={['panel', angosto && 'panel--angosto']}>
-      <slot />
-    </main>
+    <div class="app">
+      <MenuLateral sesion={sesion} />
+
+      <div class="app__contenido">
+        <slot name="contexto" />
+        <main class:list={['panel', angosto && 'panel--angosto']}>
+          <slot />
+        </main>
+      </div>
+    </div>
   </body>
 </html>

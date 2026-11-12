@@ -1,0 +1,117 @@
+---
+/*
+ * Menú lateral del panel, agrupado por uso. En escritorio es una columna fija a
+ * la izquierda; en el celular el mismo <nav> es un cajón (popover nativo) que
+ * abre el botón Menú de la barra y se cierra al tocar fuera, sin JavaScript.
+ */
+import Icono from './Icono.astro';
+import type { NombreIcono } from './iconos';
+import { ejercicioVigente } from '@lib/datos/ejercicios';
+import { esVM, type Sesion } from '@lib/sesion';
+
+interface Props {
+  sesion: Sesion;
+}
+
+const { sesion } = Astro.props;
+
+interface Enlace {
+  href: string;
+  texto: string;
+  icono: NombreIcono;
+  /** Solo para el nivel V∴M∴; la página también lo exige. */
+  soloVM?: boolean;
+}
+
+const GRUPOS: { titulo: string | null; enlaces: Enlace[] }[] = [
+  { titulo: null, enlaces: [{ href: '/', texto: 'Tablero', icono: 'tablero' }] },
+  {
+    titulo: 'Día a día',
+    enlaces: [
+      { href: '/capitas', texto: 'Cápitas', icono: 'capitas' },
+      { href: '/ingresos', texto: 'Ingresos', icono: 'ingresos' },
+      { href: '/egresos', texto: 'Egresos', icono: 'egresos' },
+      { href: '/traspasos', texto: 'Traspasos', icono: 'traspasos' },
+      { href: '/aportaciones', texto: 'Aportaciones', icono: 'aportaciones' },
+    ],
+  },
+  {
+    titulo: 'Gran Tesorería',
+    enlaces: [
+      { href: '/gran-tesoreria', texto: 'Resumen GT', icono: 'granTesoreria' },
+      { href: '/gran-tesoreria/membresias', texto: 'Membresías', icono: 'membresias' },
+      { href: '/gran-tesoreria/tarifas', texto: 'Tarifas GT', icono: 'tarifas' },
+    ],
+  },
+  {
+    titulo: 'Cierre y reportes',
+    enlaces: [
+      { href: '/cortes', texto: 'Cortes', icono: 'cortes' },
+      { href: '/pendientes', texto: 'Pendientes', icono: 'pendientes' },
+      { href: '/reportes', texto: 'Reportes', icono: 'reportes' },
+      { href: '/movimientos', texto: 'Movimientos', icono: 'movimientos' },
+    ],
+  },
+  {
+    titulo: 'Padrón y catálogos',
+    enlaces: [
+      { href: '/hermanos', texto: 'Hermanos', icono: 'hermanos' },
+      { href: '/hermanos/candidatos', texto: 'Candidatos', icono: 'candidatos' },
+      { href: '/conceptos', texto: 'Conceptos', icono: 'conceptos' },
+      { href: '/tarifas', texto: 'Tarifas de grado', icono: 'tarifas' },
+      { href: '/egresos/beneficiarios', texto: 'Beneficiarios', icono: 'beneficiarios', soloVM: true },
+    ],
+  },
+  {
+    titulo: 'Administración',
+    enlaces: [
+      { href: '/usuarios', texto: 'Usuarios', icono: 'usuarios', soloVM: true },
+      { href: '/herramientas', texto: 'Herramientas', icono: 'herramientas' },
+      { href: '/herramientas/importar', texto: 'Carga masiva', icono: 'carga' },
+      { href: '/herramientas/cuadro', texto: 'Cuadro logial', icono: 'cuadro' },
+    ],
+  },
+];
+
+const vm = esVM(sesion);
+const grupos = GRUPOS.map((g) => ({
+  ...g,
+  enlaces: g.enlaces.filter((e) => vm || !e.soloVM),
+})).filter((g) => g.enlaces.length > 0);
+
+/*
+ * Activo: el enlace que coincide de forma más específica con la ruta. Así
+ * /gran-tesoreria/tarifas marca Tarifas GT y no Resumen GT, y el tablero solo
+ * se marca en la raíz.
+ */
+const ruta = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const coincide = (href: string): boolean =>
+  href === '/' ? ruta === '/' : ruta === href || ruta.startsWith(`${href}/`);
+const activo = grupos
+  .flatMap((g) => g.enlaces)
+  .filter((e) => coincide(e.href))
+  .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
+const vigente = await ejercicioVigente();
+---
+
+<nav id="menu" class="lateral" popover="auto" aria-label="Secciones">
+  {
+    grupos.map((g) => (
+      <div class="lateral__grupo">
+        {g.titulo && <p class="lateral__titulo">{g.titulo}</p>}
+        {g.enlaces.map((e) => (
+          <a
+            class="lateral__enlace"
+            href={e.href}
+            aria-current={e.href === activo ? 'page' : undefined}
+          >
+            <Icono nombre={e.icono} />
+            {e.texto}
+          </a>
+        ))}
+      </div>
+    ))
+  }
+  <p class="lateral__pie">Ejercicio vigente: {vigente.anio}</p>
+</nav>

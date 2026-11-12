@@ -1,101 +1,58 @@
 ---
-/* Navegación del panel. Salir es POST, nunca un enlace. */
+/*
+ * Barra superior del panel: botón del menú (solo en el celular), marca y el
+ * menú del usuario. Las secciones viven en MenuLateral. Salir es POST, nunca un
+ * enlace.
+ */
 import { NOMBRE_ROL } from '@lib/tipos';
 import type { Sesion } from '@lib/sesion';
 import Formulario from './Formulario.astro';
+import Icono from './Icono.astro';
 
 interface Props {
   sesion: Sesion;
 }
 
 const { sesion } = Astro.props;
-
-const enlaces = [
-  { href: '/', texto: 'Tablero' },
-  { href: '/hermanos', texto: 'Hermanos' },
-  { href: '/capitas', texto: 'Cápitas' },
-  { href: '/ingresos', texto: 'Ingresos' },
-  { href: '/aportaciones', texto: 'Aportaciones' },
-  { href: '/egresos', texto: 'Egresos' },
-  { href: '/gran-tesoreria', texto: 'Gran Tesorería' },
-  { href: '/traspasos', texto: 'Traspasos' },
-  { href: '/cortes', texto: 'Cortes' },
-  { href: '/reportes', texto: 'Reportes' },
-  { href: '/pendientes', texto: 'Pendientes' },
-  { href: '/conceptos', texto: 'Conceptos' },
-  { href: '/tarifas', texto: 'Tarifas' },
-  { href: '/herramientas', texto: 'Herramientas' },
-];
-
-/*
- * En celular el menú se pliega en un <details> y se agrupa por uso. Mismos
- * enlaces que la barra de escritorio, que conserva su orden de siempre.
- */
-const grupos = [
-  { titulo: 'Día a día', rutas: ['/', '/capitas', '/ingresos', '/egresos', '/traspasos'] },
-  { titulo: 'Cierre', rutas: ['/cortes', '/reportes', '/pendientes'] },
-  {
-    titulo: 'Catálogos',
-    rutas: ['/hermanos', '/aportaciones', '/gran-tesoreria', '/conceptos', '/tarifas', '/herramientas'],
-  },
-].map((g) => ({ titulo: g.titulo, enlaces: g.rutas.map((r) => enlaces.find((e) => e.href === r)!) }));
-
-const ruta = Astro.url.pathname.replace(/\/+$/, '') || '/';
-const activo = (href: string): boolean =>
-  href === '/' ? ruta === '/' : ruta === href || ruta.startsWith(`${href}/`);
+const { nombre, correo, rol } = sesion.usuario;
 ---
 
 <header class="barra">
   <div class="barra__fila">
-    <a class="barra__marca" href="/">Masada 324 · Tesorería</a>
+    <button class="barra__boton-menu" type="button" popovertarget="menu">
+      <Icono nombre="menu" />
+      Menú
+    </button>
 
-    <nav class="barra__nav" aria-label="Secciones">
-      {
-        enlaces.map((e) => (
-          <a href={e.href} aria-current={activo(e.href) ? 'page' : undefined}>
-            {e.texto}
-          </a>
-        ))
-      }
-    </nav>
+    <a class="barra__marca" href="/">Masada 324<span class="barra__marca-resto"> · Tesorería</span></a>
 
-    <details class="menu-movil">
-      <summary class="menu-movil__boton">Menú</summary>
-      <nav class="menu-movil__lista" aria-label="Secciones">
-        {
-          grupos.map((g) => (
-            <div class="menu-movil__grupo">
-              <p class="menu-movil__titulo">{g.titulo}</p>
-              {g.enlaces.map((e) => (
-                <a href={e.href} aria-current={activo(e.href) ? 'page' : undefined}>
-                  {e.texto}
-                </a>
-              ))}
-            </div>
-          ))
-        }
-        <div class="menu-movil__grupo menu-movil__sesion">
-          <p class="menu-movil__titulo">Sesión</p>
-          <p class="menu-movil__usuario">
-            {sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}
-          </p>
-          <Formulario accion="/salir" csrf={sesion.csrfToken}>
-            <button class="btn btn--ghost" type="submit">Salir</button>
-          </Formulario>
-        </div>
-      </nav>
-    </details>
+    <button
+      class="usuario-menu__boton"
+      type="button"
+      popovertarget="menu-usuario"
+      aria-label={`Cuenta de ${nombre}`}
+    >
+      <span class="usuario-menu__inicial" aria-hidden="true">{nombre.trim().charAt(0)}</span>
+      <span class="usuario-menu__nombre">{nombre}</span>
+      <Icono nombre="abajo" />
+    </button>
 
-    <span class="barra__usuario">
-      {sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}
-    </span>
-
-    <Formulario accion="/salir" csrf={sesion.csrfToken} clase="barra__salir">
-      <button class="btn btn--ghost btn--chico" type="submit">
-        Salir
-      </button>
-    </Formulario>
+    <div id="menu-usuario" class="usuario-menu" popover="auto">
+      <div class="usuario-menu__cabeza">
+        <p class="usuario-menu__quien">{nombre}</p>
+        <p class="usuario-menu__dato">{NOMBRE_ROL[rol]}</p>
+        <p class="usuario-menu__dato">{correo}</p>
+      </div>
+      <a class="usuario-menu__opcion" href="/herramientas#contrasena">
+        <Icono nombre="llave" />
+        Cambiar mi contraseña
+      </a>
+      <Formulario accion="/salir" csrf={sesion.csrfToken}>
+        <button class="usuario-menu__opcion" type="submit">
+          <Icono nombre="salir" />
+          Salir
+        </button>
+      </Formulario>
+    </div>
   </div>
-
-  <slot name="contexto" />
 </header>

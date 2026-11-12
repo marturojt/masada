@@ -1,0 +1,26 @@
+---
+/* Ícono decorativo de trazo. El texto que lo acompaña es el que se lee. */
+import { ICONOS, type NombreIcono } from './iconos';
+
+interface Props {
+  nombre: NombreIcono;
+  clase?: string;
+}
+
+const { nombre, clase } = Astro.props;
+---
+
+<svg
+  class:list={['icono', clase]}
+  viewBox="0 0 24 24"
+  width="16"
+  height="16"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+  set:html={ICONOS[nombre]}
+/>
