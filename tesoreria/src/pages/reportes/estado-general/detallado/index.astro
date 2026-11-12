@@ -1,0 +1,60 @@
+---
+/*
+ * Estado general detallado, en pantalla: el estado general completo y, debajo,
+ * todo el movimiento de dinero del ejercicio con su detalle. Se imprime o se
+ * descarga en CSV.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import EstadoGeneral from '@componentes/EstadoGeneral.astro';
+import IngresosEgresosDetalle from '@componentes/IngresosEgresosDetalle.astro';
+import { estadoDetallado } from '@lib/datos/estado-detallado';
+import { resumenEnPalabras } from '@lib/datos/estado-general';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoFechaLarga, hoyISO } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const detalle = await estadoDetallado(anio);
+
+const imprimir = `/reportes/estado-general/detallado/imprimir?anio=${anio}`;
+const csv = `/reportes/estado-general-detallado.csv?anio=${anio}`;
+---
+
+<LayoutAdmin titulo="Estado general detallado" sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href={`/reportes/estado-general?anio=${anio}`}>← Estado general</a></span>
+    <span>Ejercicio {anio}</span>
+    <span>Al {formatoFechaLarga(hoyISO())}</span>
+  </div>
+
+  <div class="encabezado">
+    <h1 class="abajo-xxs">Estado general detallado</h1>
+    <div class="fila">
+      <a class="btn btn--ghost" href={imprimir}>Vista para imprimir</a>
+      <a class="btn btn--ghost" href={csv}>Descargar CSV</a>
+    </div>
+  </div>
+  <p class="apagado">
+    El estado general completo y, debajo, cada peso que entró y salió en {anio}: mes por mes,
+    por concepto, por hermano y por beneficiario, el libro de ingresos y de egresos, el
+    ciclo de cada egreso, los traspasos y los ajustes. Es de uso interno.
+    {' '}{resumenEnPalabras(detalle.general)}
+  </p>
+
+  <nav class="fila arriba-s letra-chica" aria-label="Secciones del reporte">
+    <a href="#ingresos-egresos">Ingresos y egresos</a>
+    <a href="#libro-ingresos">Libro de ingresos</a>
+    <a href="#libro-egresos">Libro de egresos</a>
+    <a href="#ciclo-egresos">Ciclo de egresos</a>
+    <a href="#traspasos-ajustes">Traspasos y ajustes</a>
+  </nav>
+
+  <div class="pila arriba-l">
+    <EstadoGeneral estado={detalle.general} />
+    <IngresosEgresosDetalle detalle={detalle} />
+  </div>
+</LayoutAdmin>

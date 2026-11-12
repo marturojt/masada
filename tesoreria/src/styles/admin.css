@@ -1641,6 +1641,10 @@
     color: var(--md-sys-color-error);
   }
 
+  .tabla .sin-corte {
+    white-space: nowrap;
+  }
+
   .solo-lectores {
     position: absolute;
     width: 1px;

@@ -1,0 +1,33 @@
+---
+/* Hoja imprimible del estado general detallado. */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import EstadoGeneral from '@componentes/EstadoGeneral.astro';
+import IngresosEgresosDetalle from '@componentes/IngresosEgresosDetalle.astro';
+import { estadoDetallado } from '@lib/datos/estado-detallado';
+import { resumenEnPalabras } from '@lib/datos/estado-general';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { formatoFechaLarga, formatoMomento, hoyISO } from '@lib/fechas';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const detalle = await estadoDetallado(anio);
+---
+
+<LayoutImpresion
+  titulo="Estado general detallado de la tesorería"
+  periodo={`Ejercicio ${anio}, al ${formatoFechaLarga(hoyISO())}`}
+  volverA={`/reportes/estado-general/detallado?anio=${anio}`}
+  firmas={['Tesorero']}
+>
+  <p class="resumen-palabras">{resumenEnPalabras(detalle.general)}</p>
+  <EstadoGeneral estado={detalle.general} impresion />
+  <IngresosEgresosDetalle detalle={detalle} impresion />
+  <p class="sello">
+    Documento de uso interno de la tesorería. Generado por {sesion.usuario.nombre} el{' '}
+    {formatoMomento(new Date())}
+  </p>
+</LayoutImpresion>

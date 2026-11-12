@@ -1,0 +1,485 @@
+---
+/*
+ * Sección de ingresos y egresos del estado general detallado. Lo usan la
+ * página y la hoja impresa: con `impresion`, sin estilos de pantalla ni enlaces.
+ */
+import type { EstadoDetallado, MovimientoDetalle } from '@lib/datos/estado-detallado';
+import { notaDeMovimiento } from '@lib/datos/estado-detallado';
+import { CLASE_ESTADO_EGRESO, NOMBRE_ESTADO_EGRESO } from '@lib/datos/egresos';
+import { formatoMXN } from '@lib/dinero';
+import { formatoFechaCorta, nombrePeriodo } from '@lib/fechas';
+import { cuenta } from '@lib/texto';
+import { NOMBRE_BOLSA } from '@lib/tipos';
+
+interface Props {
+  detalle: EstadoDetallado;
+  impresion?: boolean;
+}
+
+const { detalle: d, impresion = false } = Astro.props;
+const anio = d.general.anio;
+
+const tabla = impresion ? undefined : 'tabla';
+const bloque = impresion ? 'bloque-impreso' : 'tarjeta';
+const envoltura = impresion ? undefined : 'tabla-envoltura';
+const liga = (href: string) => (impresion ? undefined : href);
+
+const suma = <T,>(lista: T[], f: (x: T) => number): number => lista.reduce((s, x) => s + f(x), 0);
+const porcentaje = (parte: number, total: number): string =>
+  total > 0 ? `${((parte / total) * 100).toLocaleString('es-MX', { maximumFractionDigits: 1 })}%` : '—';
+const conSigno = (v: number): string => (v < 0 ? `−${formatoMXN(-v)}` : formatoMXN(v));
+
+/* Libro agrupado por mes, con su subtotal. */
+const porMes = (lista: MovimientoDetalle[]) => {
+  const grupos = new Map<string, MovimientoDetalle[]>();
+  for (const m of lista) {
+    const mes = m.periodo.slice(0, 7);
+    grupos.set(mes, [...(grupos.get(mes) ?? []), m]);
+  }
+  return [...grupos.entries()].map(([mes, movs]) => ({ mes, movs, total: suma(movs, (x) => x.monto_centavos) }));
+};
+
+const librosIngresos = porMes(d.ingresos);
+const librosEgresos = porMes(d.egresos);
+
+const r = d.resumen;
+const totalIngConcepto = suma(d.porConcepto.ingresos, (c) => c.monto_centavos);
+const totalEgrConcepto = suma(d.porConcepto.egresos, (c) => c.monto_centavos);
+const sinComprobanteEgr = d.egresos.filter((m) => !m.tiene_comprobante).length;
+const sinComprobanteIng = d.ingresos.filter((m) => !m.tiene_comprobante).length;
+const ajustes = [...d.ingresos, ...d.egresos].filter((m) => m.ajusta_a);
+const mejorMes = [...d.meses].sort(
+  (a, b) => (b.total_ingresos_centavos - b.total_egresos_centavos) - (a.total_ingresos_centavos - a.total_egresos_centavos),
+)[0];
+const conMovimiento = d.meses.filter((m) => m.total_ingresos_centavos > 0 || m.total_egresos_centavos > 0);
+---
+
+<section class={bloque} id="ingresos-egresos">
+  <h2>Ingresos y egresos {anio}</h2>
+  <p class="apagado">
+    Todo el dinero que entró y salió en el ejercicio, del primer movimiento al último. Los
+    traspasos entre banco y efectivo no son ingresos ni egresos y van aparte, al final.
+  </p>
+
+  <h3>El año en cifras</h3>
+  <div class={envoltura}>
+    <table class={tabla}>
+      <tbody>
+        <tr><th scope="row">Saldo de apertura</th><td class="num">{formatoMXN(r.apertura)}</td></tr>
+        <tr><th scope="row">Ingresos ({cuenta(r.movIngresos, 'movimiento', 'movimientos')})</th><td class="num">{formatoMXN(r.ingresos)}</td></tr>
+        <tr><th scope="row">Egresos ({cuenta(r.movEgresos, 'movimiento', 'movimientos')})</th><td class="num">{formatoMXN(r.egresos)}</td></tr>
+        <tr><th scope="row">Resultado del ejercicio</th><td class="num"><strong>{conSigno(r.resultado)}</strong></td></tr>
+        <tr class="saldo-final"><th scope="row">Saldo a hoy</th><td class="num"><strong>{formatoMXN(r.saldo)}</strong></td></tr>
+        {conMovimiento.length > 0 && (
+          <tr>
+            <th scope="row">Promedio por mes con movimiento</th>
+            <td class="num">
+              Entra {formatoMXN(Math.round(r.ingresos / conMovimiento.length))}, sale{' '}
+              {formatoMXN(Math.round(r.egresos / conMovimiento.length))}
+            </td>
+          </tr>
+        )}
+        {mejorMes && conMovimiento.length > 0 && (
+          <tr>
+            <th scope="row">Mes con mejor resultado</th>
+            <td class="num">
+              {nombrePeriodo(mejorMes.periodo.slice(0, 7))},{' '}
+              {conSigno(mejorMes.total_ingresos_centavos - mejorMes.total_egresos_centavos)}
+            </td>
+          </tr>
+        )}
+        <tr>
+          <th scope="row">Sin comprobante adjunto</th>
+          <td class="num">{sinComprobanteIng} ingresos, {sinComprobanteEgr} egresos</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Mes por mes</h3>
+  <div class={envoltura}>
+    <table class={tabla}>
+      <thead>
+        <tr>
+          <th scope="col">Mes</th>
+          <th scope="col" class="num">Saldo inicial</th>
+          <th scope="col" class="num">Ingresos</th>
+          <th scope="col" class="num">Egresos</th>
+          <th scope="col" class="num">Resultado</th>
+          <th scope="col" class="num">Saldo final</th>
+          <th scope="col">Corte</th>
+        </tr>
+      </thead>
+      <tbody>
+        {d.meses.map((m) => {
+          const mes = m.periodo.slice(0, 7);
+          return (
+            <tr>
+              <td><a href={liga(`/cortes/${mes}`)}>{nombrePeriodo(mes)}</a></td>
+              <td class="num">{formatoMXN(m.saldo_inicial_centavos)}</td>
+              <td class="num">{formatoMXN(m.total_ingresos_centavos)}</td>
+              <td class="num">{formatoMXN(m.total_egresos_centavos)}</td>
+              <td class="num">{conSigno(m.total_ingresos_centavos - m.total_egresos_centavos)}</td>
+              <td class="num">{formatoMXN(m.saldo_final_centavos)}</td>
+              <td>{m.estado_corte === 'cerrado' ? 'Cerrado' : 'Abierto'}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">Total del ejercicio</td>
+          <td class="num">{formatoMXN(suma(d.meses, (m) => m.total_ingresos_centavos))}</td>
+          <td class="num">{formatoMXN(suma(d.meses, (m) => m.total_egresos_centavos))}</td>
+          <td class="num">{conSigno(suma(d.meses, (m) => m.total_ingresos_centavos - m.total_egresos_centavos))}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {[
+    { titulo: 'Ingresos por concepto', lista: d.porConcepto.ingresos, total: totalIngConcepto },
+    { titulo: 'Egresos por concepto', lista: d.porConcepto.egresos, total: totalEgrConcepto },
+  ].map((g) => (
+    <>
+      <h3>{g.titulo}</h3>
+      {g.lista.length === 0 ? (
+        <p class="apagado">Sin movimientos en el ejercicio.</p>
+      ) : (
+        <div class={envoltura}>
+          <table class={tabla}>
+            <thead>
+              <tr>
+                <th scope="col">Concepto</th>
+                <th scope="col" class="num">Movimientos</th>
+                <th scope="col" class="num">Banco</th>
+                <th scope="col" class="num">Efectivo</th>
+                <th scope="col" class="num">Total</th>
+                <th scope="col" class="num">Del total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.lista.map((c) => (
+                <tr>
+                  <td>{c.concepto_nombre}</td>
+                  <td class="num">{c.movimientos}</td>
+                  <td class="num">{formatoMXN(c.banco_centavos)}</td>
+                  <td class="num">{formatoMXN(c.efectivo_centavos)}</td>
+                  <td class="num">{formatoMXN(c.monto_centavos)}</td>
+                  <td class="num">{porcentaje(c.monto_centavos, g.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td class="num">{suma(g.lista, (c) => c.movimientos)}</td>
+                <td class="num">{formatoMXN(suma(g.lista, (c) => c.banco_centavos))}</td>
+                <td class="num">{formatoMXN(suma(g.lista, (c) => c.efectivo_centavos))}</td>
+                <td class="num">{formatoMXN(g.total)}</td>
+                <td class="num">100%</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </>
+  ))}
+
+  <h3>Ingresos por hermano</h3>
+  {d.porHermano.length === 0 ? (
+    <p class="apagado">Ningún ingreso del ejercicio está a nombre de un hermano.</p>
+  ) : (
+    <div class={envoltura}>
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Hermano</th>
+            <th scope="col" class="num">Pagos</th>
+            <th scope="col" class="num">Cápitas</th>
+            <th scope="col" class="num">Cuotas de grado</th>
+            <th scope="col" class="num">Otros</th>
+            <th scope="col" class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.porHermano.map((h) => (
+            <tr>
+              <td><a href={liga(`/hermanos/${h.hermano_id}`)}>{h.nombre}</a></td>
+              <td class="num">{h.movimientos}</td>
+              <td class="num">{h.capitas_centavos > 0 ? formatoMXN(h.capitas_centavos) : '—'}</td>
+              <td class="num">{h.cuotas_centavos > 0 ? formatoMXN(h.cuotas_centavos) : '—'}</td>
+              <td class="num">{h.otros_centavos > 0 ? formatoMXN(h.otros_centavos) : '—'}</td>
+              <td class="num">{formatoMXN(h.total_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td class="num">{suma(d.porHermano, (h) => h.movimientos)}</td>
+            <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.capitas_centavos))}</td>
+            <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.cuotas_centavos))}</td>
+            <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.otros_centavos))}</td>
+            <td class="num">{formatoMXN(suma(d.porHermano, (h) => h.total_centavos))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )}
+
+  <h3>Egresos por beneficiario</h3>
+  {d.porBeneficiario.length === 0 ? (
+    <p class="apagado">Sin egresos en el ejercicio.</p>
+  ) : (
+    <div class={envoltura}>
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Beneficiario</th>
+            <th scope="col" class="num">Pagos</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col" class="num">Del total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.porBeneficiario.map((b) => (
+            <tr>
+              <td>{b.beneficiario}</td>
+              <td class="num">{b.movimientos}</td>
+              <td class="num">{formatoMXN(b.monto_centavos)}</td>
+              <td class="num">{porcentaje(b.monto_centavos, r.egresos)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</section>
+
+{[
+  { id: 'libro-ingresos', titulo: `Libro de ingresos ${anio}`, grupos: librosIngresos, ingreso: true },
+  { id: 'libro-egresos', titulo: `Libro de egresos ${anio}`, grupos: librosEgresos, ingreso: false },
+].map((libro) => (
+  <section class={bloque} id={libro.id}>
+    <h2>{libro.titulo}</h2>
+    <p class="apagado">
+      {libro.ingreso
+        ? 'Cada ingreso con su recibo, quién pagó, qué cubrió, por dónde entró y si tiene comprobante.'
+        : 'Cada salida de dinero con el folio del egreso, a quién se pagó, por dónde salió y si tiene comprobante.'}
+    </p>
+    {libro.grupos.length === 0 ? (
+      <p class="apagado">Sin movimientos en el ejercicio.</p>
+    ) : (
+      <div class={envoltura}>
+        <table class:list={[tabla, 'libro']}>
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Folio</th>
+              <th scope="col">Concepto</th>
+              <th scope="col">{libro.ingreso ? 'Hermano' : 'Beneficiario'}</th>
+              <th scope="col">Descripción</th>
+              <th scope="col">Bolsa</th>
+              <th scope="col">Comprobante</th>
+              <th scope="col">Capturó</th>
+              <th scope="col" class="num">Monto</th>
+            </tr>
+          </thead>
+          {libro.grupos.map((g) => (
+            <tbody>
+              <tr class="grupo">
+                <th scope="colgroup" colspan="9">{nombrePeriodo(g.mes)}</th>
+              </tr>
+              {g.movs.map((m) => {
+                const nota = notaDeMovimiento(m);
+                const persona = libro.ingreso ? m.hermano_nombre : (m.beneficiario ?? m.hermano_nombre);
+                return (
+                  <tr>
+                    <td class="sin-corte">{formatoFechaCorta(m.fecha)}</td>
+                    <td class="sin-corte">
+                      {m.folio ? (
+                        <a
+                          href={liga(libro.ingreso ? `/recibos/${m.id}` : `/egresos/${m.egreso_id}`)}
+                        >
+                          {m.folio}
+                        </a>
+                      ) : (
+                        <span class="apagado">—</span>
+                      )}
+                    </td>
+                    <td>{m.concepto_nombre}</td>
+                    <td>
+                      {persona ? (
+                        m.hermano_id && libro.ingreso ? (
+                          <a href={liga(`/hermanos/${m.hermano_id}`)}>{persona}</a>
+                        ) : (
+                          persona
+                        )
+                      ) : (
+                        <span class="apagado">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {m.descripcion}
+                      {m.meses && <span class="nota-linea en-bloque letra-menor apagado">Cubrió: {m.meses}</span>}
+                      {nota && <span class="nota-linea en-bloque letra-menor apagado">{nota}</span>}
+                    </td>
+                    <td>{NOMBRE_BOLSA[m.bolsa]}</td>
+                    <td>{m.tiene_comprobante ? 'Sí' : 'No'}</td>
+                    <td>{m.capturado_por ?? '—'}</td>
+                    <td class="num">{formatoMXN(m.monto_centavos)}</td>
+                  </tr>
+                );
+              })}
+              <tr>
+                <td colspan="8">Total de {nombrePeriodo(g.mes)}</td>
+                <td class="num"><strong>{formatoMXN(g.total)}</strong></td>
+              </tr>
+            </tbody>
+          ))}
+          <tfoot>
+            <tr>
+              <td colspan="8">Total del ejercicio</td>
+              <td class="num">{formatoMXN(suma(libro.grupos, (g) => g.total))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )}
+  </section>
+))}
+
+<section class={bloque} id="ciclo-egresos">
+  <h2>Ciclo de cada egreso {anio}</h2>
+  <p class="apagado">
+    Todos los egresos solicitados en el ejercicio, también los rechazados, cancelados y los
+    que siguen en trámite: cuánto se pidió, cuánto se autorizó, entregó y comprobó.
+  </p>
+  {d.ciclo.length === 0 ? (
+    <p class="apagado">Sin egresos solicitados en el ejercicio.</p>
+  ) : (
+    <div class={envoltura}>
+      <table class:list={[tabla, 'libro']}>
+        <thead>
+          <tr>
+            <th scope="col">Folio</th>
+            <th scope="col">Beneficiario</th>
+            <th scope="col">Concepto</th>
+            <th scope="col">Estado</th>
+            <th scope="col" class="num">Solicitado</th>
+            <th scope="col" class="num">Autorizado</th>
+            <th scope="col" class="num">Entregado</th>
+            <th scope="col" class="num">Comprobado</th>
+            <th scope="col" class="num">Devuelto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.ciclo.map((g) => (
+            <tr>
+              <td class="sin-corte">
+                <a href={liga(`/egresos/${g.id}`)}>{g.folio}</a>
+                <span class="nota-linea en-bloque letra-menor apagado">{formatoFechaCorta(g.fecha_solicitud)}</span>
+              </td>
+              <td>{g.beneficiario}</td>
+              <td>
+                {g.concepto_nombre}
+                <span class="nota-linea en-bloque letra-menor apagado">{g.descripcion}</span>
+              </td>
+              <td>
+                {impresion ? (
+                  NOMBRE_ESTADO_EGRESO[g.estado]
+                ) : (
+                  <span class={`insignia ${CLASE_ESTADO_EGRESO[g.estado]}`}>{NOMBRE_ESTADO_EGRESO[g.estado]}</span>
+                )}
+                {g.motivo_rechazo && <span class="nota-linea en-bloque letra-menor apagado">{g.motivo_rechazo}</span>}
+                {g.motivo_cancelacion && <span class="nota-linea en-bloque letra-menor apagado">{g.motivo_cancelacion}</span>}
+              </td>
+              <td class="num">{formatoMXN(g.monto_solicitado_centavos)}</td>
+              <td class="num">{g.monto_autorizado_centavos != null ? formatoMXN(g.monto_autorizado_centavos) : '—'}</td>
+              <td class="num">{g.monto_entregado_centavos != null ? formatoMXN(g.monto_entregado_centavos) : '—'}</td>
+              <td class="num">{g.monto_comprobado_centavos > 0 ? formatoMXN(g.monto_comprobado_centavos) : '—'}</td>
+              <td class="num">{g.monto_devuelto_centavos > 0 ? formatoMXN(g.monto_devuelto_centavos) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4">Total</td>
+            <td class="num">{formatoMXN(suma(d.ciclo, (g) => g.monto_solicitado_centavos))}</td>
+            <td class="num">{formatoMXN(suma(d.ciclo, (g) => g.monto_autorizado_centavos ?? 0))}</td>
+            <td class="num">{formatoMXN(suma(d.ciclo, (g) => g.monto_entregado_centavos ?? 0))}</td>
+            <td class="num">{formatoMXN(suma(d.ciclo, (g) => g.monto_comprobado_centavos))}</td>
+            <td class="num">{formatoMXN(suma(d.ciclo, (g) => g.monto_devuelto_centavos))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )}
+</section>
+
+<section class={bloque} id="traspasos-ajustes">
+  <h2>Traspasos y ajustes</h2>
+  <h3>Traspasos entre banco y efectivo</h3>
+  {d.traspasos.length === 0 ? (
+    <p class="apagado">Sin traspasos en el ejercicio.</p>
+  ) : (
+    <div class={envoltura}>
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Movimiento</th>
+            <th scope="col">Descripción</th>
+            <th scope="col">Ficha</th>
+            <th scope="col">Capturó</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.traspasos.map((t) => (
+            <tr>
+              <td>{formatoFechaCorta(t.fecha)}</td>
+              <td>De {NOMBRE_BOLSA[t.de_bolsa]} a {NOMBRE_BOLSA[t.a_bolsa]}</td>
+              <td>{t.descripcion}</td>
+              <td>{t.archivo_id ? 'Sí' : 'No'}</td>
+              <td>{t.creado_nombre ?? '—'}</td>
+              <td class="num">{formatoMXN(t.monto_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  <h3>Ajustes por corrección</h3>
+  {ajustes.length === 0 ? (
+    <p class="apagado">Ningún movimiento del ejercicio se corrigió con un ajuste.</p>
+  ) : (
+    <div class={envoltura}>
+      <table class={tabla}>
+        <thead>
+          <tr>
+            <th scope="col">Fecha</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Concepto</th>
+            <th scope="col">Motivo</th>
+            <th scope="col" class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ajustes.map((m) => (
+            <tr>
+              <td>{formatoFechaCorta(m.fecha)}</td>
+              <td>{m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</td>
+              <td>{m.concepto_nombre}</td>
+              <td>{m.motivo_ajuste ?? '—'}</td>
+              <td class="num">{formatoMXN(m.monto_centavos)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</section>
