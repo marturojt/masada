@@ -31,14 +31,14 @@ const meses = (await cortesDelAnio(anio))
 
   <h1>Reportes</h1>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Estado general</h2>
       <p class="apagado">
         Cómo está la tesorería en este momento: caja, cápitas con los hermanos que deben,
         Gran Tesorería, cuotas de grado, egresos pendientes y evidencias. Es de uso interno.
       </p>
-      <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="fila">
         <a class="btn btn--primary" href={`/reportes/estado-general?anio=${anio}`}>Ver</a>
         <a class="btn btn--ghost" href={`/reportes/estado-general/imprimir?anio=${anio}`}>Imprimir</a>
         <a class="btn btn--ghost" href={`/reportes/estado-general.csv?anio=${anio}`}>Descargar CSV</a>

@@ -26,6 +26,9 @@
   },
   "dependencies": {
     "@astrojs/node": "^11.1.7",
+    "@fontsource/cinzel": "^5.3.0",
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "astro": "^7.3.8",
     "heic-convert": "^2.1.0",
     "pg": "^8.23.0",

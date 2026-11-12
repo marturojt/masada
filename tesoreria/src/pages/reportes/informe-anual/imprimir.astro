@@ -1,0 +1,25 @@
+---
+/* Hoja imprimible del informe anual del tesorero. Se imprime con Ctrl+P. */
+import LayoutImpresion from '@layouts/LayoutImpresion.astro';
+import InformeAnual from '@componentes/InformeAnual.astro';
+import { cortesDelAnio } from '@lib/datos/cortes';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+void sesion;
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const cerrados = (await cortesDelAnio(anio)).filter((c) => c.estado_corte === 'cerrado').length;
+---
+
+<LayoutImpresion
+  titulo={`Informe anual de tesorería ${anio}`}
+  periodo={`Informe anual de tesorería, ejercicio ${anio}`}
+  borrador={cerrados < 12}
+  volverA={`/reportes/informe-anual?anio=${anio}`}
+>
+  <InformeAnual anio={anio} impresion />
+</LayoutImpresion>

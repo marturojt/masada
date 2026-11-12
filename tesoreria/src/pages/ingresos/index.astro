@@ -75,12 +75,12 @@ const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0
 
   <Aviso texto={aviso} enlaces={avisoEnlaces} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <h1>Ingresos</h1>
     <a class="btn btn--primary" href="/ingresos/nuevo">Registrar ingreso</a>
   </div>
 
-  <p class="apagado" style="font-size: 0.9rem;">
+  <p class="apagado letra-media">
     Aquí van las cuotas de grado que paga el candidato, los donativos y las
     devoluciones de gastos por comprobar. Las cápitas se registran en
     <a href="/capitas">Cápitas</a>.
@@ -88,7 +88,7 @@ const totalAjustado = movimientos.reduce((s, m) => s + (ajustados.get(m.id) ?? 0
 
   {
     porTipo.size > 0 && (
-      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+      <section class="tarjeta abajo-l">
         <h2>Por concepto</h2>
         <div class="tabla-envoltura">
           <table class="tabla">

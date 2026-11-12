@@ -75,7 +75,7 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
         <td>Egresos</td>
         <td class="num">{formatoMXN(calculado.total_egresos_centavos)}</td>
       </tr>
-      <tr>
+      <tr class="saldo-final">
         <td><strong>Saldo final</strong></td>
         <td class="num">
           <strong>{formatoMXN(calculado.saldo_final_centavos)}</strong>
@@ -112,6 +112,11 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
             </tr>
           </thead>
           <tbody>
+            {informeIngresos.length > 0 && (
+              <tr class="grupo">
+                <th scope="colgroup" colspan="4">Ingresos</th>
+              </tr>
+            )}
             {informeIngresos.map((r) => (
               <tr>
                 <td>{NOMBRE_CLASIFICACION[r.clasificacion] ?? r.clasificacion}</td>
@@ -120,12 +125,17 @@ const informeEgresos = informe.filter((r) => r.tipo === 'egreso');
                 <td class="num">{formatoCifra(r.monto_centavos)}</td>
               </tr>
             ))}
+            {informeEgresos.length > 0 && (
+              <tr class="grupo">
+                <th scope="colgroup" colspan="4">Egresos</th>
+              </tr>
+            )}
             {informeEgresos.map((r) => (
               <tr>
                 <td>{NOMBRE_CLASIFICACION[r.clasificacion] ?? r.clasificacion}</td>
                 <td>{r.concepto_nombre}</td>
                 <td class="num">{r.movimientos}</td>
-                <td class="num">({formatoCifra(r.monto_centavos)})</td>
+                <td class="num">{formatoCifra(r.monto_centavos)}</td>
               </tr>
             ))}
           </tbody>

@@ -121,8 +121,8 @@ Astro.response.status = estado;
   <Aviso texto={aviso} />
   {seccion !== 'cuota' && <ResumenErrores errores={errores} />}
 
-  <h1 style="margin-bottom: 0.2rem;">{candidato.nombre_completo}</h1>
-  <p class="apagado" style="margin: 0;">
+  <h1 class="abajo-xxs">{candidato.nombre_completo}</h1>
+  <p class="apagado sin-margen">
     Candidato a {esIniciacion ? 'iniciación' : 'afiliación'}
     {!enProceso && (
       <>
@@ -132,7 +132,7 @@ Astro.response.status = estado;
     )}
   </p>
 
-  <div class="pila" style="margin-top: 1.5rem;">
+  <div class="pila arriba-xl">
     <section class="tarjeta">
       <h2>Datos</h2>
       <div class="tabla-envoltura">
@@ -157,13 +157,13 @@ Astro.response.status = estado;
             {candidato.notas && (
               <tr>
                 <th scope="row">Notas</th>
-                <td style="white-space: pre-line;">{candidato.notas}</td>
+                <td class="preformado">{candidato.notas}</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+      <p class="apagado letra-chica abajo-0">
         El trámite ante la Gran Tesorería (para apartar la fecha) se captura en
         <a href="/gran-tesoreria/tramites/nuevo">Capturar trámite</a>, a su nombre.
       </p>
@@ -182,13 +182,13 @@ Astro.response.status = estado;
       enProceso && (
         <section class="tarjeta">
           <h2>{esIniciacion ? 'Registrar su iniciación' : 'Registrar su afiliación'}</h2>
-          <p class="apagado" style="font-size: 0.85rem;">
+          <p class="apagado letra-chica">
             Cuando la ceremonia ya pasó. Pasa al padrón como hermano activo
             {esIniciacion ? ' con grado de aprendiz' : ' con el grado que trae de su logia'},
             con esa fecha de ingreso, y conserva su cuota, sus pagos y su trámite GT.
             Después se le asigna su modalidad en Cápitas.
           </p>
-          <div style="max-width: 26rem;">
+          <div class="formulario--angosto">
             <Formulario csrf={sesion.csrfToken} nonce={nonceIngreso} accionInterna="ingresar">
               <Campo
                 nombre="fecha"
@@ -223,9 +223,9 @@ Astro.response.status = estado;
       {
         enProceso ? (
           <details open={seccion === 'desistio'}>
-            <summary style="cursor: pointer;">El candidato desistió</summary>
-            <div style="margin-top: 0.75rem; max-width: 26rem;">
-              <p class="apagado" style="font-size: 0.85rem;">
+            <summary>El candidato desistió</summary>
+            <div class="arriba-s formulario--angosto">
+              <p class="apagado letra-chica">
                 Queda registrado y sale de la lista de candidatos. No se borra: lo que pagó y
                 lo que debe siguen a su nombre. Si regresa, se retoma.
               </p>
@@ -237,7 +237,7 @@ Astro.response.status = estado;
           </details>
         ) : (
           <Formulario csrf={sesion.csrfToken} nonce={nonceEstatus} accionInterna="retomar">
-            <p class="apagado" style="font-size: 0.85rem;">
+            <p class="apagado letra-chica">
               Si el candidato regresa, vuelve a la lista de candidatos con todo lo que tenía.
             </p>
             <button class="btn btn--primary" type="submit">Retomar candidatura</button>

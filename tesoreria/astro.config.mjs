@@ -40,5 +40,8 @@ export default defineConfig({
 
   integrations: [],
 
-  vite: { build: { sourcemap: false } },
+  // assetsInlineLimit en 0: Astro mete en la página los scripts chicos, y la CSP
+  // (script-src 'self', sin 'unsafe-inline') los bloquearía. Así salen siempre
+  // como archivo propio en /_astro. Aplica igual a fuentes e imágenes.
+  vite: { build: { sourcemap: false, assetsInlineLimit: 0 } },
 });

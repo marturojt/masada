@@ -359,24 +359,24 @@ Astro.response.status = estado;
   <Aviso texto={aviso} enlaces={avisoEnlaces} />
   {seccion === null && <ResumenErrores errores={errores} />}
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <div>
-      <h1 style="margin-bottom: 0.2rem;">{egreso.folio}</h1>
-      <p class="apagado" style="margin: 0;">
+      <h1 class="abajo-xxs">{egreso.folio}</h1>
+      <p class="apagado sin-margen">
         <span class:list={['insignia', CLASE_ESTADO_EGRESO[egreso.estado]]}>
           {NOMBRE_ESTADO_EGRESO[egreso.estado]}
         </span>
         {egreso.requiere_comprobacion && (
           <>
             {' '}
-            <span class="insignia">Por comprobar</span>
+            <span class="insignia insignia--neutro">Gasto a comprobar</span>
           </>
         )}
       </p>
     </div>
   </div>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Datos</h2>
       <div class="tabla-envoltura">
@@ -464,7 +464,7 @@ Astro.response.status = estado;
             {egreso.notas && (
               <tr>
                 <th scope="row">Notas</th>
-                <td style="white-space: pre-line;">{egreso.notas}</td>
+                <td class="preformado">{egreso.notas}</td>
               </tr>
             )}
           </tbody>
@@ -473,14 +473,14 @@ Astro.response.status = estado;
 
       {
         obligacionesGT.length > 0 && (
-          <div style="margin-top: 1rem;">
+          <div class="arriba-m">
             <h3>Lo que paga a la Gran Tesorería</h3>
-            <p style="margin: 0; font-size: 0.9rem;">
+            <p class="letra-media sin-margen">
               Cuando registres la entrega del dinero, el pago queda asentado solo en estas
               obligaciones.
             </p>
             <div class="tabla-envoltura">
-            <table class="tabla" style="margin-top: 0.5rem;">
+            <table class="tabla arriba-xs">
               <thead>
                 <tr>
                   <th>Folio</th>
@@ -507,9 +507,9 @@ Astro.response.status = estado;
 
       {
         granTesoreria && (
-          <div style="margin-top: 1rem;">
+          <div class="arriba-m">
             <h3>Pago a la Gran Tesorería</h3>
-            <p style="margin: 0; font-size: 0.9rem;">
+            <p class="letra-media sin-margen">
               {NOMBRE_TIPO_PAGO_GT[granTesoreria.tipo_pago]} · ampara de{' '}
               {nombrePeriodo(granTesoreria.periodo_desde.slice(0, 7))} a{' '}
               {nombrePeriodo(granTesoreria.periodo_hasta.slice(0, 7))}
@@ -522,7 +522,7 @@ Astro.response.status = estado;
 
     <section class="tarjeta">
       <h2>Firmas</h2>
-      <p class="apagado" style="font-size: 0.85rem;">
+      <p class="apagado letra-chica">
         Todo egreso lleva la firma del tesorero y la del Venerable Maestro. El V∴M∴ puede
         firmar por el tesorero cuando no está, dejando constancia del motivo.
       </p>
@@ -550,11 +550,11 @@ Astro.response.status = estado;
                           {f.es_suplencia && (
                             <>
                               {' '}
-                              <span class="insignia insignia--pendiente">
+                              <span class="insignia insignia--neutro">
                                 Suplió al tesorero
                               </span>
                               <br />
-                              <span class="apagado" style="font-size: 0.8rem;">
+                              <span class="apagado letra-menor">
                                 {f.motivo_suplencia ??
                                   (f.motivo_limpiado ? 'Motivo retirado como corrección de captura' : '')}
                               </span>
@@ -576,9 +576,9 @@ Astro.response.status = estado;
 
       {
         soyVM && firmaDe('tesorero')?.es_suplencia && (
-          <details style="margin-top: 0.75rem;" open={seccion === 'suplencia'}>
-            <summary style="cursor: pointer;">Editar o limpiar el motivo de la suplencia</summary>
-            <div style="margin-top: 0.75rem; max-width: 26rem;">
+          <details class="arriba-s" open={seccion === 'suplencia'}>
+            <summary>Editar o limpiar el motivo de la suplencia</summary>
+            <div class="arriba-s formulario--angosto">
               {seccion === 'suplencia' && <ResumenErrores errores={errores} />}
               <Formulario
                 csrf={sesion.csrfToken}
@@ -603,13 +603,13 @@ Astro.response.status = estado;
 
       {
         egreso.estado === 'registrado' && (
-          <div style="margin-top: 1rem;">
+          <div class="arriba-m">
             {seccion === 'firmar' && <ResumenErrores errores={errores} />}
 
             {faltaMiFirma && (
               <Formulario csrf={sesion.csrfToken} nonce={nonces.firma} accionInterna="firmar">
                 <input type="hidden" name="rol_requerido" value={miLado} />
-                <div class="formulario__acciones" style="margin-top: 0;">
+                <div class="formulario__acciones arriba-0">
                   <button class="btn btn--primary" type="submit">
                     Firmar como {NOMBRE_ROL[miLado]}
                   </button>
@@ -619,11 +619,11 @@ Astro.response.status = estado;
 
             {soyVM && faltaFirmaTesorero && (
               <details
-                style="margin-top: 0.75rem;"
+              class="arriba-s"
                 open={seccion === 'firmar' && errores.motivo_suplencia !== undefined}
               >
-                <summary style="cursor: pointer;">Firmar por el tesorero (suplencia)</summary>
-                <div style="margin-top: 0.75rem; max-width: 26rem;">
+                <summary>Firmar por el tesorero (suplencia)</summary>
+                <div class="arriba-s formulario--angosto">
                   <Formulario
                     csrf={sesion.csrfToken}
                     nonce={nonces.firma}
@@ -648,9 +648,9 @@ Astro.response.status = estado;
               </details>
             )}
 
-            <details style="margin-top: 0.75rem;" open={seccion === 'rechazar'}>
-              <summary style="cursor: pointer;">Rechazar este egreso</summary>
-              <div style="margin-top: 0.75rem; max-width: 26rem;">
+            <details class="arriba-s" open={seccion === 'rechazar'}>
+              <summary>Rechazar este egreso</summary>
+              <div class="arriba-s formulario--angosto">
                 {seccion === 'rechazar' && <ResumenErrores errores={errores} />}
                 <Formulario
                   csrf={sesion.csrfToken}
@@ -683,7 +683,7 @@ Astro.response.status = estado;
       egreso.estado === 'autorizado' && (
         <section class="tarjeta" id="entrega">
           <h2>Registrar la entrega del dinero</h2>
-          <p class="apagado" style="font-size: 0.85rem;">
+          <p class="apagado letra-chica">
             Esta es la operación que saca el dinero de la caja.
             {egreso.requiere_comprobacion
               ? ' Al ser por comprobar, después habrá que subir los recibos y registrar la devolución del sobrante.'
@@ -691,7 +691,7 @@ Astro.response.status = estado;
           </p>
           {seccion === 'entregar' && <ResumenErrores errores={errores} />}
 
-          <div style="max-width: 28rem;">
+          <div class="formulario--angosto">
             <Formulario
               csrf={sesion.csrfToken}
               nonce={nonces.entrega}
@@ -762,9 +762,9 @@ Astro.response.status = estado;
               </div>
             </Formulario>
 
-            <details style="margin-top: 1rem;" open={seccion === 'cancelar'}>
-              <summary style="cursor: pointer;">Cancelar este egreso</summary>
-              <div style="margin-top: 0.75rem;">
+            <details class="arriba-m" open={seccion === 'cancelar'}>
+              <summary>Cancelar este egreso</summary>
+              <div class="arriba-s">
                 {seccion === 'cancelar' && <ResumenErrores errores={errores} />}
                 <Formulario
                   csrf={sesion.csrfToken}
@@ -797,13 +797,13 @@ Astro.response.status = estado;
       egreso.estado === 'por_comprobar' && (
         <section class="tarjeta" id="comprobacion">
           <h2>Comprobación</h2>
-          <p class="apagado" style="font-size: 0.85rem;">
+          <p class="apagado letra-chica">
             Se entregaron {formatoMXN(entregado)}. Para cerrar, los recibos más lo devuelto
             tienen que sumar esa cantidad. Faltan {formatoMXN(pendienteComprobar)}.
           </p>
 
-          <div style="display: flex; flex-wrap: wrap; gap: 1.5rem;">
-            <div style="flex: 1; min-width: 16rem;">
+          <div class="columnas">
+            <div class="columnas__una">
               <h3>Agregar recibo</h3>
               {seccion === 'comprobar' && <ResumenErrores errores={errores} />}
               <Formulario
@@ -859,7 +859,7 @@ Astro.response.status = estado;
               </Formulario>
             </div>
 
-            <div style="flex: 1; min-width: 16rem;">
+            <div class="columnas__una">
               <h3>Devolver sobrante</h3>
               {seccion === 'devolver' && <ResumenErrores errores={errores} />}
               <Formulario
@@ -900,7 +900,7 @@ Astro.response.status = estado;
                 </div>
               </Formulario>
 
-              <h3 style="margin-top: 1.5rem;">Cerrar comprobación</h3>
+              <h3 class="arriba-xl">Cerrar comprobación</h3>
               {seccion === 'cerrar' && <ResumenErrores errores={errores} />}
               {pendienteComprobar === 0 ? (
                 <Formulario
@@ -921,7 +921,7 @@ Astro.response.status = estado;
                   </div>
                 </Formulario>
               ) : (
-                <p class="apagado" style="font-size: 0.85rem;">
+                <p class="apagado letra-chica">
                   Todavía faltan {formatoMXN(pendienteComprobar)} entre recibos y devolución.
                 </p>
               )}
@@ -980,9 +980,9 @@ Astro.response.status = estado;
 
       {
         egreso.estado !== 'rechazado' && egreso.estado !== 'cancelado' && (
-          <details style="margin-top: 1rem;" open={seccion === 'documento'}>
-            <summary style="cursor: pointer;">Adjuntar documento</summary>
-            <div style="margin-top: 0.75rem; max-width: 26rem;">
+          <details class="arriba-m" open={seccion === 'documento'}>
+            <summary>Adjuntar documento</summary>
+            <div class="arriba-s formulario--angosto">
               {seccion === 'documento' && <ResumenErrores errores={errores} />}
               <Formulario
                 csrf={sesion.csrfToken}
@@ -1035,24 +1035,24 @@ Astro.response.status = estado;
       soyVM && (
         <section class="tarjeta">
           <details open={seccion === 'corregir'}>
-            <summary style="cursor: pointer;">
-              <h2 style="display: inline; margin: 0;">Corregir la captura</h2>
+            <summary>
+              <h2 class="en-linea">Corregir la captura</h2>
             </summary>
-            <p class="apagado" style="font-size: 0.85rem; margin-top: 0.75rem;">
+            <p class="apagado letra-chica arriba-s">
               Para errores de captura: concepto, beneficiario, descripción y fechas. Los
               montos no se tocan. La salida del libro de caja sigue a la fecha de entrega,
               salvo que su mes ya tenga corte cerrado. El antes y el después quedan en la
               bitácora.
             </p>
             {seccion === 'corregir' && <ResumenErrores errores={errores} />}
-            <div style="max-width: 28rem;">
+            <div class="formulario--angosto">
               <Formulario
                 csrf={sesion.csrfToken}
                 nonce={nonces.correccion}
                 accionInterna="corregir"
               >
                 {esPagoGT ? (
-                  <p style="font-size: 0.9rem;">
+                  <p class="letra-media">
                     Concepto: {egreso.concepto_nombre}. Va ligado a las obligaciones de la Gran
                     Tesorería y no se cambia.
                   </p>
@@ -1123,7 +1123,7 @@ Astro.response.status = estado;
                   <button class="btn btn--primary" type="submit">Guardar corrección</button>
                 </div>
               </Formulario>
-              <p class="apagado" style="font-size: 0.85rem;">
+              <p class="apagado letra-chica">
                 Si un beneficiario está escrito de dos maneras en varios egresos, se unifica de
                 una vez en <a href="/egresos/beneficiarios">Beneficiarios</a>.
               </p>

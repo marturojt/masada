@@ -81,7 +81,7 @@ Astro.response.status = estado;
     <section class="tarjeta">
       <h2>Unificar</h2>
       <ResumenErrores errores={errores} />
-      <div style="max-width: 28rem;">
+      <div class="formulario--angosto">
         <Formulario csrf={sesion.csrfToken} nonce={nonce}>
           <Selector
             nombre="de"

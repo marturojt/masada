@@ -133,7 +133,7 @@ Astro.response.status = estado;
 
   {
     aplicado && (
-      <div class="aviso">
+      <div class="aviso aviso--exito">
         Carga aplicada: {aplicado.detalle}.
         {aplicado.tipo === 'egresos' && (
           <>
@@ -149,7 +149,7 @@ Astro.response.status = estado;
 
   {
     ensayo && (
-      <section class="tarjeta" style="margin-top: 1.25rem;">
+      <section class="tarjeta arriba-l">
         <h2>Ensayo: {TIPOS.find((t) => t.tipo === ensayo!.tipo)?.titulo}</h2>
         <p>
           {cuenta(ensayo.total, 'fila', 'filas')}, <strong>{cuenta(ensayo.validas, 'válida', 'válidas')}</strong>
@@ -208,12 +208,12 @@ Astro.response.status = estado;
     )
   }
 
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1.25rem; margin-top: 1.25rem;">
+  <div class="rejilla rejilla--media arriba-l">
     {
       TIPOS.map((t) => (
         <section class="tarjeta">
           <h2>{t.titulo}</h2>
-          <p class="apagado" style="font-size: 0.9rem;">{t.nota}</p>
+          <p class="apagado letra-media">{t.nota}</p>
           <p>
             <a class="btn btn--ghost" href={`/herramientas/plantillas/${t.tipo}`}>
               Descargar plantilla

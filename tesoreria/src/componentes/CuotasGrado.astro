@@ -58,7 +58,7 @@ const opcionesEvento: Opcion[] = (Object.entries(NOMBRE_EVENTO_CUOTA) as [string
 
 <section class="tarjeta" id="cuotas">
   <h2>Cuotas de grado</h2>
-  <p class="apagado" style="font-size: 0.85rem;">
+  <p class="apagado letra-chica">
     Lo que debe a la logia por su iniciación, afiliación, aumento de salario o exaltación.
     Los pagos se capturan en <a href={`/ingresos/nuevo?hermano=${hermanoId}&cuota=1`}>Ingresos</a>
     con el concepto de la cuota y a su nombre: se aplican solos, en uno o varios abonos.
@@ -89,7 +89,7 @@ const opcionesEvento: Opcion[] = (Object.entries(NOMBRE_EVENTO_CUOTA) as [string
                   {c.estatus === 'cancelado' && (
                     <>
                       {' '}
-                      <span class="insignia">Cancelada</span>
+                      <span class="insignia insignia--cancelado">Cancelada</span>
                     </>
                   )}
                   {c.estatus === 'vigente' && c.saldo_centavos === 0 && (
@@ -105,11 +105,11 @@ const opcionesEvento: Opcion[] = (Object.entries(NOMBRE_EVENTO_CUOTA) as [string
                 <td class="num">
                   {c.estatus === 'vigente' ? <strong>{formatoMXN(c.saldo_centavos)}</strong> : '—'}
                 </td>
-                <td class="apagado" style="font-size: 0.85rem;">
+                <td class="apagado letra-chica">
                   {c.motivo_cancelacion ?? c.notas ?? ''}
                   {noncesCancelar.has(c.id) && (
                     <details>
-                      <summary style="cursor: pointer;">Cancelar</summary>
+                      <summary>Cancelar</summary>
                       <Formulario
                         csrf={sesion.csrfToken}
                         nonce={noncesCancelar.get(c.id)!}
@@ -141,10 +141,10 @@ const opcionesEvento: Opcion[] = (Object.entries(NOMBRE_EVENTO_CUOTA) as [string
 
   {
     admiteNuevas && (
-      <details style="margin-top: 1rem;" open={abierto}>
-        <summary style="cursor: pointer;">Registrar cuota por cobrar</summary>
-        <div style="margin-top: 0.75rem; max-width: 26rem;">
-          <p class="apagado" style="font-size: 0.85rem;">
+      <details class="arriba-m" open={abierto}>
+        <summary>Registrar cuota por cobrar</summary>
+        <div class="arriba-s formulario--angosto">
+          <p class="apagado letra-chica">
             Cuando la logia ya pagó el trámite a la Gran Tesorería y la persona todavía no
             cubre su parte. Si ya hay pagos de esa cuota, se aplican solos.
           </p>

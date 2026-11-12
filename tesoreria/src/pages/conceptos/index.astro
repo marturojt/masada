@@ -113,7 +113,7 @@ Astro.response.status = estado;
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Catálogo de conceptos</h1>
-  <p class="apagado" style="font-size: 0.9rem;">
+  <p class="apagado letra-media">
     Los conceptos no se borran: se desactivan, y así los movimientos históricos
     conservan el suyo. Los marcados como del sistema llevan lógica propia y no se
     pueden desactivar.
@@ -124,7 +124,7 @@ Astro.response.status = estado;
       { titulo: 'Egresos', lista: egresos },
       { titulo: 'Ingresos', lista: ingresos },
     ].map((grupo) => (
-      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+      <section class="tarjeta abajo-l">
         <h2>{grupo.titulo}</h2>
         <div class="tabla-envoltura">
           <table class="tabla">
@@ -149,7 +149,7 @@ Astro.response.status = estado;
                       </>
                     )}
                   </td>
-                  <td style="font-size: 0.8rem;">
+                  <td class="letra-menor">
                     {c.requiere_hermano && <span class="insignia">Pide hermano</span>}{' '}
                     {c.requiere_comprobante && <span class="insignia">Pide comprobante</span>}{' '}
                     {c.por_comprobar_por_defecto && (
@@ -161,7 +161,7 @@ Astro.response.status = estado;
                     {c.activo ? (
                       <span class="insignia insignia--ok">Activo</span>
                     ) : (
-                      <span class="insignia">Inactivo</span>
+                      <span class="insignia insignia--cancelado">Inactivo</span>
                     )}
                   </td>
                   <td>
@@ -174,9 +174,8 @@ Astro.response.status = estado;
                         <input type="hidden" name="concepto_id" value={String(c.id)} />
                         <input type="hidden" name="activo" value={c.activo ? 'no' : 'si'} />
                         <button
-                          class="btn btn--ghost"
+                          class="btn btn--ghost btn--chico"
                           type="submit"
-                          style="padding: 0.15rem 0.6rem; font-size: 0.72rem;"
                         >
                           {c.activo ? 'Desactivar' : 'Activar'}
                         </button>
@@ -195,8 +194,8 @@ Astro.response.status = estado;
   <section class="tarjeta">
     <h2>Agregar concepto</h2>
     <details open={seccion === 'nuevo'}>
-      <summary style="cursor: pointer;">Nuevo concepto</summary>
-      <div style="margin-top: 1rem; max-width: 32rem;">
+      <summary>Nuevo concepto</summary>
+      <div class="arriba-m formulario--angosto">
         <Formulario csrf={sesion.csrfToken} nonce={nonceNuevo} accionInterna="nuevo">
           <Campo
             nombre="nombre"
@@ -215,21 +214,21 @@ Astro.response.status = estado;
           />
           <div class="campo">
             <label class="campo__etiqueta" for="campo-requiere_hermano">Reglas</label>
-            <label style="display: block; font-size: 0.85rem;">
+            <label class="en-bloque letra-chica">
               <input
                 id="campo-requiere_hermano"
                 type="checkbox"
                 name="requiere_hermano"
-                style="width: auto;"
+                class="ancho-auto"
               />
               {' '}Exige indicar el hermano
             </label>
-            <label style="display: block; font-size: 0.85rem;">
-              <input type="checkbox" name="requiere_comprobante" style="width: auto;" checked />
+            <label class="en-bloque letra-chica">
+              <input type="checkbox" name="requiere_comprobante" class="ancho-auto" checked />
               {' '}Exige imagen de comprobante
             </label>
-            <label style="display: block; font-size: 0.85rem;">
-              <input type="checkbox" name="por_comprobar_por_defecto" style="width: auto;" />
+            <label class="en-bloque letra-chica">
+              <input type="checkbox" name="por_comprobar_por_defecto" class="ancho-auto" />
               {' '}Normalmente se entrega por comprobar
             </label>
           </div>

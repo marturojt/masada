@@ -134,7 +134,7 @@ Astro.response.status = estado;
   <Aviso texto={aviso} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <h1>{usuario.nombre}{soyYo && <span class="apagado"> (tú)</span>}</h1>
     {
       usuario.activo ? (
@@ -149,7 +149,7 @@ Astro.response.status = estado;
     {usuario.ultimo_acceso ? formatoMomento(usuario.ultimo_acceso) : 'nunca'}
   </p>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Datos</h2>
       <Formulario csrf={sesion.csrfToken} nonce={nonceEditar} accionInterna="editar">

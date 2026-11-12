@@ -110,7 +110,7 @@ Astro.response.status = estado;
     nombre. El día de la ceremonia pasan al padrón desde su ficha, con todo eso.
   </p>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>En proceso</h2>
       {
@@ -157,7 +157,7 @@ Astro.response.status = estado;
 
     <section class="tarjeta">
       <h2>Alta de candidato</h2>
-      <div style="max-width: 28rem;">
+      <div class="formulario--angosto">
         <Formulario csrf={sesion.csrfToken} nonce={nonce}>
           <Campo
             nombre="nombre_completo"
@@ -227,10 +227,10 @@ Astro.response.status = estado;
       desistieron.length > 0 && (
         <section class="tarjeta">
           <details>
-            <summary style="cursor: pointer;">
-              <h2 style="display: inline; margin: 0;">Desistieron ({desistieron.length})</h2>
+            <summary>
+              <h2 class="en-linea">Desistieron ({desistieron.length})</h2>
             </summary>
-            <ul style="margin-top: 0.75rem;">
+            <ul class="arriba-s">
               {desistieron.map((c) => (
                 <li>
                   <a href={`/hermanos/candidatos/${c.id}`}>{c.nombre_completo}</a>

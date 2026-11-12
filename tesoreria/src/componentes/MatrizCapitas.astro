@@ -52,6 +52,23 @@ const ETIQUETA: Record<string, string> = {
   pendiente: 'pendiente',
 };
 
+/* Estado para el globo de cada mes, con la insignia de su significado. */
+const ESTADO: Record<string, string> = {
+  cubierto: 'Cubierto',
+  parcial: 'Pago parcial',
+  vencido_parcial: 'Vencido, pago parcial',
+  vencido: 'Vencido',
+  pendiente: 'Por vencer',
+};
+
+const INSIGNIA: Record<string, string> = {
+  cubierto: 'insignia--ok',
+  parcial: 'insignia--pendiente',
+  vencido_parcial: 'insignia--alerta',
+  vencido: 'insignia--alerta',
+  pendiente: 'insignia--pendiente',
+};
+
 const meses = Array.from({ length: 12 }, (_, i) => i + 1);
 
 /*
@@ -61,23 +78,40 @@ const meses = Array.from({ length: 12 }, (_, i) => i + 1);
 const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
 ---
 
+<!--
+  Tocar un mes abre un globo con el cargo, lo pagado y el estado; tocar la
+  insignia del plan abre su historia. Son popovers nativos del navegador: sin
+  JavaScript propio y sin depender del title, que en el celular no existe.
+-->
 <div class="tabla-envoltura">
-  <table class="tabla tabla--matriz">
+  <table class="tabla tabla--matriz tabla--fija">
     <caption>Cápitas {anio}, mes por mes</caption>
     <thead>
       <tr>
         <th scope="col">Hermano</th>
         {meses.map((m) => <th scope="col" class="celda">{MESES_CORTOS[m - 1]}</th>)}
-        <th scope="col" class="num">Vencido</th>
       </tr>
     </thead>
     <tbody>
       {
         estados.map((e) => {
           const fila = porHermano.get(e.hermano_id) ?? SIN_CARGOS;
+          const plan = planes?.get(e.hermano_id);
+          /*
+            Ajustado es cuando cambió el trato, como una promoción convertida a
+            mensual. Un recálculo que deja la misma modalidad (corregir cómo se
+            contaron los meses) no es ajuste y no se marca.
+          */
+          const etiquetaPlan =
+            e.modalidad === 'promocion'
+              ? 'Promoción'
+              : plan?.reemplazo_de && plan.reemplazo_de !== e.modalidad
+                ? 'Plan ajustado'
+                : null;
+          const idPlan = `plan-${e.hermano_id}`;
           return (
             <tr>
-              <td>
+              <th scope="row">
                 <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>
                 {e.estatus === 'baja' && (
                   <>
@@ -85,36 +119,31 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
                     <span class="insignia">Baja</span>
                   </>
                 )}
-                {e.modalidad === 'promocion' && (
+                {etiquetaPlan && (
                   <>
                     {' '}
-                    <span
-                      class="insignia insignia--pendiente con-historia"
-                      title={historiaDelPlan(planes?.get(e.hermano_id))}
+                    <button
+                      type="button"
+                      class="insignia insignia--neutro insignia--boton"
+                      popovertarget={idPlan}
                     >
-                      Promoción
-                    </span>
+                      {etiquetaPlan}
+                    </button>
+                    <div id={idPlan} popover="auto" class="globo">
+                      <p class="globo__titulo">{e.nombre_completo}</p>
+                      <p class="globo__texto">{historiaDelPlan(plan)}</p>
+                      <button
+                        type="button"
+                        class="btn btn--ghost btn--chico"
+                        popovertarget={idPlan}
+                        popovertargetaction="hide"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
                   </>
                 )}
-                {/*
-                  Ajustado es cuando cambió el trato, como una promoción convertida a
-                  mensual. Un recálculo que deja la misma modalidad (corregir cómo se
-                  contaron los meses) no es ajuste y no se marca.
-                */}
-                {e.modalidad !== 'promocion' &&
-                  planes?.get(e.hermano_id)?.reemplazo_de &&
-                  planes?.get(e.hermano_id)?.reemplazo_de !== e.modalidad && (
-                  <>
-                    {' '}
-                    <span
-                      class="insignia con-historia"
-                      title={historiaDelPlan(planes?.get(e.hermano_id))}
-                    >
-                      Plan ajustado
-                    </span>
-                  </>
-                )}
-              </td>
+              </th>
               {meses.map((m) => {
                 const cargo = fila.get(m);
                 if (!cargo) {
@@ -125,25 +154,49 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
                     </td>
                   );
                 }
-                const titulo =
-                  `${nombrePeriodo(cargo.periodo.slice(0, 7))}: ` +
-                  `${ETIQUETA[cargo.estado_pago]}, esperado ${formatoCifra(cargo.monto_esperado_centavos)}` +
-                  (cargo.pagado_centavos > 0
-                    ? `, pagado ${formatoCifra(cargo.pagado_centavos)}`
-                    : '') +
-                  (cargo.condonado_centavos > 0
-                    ? `, exento ${formatoCifra(cargo.condonado_centavos)}`
-                    : '');
+                const mes = nombrePeriodo(cargo.periodo.slice(0, 7));
+                const idMes = `mes-${e.hermano_id}-${m}`;
+                const resumen =
+                  `${mes}: ${ETIQUETA[cargo.estado_pago]}, cargo ${formatoCifra(cargo.monto_esperado_centavos)}` +
+                  (cargo.pagado_centavos > 0 ? `, pagado ${formatoCifra(cargo.pagado_centavos)}` : '') +
+                  (cargo.condonado_centavos > 0 ? `, exento ${formatoCifra(cargo.condonado_centavos)}` : '');
                 return (
-                  <td class:list={['celda', CLASE[cargo.estado_pago]]} title={titulo}>
-                    <span aria-hidden="true">{SIMBOLO[cargo.estado_pago]}</span>
-                    <span class="solo-lectores">{titulo}</span>
+                  <td class:list={['celda', CLASE[cargo.estado_pago]]}>
+                    <button
+                      type="button"
+                      class="celda__boton"
+                      popovertarget={idMes}
+                      aria-label={resumen}
+                    >
+                      <span aria-hidden="true">{SIMBOLO[cargo.estado_pago]}</span>
+                    </button>
+                    <div id={idMes} popover="auto" class="globo">
+                      <p class="globo__titulo">
+                        {e.nombre_completo} · {mes}
+                        {cargo.clase === 'promocion' && ', anualidad'}
+                      </p>
+                      <dl class="globo__datos">
+                        <dt>Cargo</dt>
+                        <dd>{formatoCifra(cargo.monto_esperado_centavos)}</dd>
+                        <dt>Pagado</dt>
+                        <dd>{formatoCifra(cargo.pagado_centavos)}</dd>
+                        {cargo.condonado_centavos > 0 && (
+                          <>
+                            <dt>Exento</dt>
+                            <dd>{formatoCifra(cargo.condonado_centavos)}</dd>
+                          </>
+                        )}
+                      </dl>
+                      <p class="globo__pie">
+                        <span class:list={['insignia', INSIGNIA[cargo.estado_pago]]}>
+                          {ESTADO[cargo.estado_pago]}
+                        </span>
+                        <a href={`/capitas/hermano/${e.hermano_id}`}>Ver ficha</a>
+                      </p>
+                    </div>
                   </td>
                 );
               })}
-              <td class="num">
-                {e.vencido_centavos > 0 ? formatoCifra(e.vencido_centavos) : '—'}
-              </td>
             </tr>
           );
         })
@@ -152,15 +205,38 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
   </table>
 </div>
 
-<p class="apagado" style="font-size: 0.8rem;">
-  ● cubierto · ◐ parcial · ✕ vencido · · pendiente · – sin cargo ese mes
+<p class="apagado letra-menor">
+  Toca un mes para ver el detalle. ● cubierto · ◐ parcial · ✕ vencido · · pendiente · – sin cargo ese mes
 </p>
 
 <style>
   .tabla--matriz .celda {
     text-align: center;
-    padding: 0.3rem 0.2rem;
+    padding: 0.1rem;
     font-size: 0.95rem;
+    vertical-align: middle;
+  }
+
+  /* El símbolo es un botón del tamaño de la celda, cómodo para el dedo. */
+  .celda__boton {
+    all: unset;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    min-width: 2.1rem;
+    min-height: 2.1rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .celda__boton:hover {
+    background: var(--relleno-tenue);
+  }
+
+  .celda__boton:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: -2px;
   }
 
   .celda--cubierto {

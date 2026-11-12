@@ -171,12 +171,103 @@
     color: #444444;
   }
 
-  .acciones-impresion {
+  /*
+   * Barra de pantalla sobre la hoja: volver, qué documento es e imprimir. No sale
+   * en el papel. Tiene sus propios estilos porque esta hoja no carga admin.css.
+   */
+  .barra-impresion {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #f3f1ec;
+    border-bottom: 1px solid #d6d1c4;
+  }
+
+  .barra-impresion__fila {
     max-width: 46rem;
-    margin: 1rem auto 0;
-    padding: 0 1.25rem;
+    margin: 0 auto;
+    padding: 0.6rem 1.25rem;
     display: flex;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .barra-impresion__titulo {
+    font-weight: 600;
+    margin-right: auto;
+  }
+
+  .barra-impresion__ayuda {
+    flex-basis: 100%;
+    font-size: 0.8rem;
+    color: #555555;
+  }
+
+  .boton-impresion {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    line-height: 1.2;
+    padding: 0.45rem 1rem;
+    border-radius: 6px;
+    border: 1px solid #8b6914;
+    background: transparent;
+    color: #5a4410;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .boton-impresion[hidden] {
+    display: none;
+  }
+
+  .boton-impresion--principal {
+    background: #8b6914;
+    color: #ffffff;
+  }
+
+  .boton-impresion:focus-visible {
+    outline: 2px solid #8b6914;
+    outline-offset: 2px;
+  }
+
+  /* Títulos que no se quedan solos al pie de una página. */
+  .hoja h2,
+  .hoja h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .hoja h2 + table,
+  .hoja h2 + p {
+    break-before: avoid;
+  }
+
+  .bloque-impreso {
+    break-inside: avoid-page;
+  }
+
+  /* Saldo final: en negritas y con doble línea arriba, como en un estado contable. */
+  .hoja .saldo-final td,
+  .hoja .saldo-final th {
+    border-top: 3px double #111111;
+    font-weight: 700;
+  }
+
+  /* Renglón que separa ingresos de egresos dentro de una misma tabla. */
+  .hoja tr.grupo th {
+    padding-top: 0.6rem;
+    font-family: var(--font-label);
+    font-size: 8pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #111111;
+    border-bottom: 1px solid #999999;
   }
 
   /* Reportes de varias secciones: estado general e informes. */
@@ -187,6 +278,10 @@
   .hoja h3 {
     font-size: 10pt;
     margin: 0.9rem 0 0.35rem;
+  }
+
+  .hoja .sangria {
+    padding-left: 1.2rem;
   }
 
   .hoja .apagado {
@@ -233,5 +328,12 @@
 
   tr {
     page-break-inside: avoid;
+  }
+}
+
+/* En un teléfono, una tabla ancha se desplaza dentro de la hoja y no la página. */
+@media screen and (max-width: 600px) {
+  .hoja {
+    overflow-x: auto;
   }
 }

@@ -176,7 +176,7 @@ Astro.response.status = estado;
     />
     <fieldset class="campo" style="border: 0; padding: 0; margin: 0 0 1rem;">
       <legend class="campo__etiqueta">Meses que cubre (solo ajuste de cápitas)</legend>
-      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <div class="fila">
         <Campo
           nombre="cubre_desde"
           etiqueta={ETIQUETAS.cubre_desde!}
@@ -219,9 +219,9 @@ Astro.response.status = estado;
     {
       tarifasTramite.length > 0 && (
         <details style="margin-bottom: 1rem;">
-          <summary style="cursor: pointer;">Montos de la Ley de Ingresos</summary>
+          <summary>Montos de la Ley de Ingresos</summary>
           <div class="tabla-envoltura">
-          <table class="tabla" style="margin-top: 0.5rem; font-size: 0.85rem;">
+          <table class="tabla letra-chica arriba-xs">
             <tbody>
               {tarifasTramite.map((t) => (
                 <tr>
@@ -233,7 +233,7 @@ Astro.response.status = estado;
           </table>
           </div>
           {desdeLey && (
-            <p class="apagado" style="font-size: 0.8rem;">
+            <p class="apagado letra-menor">
               Vigentes desde el {formatoFechaCorta(desdeLey)}. Para un trámite anterior, los
               montos de entonces están en el <a href="/gran-tesoreria/tarifas">historial de tarifas</a>.
             </p>

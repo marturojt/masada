@@ -27,6 +27,19 @@ const enlaces = [
   { href: '/herramientas', texto: 'Herramientas' },
 ];
 
+/*
+ * En celular el menú se pliega en un <details> y se agrupa por uso. Mismos
+ * enlaces que la barra de escritorio, que conserva su orden de siempre.
+ */
+const grupos = [
+  { titulo: 'Día a día', rutas: ['/', '/capitas', '/ingresos', '/egresos', '/traspasos'] },
+  { titulo: 'Cierre', rutas: ['/cortes', '/reportes', '/pendientes'] },
+  {
+    titulo: 'Catálogos',
+    rutas: ['/hermanos', '/aportaciones', '/gran-tesoreria', '/conceptos', '/tarifas', '/herramientas'],
+  },
+].map((g) => ({ titulo: g.titulo, enlaces: g.rutas.map((r) => enlaces.find((e) => e.href === r)!) }));
+
 const ruta = Astro.url.pathname.replace(/\/+$/, '') || '/';
 const activo = (href: string): boolean =>
   href === '/' ? ruta === '/' : ruta === href || ruta.startsWith(`${href}/`);
@@ -46,12 +59,39 @@ const activo = (href: string): boolean =>
       }
     </nav>
 
+    <details class="menu-movil">
+      <summary class="menu-movil__boton">Menú</summary>
+      <nav class="menu-movil__lista" aria-label="Secciones">
+        {
+          grupos.map((g) => (
+            <div class="menu-movil__grupo">
+              <p class="menu-movil__titulo">{g.titulo}</p>
+              {g.enlaces.map((e) => (
+                <a href={e.href} aria-current={activo(e.href) ? 'page' : undefined}>
+                  {e.texto}
+                </a>
+              ))}
+            </div>
+          ))
+        }
+        <div class="menu-movil__grupo menu-movil__sesion">
+          <p class="menu-movil__titulo">Sesión</p>
+          <p class="menu-movil__usuario">
+            {sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}
+          </p>
+          <Formulario accion="/salir" csrf={sesion.csrfToken}>
+            <button class="btn btn--ghost" type="submit">Salir</button>
+          </Formulario>
+        </div>
+      </nav>
+    </details>
+
     <span class="barra__usuario">
       {sesion.usuario.nombre} · {NOMBRE_ROL[sesion.usuario.rol]}
     </span>
 
-    <Formulario accion="/salir" csrf={sesion.csrfToken}>
-      <button class="btn btn--ghost" type="submit" style="padding: 0.25rem 0.7rem; font-size: 0.75rem;">
+    <Formulario accion="/salir" csrf={sesion.csrfToken} clase="barra__salir">
+      <button class="btn btn--ghost btn--chico" type="submit">
         Salir
       </button>
     </Formulario>

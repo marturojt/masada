@@ -158,7 +158,7 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
 
   {
     faltantes.length > 0 && (
-      <div class="aviso aviso--error">
+      <div class="aviso aviso--cuidado">
         {faltantes.length === 1 ? 'Un hermano' : `${faltantes.length} hermanos`} sin modalidad de cápita para {anio}:{' '}
         {faltantes
           .slice(0, 4)
@@ -172,14 +172,14 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
 
   {
     mesAtrasado && (
-      <div class="aviso">
+      <div class="aviso aviso--cuidado">
         El corte de <strong>{nombrePeriodo(mesAtrasado)}</strong> sigue abierto.{' '}
         <a href={`/cortes/${mesAtrasado}`}>Revisar y cerrar</a>
       </div>
     )
   }
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <form method="get" class="filtros" aria-label="Periodo del tablero">
         {
@@ -202,35 +202,39 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
       </form>
     </section>
 
-    <section aria-labelledby="titulo-periodo">
-      <h2 id="titulo-periodo" style="margin: 0 0 0.75rem;">
-        {periodo ? nombrePeriodo(periodo) : `Ejercicio ${anio}`}
+    {/*
+      Tres niveles: bloque (h2 grande con línea), tarjeta (etiqueta en versalitas) y
+      cifra grande. Entre bloques hay más aire que entre tarjetas.
+    */}
+    <section class="bloque" aria-labelledby="titulo-periodo">
+      <h2 class="bloque__titulo" id="titulo-periodo">
+        Este periodo: {periodo ? nombrePeriodo(periodo) : `ejercicio ${anio}`}
       </h2>
       <div class="cifras-periodo">
-        <div class="tarjeta">
-          <h3 class="grafica__titulo">Ingresos</h3>
-          <p class="cifras-periodo__valor cifras-periodo__valor--ingreso">{formatoMXN(resumen.ingresos)}</p>
-          <p class="cifras-periodo__nota">
+        <div class="tarjeta tarjeta--cifra">
+          <p class="tarjeta__etiqueta">Ingresos</p>
+          <p class="cifra-grande cifras-periodo__valor--ingreso">{formatoMXN(resumen.ingresos)}</p>
+          <p class="nota-cifra">
             {resumen.anterior
               ? `${contraAnterior(resumen.ingresos, resumen.anterior.ingresos)} ${nombrePeriodo(resumen.anterior.periodo).split(' ')[0]}`
-              : <a href={`/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&tipo=ingreso`}>ver movimientos</a>}
+              : <a href={`/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&tipo=ingreso`}>Ver movimientos</a>}
           </p>
         </div>
-        <div class="tarjeta">
-          <h3 class="grafica__titulo">Egresos</h3>
-          <p class="cifras-periodo__valor cifras-periodo__valor--egreso">{formatoMXN(resumen.egresos)}</p>
-          <p class="cifras-periodo__nota">
+        <div class="tarjeta tarjeta--cifra">
+          <p class="tarjeta__etiqueta">Egresos</p>
+          <p class="cifra-grande cifras-periodo__valor--egreso">{formatoMXN(resumen.egresos)}</p>
+          <p class="nota-cifra">
             {resumen.anterior
               ? `${contraAnterior(resumen.egresos, resumen.anterior.egresos)} ${nombrePeriodo(resumen.anterior.periodo).split(' ')[0]}`
-              : <a href={`/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&tipo=egreso`}>ver movimientos</a>}
+              : <a href={`/movimientos?anio=${anio}${periodo ? `&periodo=${periodo}` : ''}&tipo=egreso`}>Ver movimientos</a>}
           </p>
         </div>
-        <div class="tarjeta">
-          <h3 class="grafica__titulo">Resultado</h3>
-          <p class:list={['cifras-periodo__valor', { 'cifras-periodo__valor--negativo': resumen.resultado < 0 }]}>
+        <div class="tarjeta tarjeta--cifra">
+          <p class="tarjeta__etiqueta">Resultado</p>
+          <p class:list={['cifra-grande', { 'cifras-periodo__valor--negativo': resumen.resultado < 0 }]}>
             {resumen.resultado < 0 ? '−' : ''}{formatoMXN(Math.abs(resumen.resultado))}
           </p>
-          <p class="cifras-periodo__nota">
+          <p class="nota-cifra">
             {resumen.resultado > 0
               ? 'Entró más de lo que salió'
               : resumen.resultado < 0
@@ -238,167 +242,148 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
                 : 'Entró lo mismo que salió'}
           </p>
         </div>
-        <div class="tarjeta">
-          <h3 class="grafica__titulo">{resumen.etiquetaSaldo}</h3>
-          <p class="cifras-periodo__valor">{formatoMXN(resumen.saldoFinal)}</p>
-          <p class="cifras-periodo__nota">
-            {periodo ? <a href={`/cortes/${periodo}`}>ver el corte</a> : <a href="/cortes">ver los cortes</a>}
+        <div class="tarjeta tarjeta--cifra">
+          <p class="tarjeta__etiqueta">{resumen.etiquetaSaldo}</p>
+          <p class="cifra-grande">{formatoMXN(resumen.saldoFinal)}</p>
+          <p class="nota-cifra">
+            {periodo ? <a href={`/cortes/${periodo}`}>Ver el corte</a> : <a href="/cortes">Ver los cortes</a>}
           </p>
         </div>
       </div>
-    </section>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.25rem;">
-      {
-        (
-          [
-            ['ingreso', 'De dónde vino', repartoIngresos, 'Sin ingresos'],
-            ['egreso', 'A dónde se fue', repartoEgresos, 'Sin egresos'],
-          ] as const
-        ).map(([tipo, titulo, filas, vacio]) => (
-          <section class="tarjeta">
-            <h2>{titulo}</h2>
-            {filas.length === 0 ? (
-              <p class="apagado">{vacio} en {nombreDelPeriodo}.</p>
-            ) : (
-              <ul class="reparto">
-                {filas.map((c) => (
-                  <li class="reparto__fila">
-                    <a class="reparto__nombre" href={enlaceConcepto(c)}>{c.concepto_nombre}</a>
-                    <span class="reparto__monto">
-                      {formatoMXN(c.monto_centavos)}{' '}
-                      <span class="reparto__detalle">{formatoPorcentaje(c.porcentaje)}</span>
-                    </span>
-                    <span class="reparto__pista" aria-hidden="true">
-                      <span
-                        class:list={['reparto__barra', `reparto__barra--${tipo}`]}
-                        style={`width: ${Math.max(c.porcentaje, 0.5)}%;`}
-                      ></span>
-                    </span>
-                    <span class="reparto__detalle">
-                      {c.movimientos} {c.movimientos === 1 ? 'movimiento' : 'movimientos'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))
-      }
-    </div>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1.25rem;">
-      <section class="tarjeta">
-        <GraficaFlujoMensual flujo={flujo} anio={anio} seleccionado={periodo} />
-      </section>
-      <section class="tarjeta">
-        <GraficaSaldo flujo={flujo} apertura={caja.apertura} anio={anio} />
-      </section>
-    </div>
-
-    <h2 style="margin: 0.5rem 0 0;">Pendientes</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem;">
-      <section class="tarjeta">
-        <h2>Caja</h2>
-        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
-          {formatoMXN(caja.saldo)}
-        </p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          {conBolsas ? (
-            <>Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}</>
-          ) : control.desde ? (
-            <>Banco y efectivo: falta el <a href={`/cortes/${control.desde}`}>arqueo inicial</a></>
-          ) : null}
-        </p>
-      </section>
-
-      <section class="tarjeta">
-        <h2>Cápitas vencidas</h2>
-        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
-          {formatoMXN(capitas?.vencido ?? 0)}
-        </p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          {capitas?.con_adeudo ?? 0} {(capitas?.con_adeudo ?? 0) === 1 ? 'hermano con adeudo' : 'hermanos con adeudo'} · <a href="/capitas">ver</a>
-        </p>
-      </section>
-
-      <section class="tarjeta">
-        <h2>Gran Tesorería</h2>
-        <p style="margin: 0.2rem 0 0;">
-          {aplomo.ordinario_a_plomo ? (
-            <span class="insignia insignia--ok">A plomo</span>
-          ) : (
-            <span class="insignia insignia--alerta">{aplomo.meses_pendientes} {aplomo.meses_pendientes === 1 ? 'mes pendiente' : 'meses pendientes'}</span>
-          )}
-        </p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.5rem 0 0;">
-          {aplomo.cubierto_hasta
-            ? `Cubierto hasta ${nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}`
-            : 'Sin obligaciones pagadas'} · <a href="/gran-tesoreria">ver</a>
-        </p>
-      </section>
-
-      <section class="tarjeta">
-        <h2>Evidencias</h2>
-        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
-          {evidencias.length}
-        </p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          {evidencias.length === 1 ? 'documento' : 'documentos'} por adjuntar · <a href="/pendientes">atender</a>
-        </p>
-      </section>
-
-      <section class="tarjeta">
-        <h2>Cuotas de grado</h2>
-        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
-          {formatoMXN(porCobrarCuotas)}
-        </p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          por cobrar a {cuenta(new Set(cuotas.map((c) => c.hermano_id)).size, 'persona', 'personas')} ·{' '}
-          <a href="/hermanos#cuotas">ver</a>
-        </p>
-      </section>
-
-      <section class="tarjeta">
-        <h2>Cortes</h2>
-        <p class="cifra" style="font-size: 1.9rem; font-family: var(--font-display); margin: 0;">
-          {cerrados} <span style="font-size: 1rem;">de 12</span>
-        </p>
-        <p class="apagado" style="font-size: 0.82rem; margin: 0.3rem 0 0;">
-          {mesAbierto ? `Sigue ${nombrePeriodo(mesAbierto)}` : 'Ejercicio completo'} ·{' '}
-          <a href="/cortes">ver</a>
-        </p>
-      </section>
-    </div>
-
-    <section class="tarjeta">
-      <h2>Cápitas {anio}</h2>
-      <div class="avance" role="img" aria-label={`Cobrado ${formatoMXN(capitas?.pagado ?? 0)}, vencido ${formatoMXN(capitas?.vencido ?? 0)}, por vencer ${formatoMXN(capitas?.por_vencer ?? 0)}`}>
-        {avance.cobrado > 0 && (
-          <span class="avance__cobrado" style={`width: ${avance.cobrado}%;`} title={`Cobrado ${formatoMXN(capitas?.pagado ?? 0)}`}></span>
-        )}
-        {avance.vencido > 0 && (
-          <span class="avance__vencido" style={`width: ${avance.vencido}%;`} title={`Vencido ${formatoMXN(capitas?.vencido ?? 0)}`}></span>
-        )}
-        {avance.porVencer > 0 && (
-          <span class="avance__porvencer" style={`width: ${avance.porVencer}%;`} title={`Por vencer ${formatoMXN(capitas?.por_vencer ?? 0)}`}></span>
-        )}
+      <div class="rejilla">
+        {
+          (
+            [
+              ['ingreso', 'De dónde vino', repartoIngresos, 'Sin ingresos'],
+              ['egreso', 'A dónde se fue', repartoEgresos, 'Sin egresos'],
+            ] as const
+          ).map(([tipo, titulo, filas, vacio]) => (
+            <section class="tarjeta">
+              <h3 class="tarjeta__etiqueta">{titulo}</h3>
+              {filas.length === 0 ? (
+                <p class="apagado sin-margen">{vacio} en {nombreDelPeriodo}.</p>
+              ) : (
+                <ul class="reparto">
+                  {filas.map((c) => (
+                    <li class="reparto__fila">
+                      <a class="reparto__nombre" href={enlaceConcepto(c)}>{c.concepto_nombre}</a>
+                      <span class="reparto__monto">
+                        {formatoMXN(c.monto_centavos)}{' '}
+                        <span class="reparto__detalle">{formatoPorcentaje(c.porcentaje)}</span>
+                      </span>
+                      <span class="reparto__pista" aria-hidden="true">
+                        <span
+                          class:list={['reparto__barra', `reparto__barra--${tipo}`]}
+                          style={`width: ${Math.max(c.porcentaje, 0.5)}%;`}
+                        ></span>
+                      </span>
+                      <span class="reparto__detalle">
+                        {c.movimientos} {c.movimientos === 1 ? 'movimiento' : 'movimientos'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))
+        }
       </div>
-      <p class="apagado" style="font-size: 0.85rem; margin: 0.5rem 0 0;">
-        <span class="grafica__muestra" style="background: var(--md-sys-color-tertiary);"></span>
-        Cobrado {formatoMXN(capitas?.pagado ?? 0)}{' '}
-        <span class="grafica__muestra" style="background: var(--md-sys-color-error); margin-left: 0.8rem;"></span>
-        Vencido {formatoMXN(capitas?.vencido ?? 0)}{' '}
-        <span class="grafica__muestra" style="background: rgba(240,234,214,0.18); margin-left: 0.8rem;"></span>
-        Por vencer {formatoMXN(capitas?.por_vencer ?? 0)} · de {formatoMXN(capitas?.esperado ?? 0)} esperados ·{' '}
-        <span class="insignia insignia--ok">{capitas?.al_corriente ?? 0} al corriente</span>
-      </p>
+
+      <div class="rejilla rejilla--ancha">
+        <section class="tarjeta">
+          <GraficaFlujoMensual flujo={flujo} anio={anio} seleccionado={periodo} />
+        </section>
+        <section class="tarjeta">
+          <GraficaSaldo flujo={flujo} apertura={caja.apertura} anio={anio} />
+        </section>
+      </div>
     </section>
+
+    <section class="bloque" aria-labelledby="titulo-pendientes">
+      <h2 class="bloque__titulo" id="titulo-pendientes">Pendientes</h2>
+      {/* Todas con la misma forma: etiqueta, número, una línea de contexto y Ver. */}
+      <div class="rejilla rejilla--pendientes">
+        <section class="tarjeta tarjeta--pendiente">
+          <h3 class="tarjeta__etiqueta">Caja</h3>
+          <p class="cifra-grande">{formatoMXN(caja.saldo)}</p>
+          <p class="nota-cifra">
+            {conBolsas ? (
+              <>Banco {formatoMXN(caja.banco)} · Efectivo {formatoMXN(caja.efectivo)}</>
+            ) : control.desde ? (
+              <>Banco y efectivo: falta el arqueo inicial</>
+            ) : (
+              <>Dinero de la logia hoy</>
+            )}
+          </p>
+          <a class="tarjeta__ver" href={!conBolsas && control.desde ? `/cortes/${control.desde}#arqueo` : '/movimientos'}>Ver</a>
+        </section>
+
+        <section class="tarjeta tarjeta--pendiente">
+          <h3 class="tarjeta__etiqueta">Cápitas vencidas</h3>
+          <p class="cifra-grande">{formatoMXN(capitas?.vencido ?? 0)}</p>
+          <p class="nota-cifra">
+            {cuenta(capitas?.con_adeudo ?? 0, 'hermano con adeudo', 'hermanos con adeudo')}
+          </p>
+          <a class="tarjeta__ver" href="/capitas">Ver</a>
+        </section>
+
+        <section class="tarjeta tarjeta--pendiente">
+          <h3 class="tarjeta__etiqueta">Gran Tesorería</h3>
+          <p class="cifra-grande">
+            {aplomo.ordinario_a_plomo ? 0 : aplomo.meses_pendientes}{' '}
+            <span class="cifra-grande__unidad">
+              {(aplomo.ordinario_a_plomo ? 0 : aplomo.meses_pendientes) === 1 ? 'mes' : 'meses'}
+            </span>
+          </p>
+          <p class="nota-cifra">
+            {aplomo.ordinario_a_plomo ? (
+              <span class="insignia insignia--ok">A plomo</span>
+            ) : (
+              <span class="insignia insignia--alerta">Atrasado</span>
+            )}{' '}
+            {!aplomo.ordinario_a_plomo && 'por pagar. '}
+            {aplomo.cubierto_hasta
+              ? `Cubierto hasta ${nombrePeriodo(aplomo.cubierto_hasta.slice(0, 7))}`
+              : 'Sin obligaciones pagadas'}
+          </p>
+          <a class="tarjeta__ver" href="/gran-tesoreria">Ver</a>
+        </section>
+
+        <section class="tarjeta tarjeta--pendiente">
+          <h3 class="tarjeta__etiqueta">Evidencias</h3>
+          <p class="cifra-grande">{evidencias.length}</p>
+          <p class="nota-cifra">
+            {evidencias.length === 1 ? 'Documento por adjuntar' : 'Documentos por adjuntar'}
+          </p>
+          <a class="tarjeta__ver" href="/pendientes">Ver</a>
+        </section>
+
+        <section class="tarjeta tarjeta--pendiente">
+          <h3 class="tarjeta__etiqueta">Cuotas de grado</h3>
+          <p class="cifra-grande">{formatoMXN(porCobrarCuotas)}</p>
+          <p class="nota-cifra">
+            Por cobrar a {cuenta(new Set(cuotas.map((c) => c.hermano_id)).size, 'persona', 'personas')}
+          </p>
+          <a class="tarjeta__ver" href="/hermanos#cuotas">Ver</a>
+        </section>
+
+        <section class="tarjeta tarjeta--pendiente">
+          <h3 class="tarjeta__etiqueta">Cortes</h3>
+          <p class="cifra-grande">
+            {cerrados} <span class="cifra-grande__unidad">de 12 cerrados</span>
+          </p>
+          <p class="nota-cifra">
+            {mesAbierto ? `Sigue ${nombrePeriodo(mesAbierto)}` : 'Ejercicio completo'}
+          </p>
+          <a class="tarjeta__ver" href={mesAbierto ? `/cortes/${mesAbierto}` : '/cortes'}>Ver</a>
+        </section>
+      </div>
 
     {
       (porFirmar.length > 0 || porEntregar.length > 0 || porComprobar.length > 0) && (
         <section class="tarjeta">
-          <h2>Egresos que esperan algo</h2>
+          <h3 class="tarjeta__etiqueta">Egresos que esperan algo</h3>
           <div class="tabla-envoltura">
             <table class="tabla">
               <thead>
@@ -451,9 +436,44 @@ const sinApertura = ejercicio.saldo_apertura_centavos === 0 && caja.ingresos ===
       )
     }
 
+    </section>
+
+    <section class="bloque" aria-labelledby="titulo-avance">
+      <h2 class="bloque__titulo" id="titulo-avance">Avance de cápitas {anio}</h2>
+      <section class="tarjeta">
+        <div class="avance" role="img" aria-label={`Cobrado ${formatoMXN(capitas?.pagado ?? 0)}, vencido ${formatoMXN(capitas?.vencido ?? 0)}, por vencer ${formatoMXN(capitas?.por_vencer ?? 0)}`}>
+          {avance.cobrado > 0 && <span class="avance__cobrado" style={`width: ${avance.cobrado}%;`}></span>}
+          {avance.vencido > 0 && <span class="avance__vencido" style={`width: ${avance.vencido}%;`}></span>}
+          {avance.porVencer > 0 && <span class="avance__porvencer" style={`width: ${avance.porVencer}%;`}></span>}
+        </div>
+        <dl class="leyenda-avance">
+          <div>
+            <dt><span class="grafica__muestra avance__cobrado"></span>Cobrado</dt>
+            <dd>{formatoMXN(capitas?.pagado ?? 0)}</dd>
+          </div>
+          <div>
+            <dt><span class="grafica__muestra avance__vencido"></span>Vencido</dt>
+            <dd>{formatoMXN(capitas?.vencido ?? 0)}</dd>
+          </div>
+          <div>
+            <dt><span class="grafica__muestra avance__porvencer"></span>Por vencer</dt>
+            <dd>{formatoMXN(capitas?.por_vencer ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>Esperado del año</dt>
+            <dd>{formatoMXN(capitas?.esperado ?? 0)}</dd>
+          </div>
+        </dl>
+        <p class="nota-cifra">
+          <span class="insignia insignia--ok">{capitas?.al_corriente ?? 0} al corriente</span>{' '}
+          <a href="/capitas">Ver cápitas</a>
+        </p>
+      </section>
+    </section>
+
     <section class="tarjeta">
       <h2>Capturar</h2>
-      <div style="display: flex; flex-wrap: wrap; gap: 0.6rem;">
+      <div class="fila">
         <a class="btn btn--primary" href="/capitas/pagos/nuevo">Pago de cápita</a>
         <a class="btn btn--ghost" href="/ingresos/nuevo">Otro ingreso</a>
         <a class="btn btn--ghost" href="/egresos/nuevo">Egreso</a>

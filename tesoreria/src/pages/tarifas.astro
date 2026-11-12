@@ -98,7 +98,7 @@ Astro.response.status = estado;
     <span>Las tarifas aplican de su fecha de vigencia en adelante, nunca hacia atrás</span>
   </div>
 
-  {aviso && <div class="aviso">Tarifa guardada.</div>}
+  {aviso && <div class="aviso aviso--exito">Tarifa guardada.</div>}
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
   <h1>Tarifas de grado</h1>
@@ -142,7 +142,7 @@ Astro.response.status = estado;
 
     <section class="tarjeta">
       <h2>Capturar tarifa</h2>
-      <div style="max-width: 26rem;">
+      <div class="formulario--angosto">
         <Formulario csrf={sesion.csrfToken} nonce={nonce}>
           <Selector
             nombre="tipo_evento"

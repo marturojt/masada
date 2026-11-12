@@ -3,6 +3,7 @@
  * Hoja imprimible. Sin navegación y sin nada que estorbe en papel.
  * Se imprime con Ctrl+P, el servidor no genera PDF.
  */
+import '@styles/fuentes.css';
 import '@styles/impresion.css';
 
 interface Props {
@@ -43,16 +44,18 @@ const {
       )
     }
 
-    {
-      volverA && (
-        <div class="acciones-impresion no-imprimir">
-          <a class="btn btn--ghost" href={volverA}>← Volver</a>
-          <span class="apagado" style="font-size: 0.85rem; align-self: center;">
-            Imprime con Ctrl+P, o Cmd+P en Mac.
-          </span>
-        </div>
-      )
-    }
+    <div class="barra-impresion no-imprimir">
+      <div class="barra-impresion__fila">
+        {volverA && <a class="boton-impresion" href={volverA}>← Volver</a>}
+        <span class="barra-impresion__titulo">{titulo}</span>
+        <button class="boton-impresion boton-impresion--principal" type="button" data-imprimir hidden>
+          Imprimir
+        </button>
+        <span class="barra-impresion__ayuda">
+          Imprime con Ctrl+P, o Cmd+P en Mac. En el celular, desde el menú Compartir.
+        </span>
+      </div>
+    </div>
 
     <div class="hoja">
       <header class="hoja__encabezado">
@@ -77,3 +80,12 @@ const {
     </div>
   </body>
 </html>
+
+<script>
+  /* El botón solo aparece si hay JavaScript; sin él queda la indicación de Ctrl+P. */
+  const boton = document.querySelector<HTMLButtonElement>('[data-imprimir]');
+  if (boton) {
+    boton.hidden = false;
+    boton.addEventListener('click', () => window.print());
+  }
+</script>

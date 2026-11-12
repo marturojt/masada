@@ -1,0 +1,48 @@
+---
+/*
+ * Informe anual dentro del panel, para revisarlo antes de imprimirlo. La hoja
+ * para imprimir está en /reportes/informe-anual/imprimir.
+ */
+import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import InformeAnual from '@componentes/InformeAnual.astro';
+import { cortesDelAnio } from '@lib/datos/cortes';
+import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
+import { requerirSesion } from '@lib/sesion';
+
+const sesion = requerirSesion(Astro);
+
+const ejercicios = await listarEjercicios();
+const vigente = await ejercicioVigente();
+const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
+const cerrados = (await cortesDelAnio(anio)).filter((c) => c.estado_corte === 'cerrado').length;
+---
+
+<LayoutAdmin titulo={`Informe anual ${anio}`} sesion={sesion}>
+  <div class="barra__contexto" slot="contexto">
+    <span><a href="/reportes">← Reportes</a></span>
+    <span>Ejercicio {anio}</span>
+    <span>{cerrados} de 12 cortes cerrados</span>
+  </div>
+
+  <div class="encabezado">
+    <div>
+      <h1 class="abajo-xxs">Informe anual de tesorería {anio}</h1>
+      <p class="apagado sin-margen">
+        {cerrados === 12 ? (
+          <span class="insignia insignia--ok">Ejercicio cerrado</span>
+        ) : (
+          <span class="insignia insignia--pendiente">Borrador, faltan cortes por cerrar</span>
+        )}
+      </p>
+    </div>
+    <div class="fila">
+      <a class="btn btn--primary" href={`/reportes/informe-anual/imprimir?anio=${anio}`}>
+        Versión para imprimir
+      </a>
+    </div>
+  </div>
+
+  <div class="pila arriba-l">
+    <InformeAnual anio={anio} />
+  </div>
+</LayoutAdmin>

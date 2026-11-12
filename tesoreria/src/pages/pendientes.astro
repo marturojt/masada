@@ -103,7 +103,7 @@ Astro.response.status = estado;
     aparece después se puede adjuntar de todos modos.
   </p>
 
-  <section class="tarjeta" style="margin-top: 1.25rem;">
+  <section class="tarjeta arriba-l">
     <h2>Por atender</h2>
     {
       pendientes.length === 0 ? (
@@ -130,7 +130,7 @@ Astro.response.status = estado;
                       {p.detalle && (
                         <>
                           <br />
-                          <span class="apagado" style="font-size: 0.8rem;">{p.detalle}</span>
+                          <span class="apagado letra-menor">{p.detalle}</span>
                         </>
                       )}
                     </td>
@@ -144,10 +144,10 @@ Astro.response.status = estado;
                         </a>
                       )}
                       <details open={conError === clave} style="display: inline-block;">
-                        <summary style="cursor: pointer; font-size: 0.85rem;">
+                        <summary class="letra-chica">
                           Cerrar sin evidencia formal
                         </summary>
-                        <div style="margin-top: 0.5rem; max-width: 20rem;">
+                        <div class="arriba-xs formulario--estrecho">
                           {conError === clave && <ResumenErrores errores={errores} />}
                           <Formulario csrf={sesion.csrfToken} nonce={nonces.get(clave) ?? ''}>
                             <input type="hidden" name="entidad" value={p.entidad} />
@@ -177,7 +177,7 @@ Astro.response.status = estado;
 
   {
     dispensas.length > 0 && (
-      <section class="tarjeta" style="margin-top: 1.25rem;">
+      <section class="tarjeta arriba-l">
         <h2>Cerrados sin evidencia formal</h2>
         <div class="tabla-envoltura">
           <table class="tabla">

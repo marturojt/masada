@@ -89,7 +89,7 @@ Astro.response.status = estado;
     o el PDF como respaldo para consultarlo. No modifica el padrón ni se concilia.
   </p>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Historial</h2>
       {
@@ -112,7 +112,7 @@ Astro.response.status = estado;
                       <a href={`/gran-tesoreria/membresias/${m.id}`}>
                         {nombrePeriodo(m.periodo_referencia.slice(0, 7))}
                       </a>
-                      {i === 0 && <span class="insignia" style="margin-left: 0.5rem;">Más reciente</span>}
+                      {i === 0 && <span class="insignia separa-izq">Más reciente</span>}
                     </td>
                     <td>{formatoFechaCorta(m.fecha_documento)}</td>
                     <td>

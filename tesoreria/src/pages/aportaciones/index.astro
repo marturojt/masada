@@ -143,7 +143,7 @@ Astro.response.status = estado;
     el libro de caja: su valor estimado es informativo y no entra en ningún saldo.
   </p>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Registradas en {anio}</h2>
       {
@@ -168,9 +168,9 @@ Astro.response.status = estado;
                     <td>{formatoFechaCorta(a.fecha)}</td>
                     <td>
                       {a.tipo === 'monetaria' ? (
-                        <span class="insignia insignia--ok">Monetaria</span>
+                        <span class="insignia insignia--neutro">Monetaria</span>
                       ) : (
-                        <span class="insignia insignia--pendiente">Especie</span>
+                        <span class="insignia insignia--neutro">Especie</span>
                       )}
                     </td>
                     <td>{a.aportante_nombre}</td>
@@ -206,13 +206,13 @@ Astro.response.status = estado;
           </div>
         )
       }
-      <p class="apagado" style="font-size: 0.85rem;">
+      <p class="apagado letra-chica">
         El monto de las monetarias vive en el libro de caja como cualquier ingreso;
         se consulta en Ingresos. Aquí solo se distingue su origen.
       </p>
     </section>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.25rem;">
+    <div class="rejilla">
       <section class="tarjeta">
         <h2>Aportación monetaria</h2>
         <details open={seccion === 'monetaria'}>

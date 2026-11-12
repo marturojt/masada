@@ -79,9 +79,9 @@ const conFiltro = (valor?: string): string => {
 
   <Aviso texto={aviso} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <h1>Egresos</h1>
-    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+    <div class="fila">
       <a class="btn btn--primary" href="/egresos/nuevo">Nuevo egreso</a>
       <a class="btn btn--ghost" href="/gran-tesoreria">Gran Tesorería</a>
       {esVM(sesion) && <a class="btn btn--ghost" href="/egresos/beneficiarios">Beneficiarios</a>}
@@ -90,9 +90,9 @@ const conFiltro = (valor?: string): string => {
 
   {
     porComprobar.length > 0 && (
-      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+      <section class="tarjeta abajo-l">
         <h2>Pendientes de comprobar</h2>
-        <p class="apagado" style="font-size: 0.85rem;">
+        <p class="apagado letra-chica">
           Dinero entregado que todavía no tiene recibos ni devolución. Un corte mensual no
           cierra si quedan pendientes de meses anteriores.
         </p>
@@ -132,9 +132,9 @@ const conFiltro = (valor?: string): string => {
 
   {
     sinEgreso.length > 0 && (
-      <section class="tarjeta" style="margin-bottom: 1.25rem;">
+      <section class="tarjeta abajo-l">
         <h2>Gran Tesorería, falta generar su egreso</h2>
-        <p class="apagado" style="font-size: 0.85rem;">
+        <p class="apagado letra-chica">
           Obligaciones y trámites que la Gran Tesorería ya cobró y que todavía no tienen
           egreso. No ha salido dinero: el egreso se genera en Gran Tesorería, eligiendo
           las obligaciones, y después lleva sus dos firmas y su entrega como cualquier otro.
@@ -170,7 +170,7 @@ const conFiltro = (valor?: string): string => {
     )
   }
 
-  <p class="apagado" style="font-size: 0.85rem;">
+  <p class="apagado letra-chica">
     Filtrar:{' '}
     <a href={conFiltro()} style={!estado ? 'color: var(--gold); font-weight: 600;' : undefined}>
       Todos
@@ -193,7 +193,7 @@ const conFiltro = (valor?: string): string => {
   {
     egresos.length === 0 ? (
       <div class="tarjeta">
-        <p style="margin: 0;">
+        <p class="sin-margen">
           Sin egresos con ese filtro. Empieza con <a href="/egresos/nuevo">un nuevo egreso</a>.
         </p>
       </div>
@@ -231,7 +231,7 @@ const conFiltro = (valor?: string): string => {
                         </>
                       ))}
                       <br />
-                      <span class="apagado" style="font-size: 0.8rem;">
+                      <span class="apagado letra-menor">
                         Gran Tesorería{e.pago_gt_folio && <> · {e.pago_gt_folio}</>}
                       </span>
                     </>

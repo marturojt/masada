@@ -168,7 +168,7 @@ Astro.response.status = estado;
   <div class="pila">
     <section class="tarjeta">
       <h2>Saldo de apertura de {anio}</h2>
-      <p class="apagado" style="font-size: 0.9rem;">
+      <p class="apagado letra-media">
         Es el dinero con el que arrancó el ejercicio, separado por bolsa: lo que había en
         la cuenta del banco y lo que traía el tesorero en efectivo. De estas cifras se
         encadenan todos los saldos de los cortes. Hoy: banco
@@ -235,9 +235,9 @@ Astro.response.status = estado;
                   <td>{e.anio}</td>
                   <td>
                     {e.estado === 'cerrado' ? (
-                      <span class="insignia">Cerrado</span>
+                      <span class="insignia insignia--ok">Cerrado</span>
                     ) : (
-                      <span class="insignia insignia--ok">Abierto</span>
+                      <span class="insignia insignia--pendiente">Abierto</span>
                     )}
                   </td>
                   <td class="num">{cortesPorAnio.get(e.anio) ?? 0} de 12</td>
@@ -252,10 +252,10 @@ Astro.response.status = estado;
         </table>
       </div>
 
-      <details style="margin-top: 1rem;" open={seccion === 'abrir_ejercicio'}>
-        <summary style="cursor: pointer;">Abrir el ejercicio {anioSiguiente}</summary>
-        <div style="margin-top: 0.75rem;">
-          <p class="apagado" style="font-size: 0.85rem;">
+      <details class="arriba-m" open={seccion === 'abrir_ejercicio'}>
+        <summary>Abrir el ejercicio {anioSiguiente}</summary>
+        <div class="arriba-s">
+          <p class="apagado letra-chica">
             El saldo de apertura se arrastra del corte de diciembre de {anioSiguiente - 1}:
             si ese corte aún no cierra, se completa solo cuando cierre. Las tarifas vacías
             heredan las de {anioSiguiente - 1}.
@@ -298,10 +298,10 @@ Astro.response.status = estado;
       {
         (cortesPorAnio.get(anio) ?? 0) === 12 &&
           ejercicios.find((e) => e.anio === anio)?.estado === 'abierto' && (
-            <details style="margin-top: 1rem;" open={seccion === 'cerrar_ejercicio'}>
-              <summary style="cursor: pointer;">Cerrar el ejercicio {anio}</summary>
-              <div style="margin-top: 0.75rem;">
-                <p class="apagado" style="font-size: 0.85rem;">
+            <details class="arriba-m" open={seccion === 'cerrar_ejercicio'}>
+              <summary>Cerrar el ejercicio {anio}</summary>
+              <div class="arriba-s">
+                <p class="apagado letra-chica">
                   Los doce cortes de {anio} ya están cerrados. Cerrar el ejercicio lo deja
                   como consulta: sus tarifas y cargos ya no se tocan.
                 </p>
@@ -346,7 +346,7 @@ Astro.response.status = estado;
 
     <section class="tarjeta">
       <h2>Cuadro logial del sitio público</h2>
-      <p class="apagado" style="font-size: 0.9rem;">
+      <p class="apagado letra-media">
         El padrón de este sistema es la fuente de verdad. Desde aquí se genera el JSON que
         publica el sitio, con solo nombre, grado y cargo: ni correos, ni teléfonos, ni
         montos.
@@ -356,7 +356,7 @@ Astro.response.status = estado;
 
     <section class="tarjeta">
       <h2>Cambiar mi contraseña</h2>
-      <p class="apagado" style="font-size: 0.9rem;">
+      <p class="apagado letra-media">
         Al cambiarla se cierran todas las sesiones, incluida esta, y habrá que entrar de
         nuevo.
       </p>

@@ -9,6 +9,39 @@
 @import './heredado/global.css' layer(base);
 
 @layer app {
+  /*
+   * Colores propios del panel, con nombre. Lo que no sale de tokens.css sale de
+   * aquí: nada de colores escritos a mano en las reglas.
+   */
+  :root {
+    /* Series de las gráficas, validadas sobre fondo oscuro. */
+    --serie-ingreso: #c08a1e;
+    --serie-ingreso-tenue: rgba(192, 138, 30, 0.12);
+    --serie-ingreso-elegida: rgba(192, 138, 30, 0.14);
+    --serie-egreso: #4c7fc4;
+    --fondo-grafica: #141414;
+    /* Cifras del periodo: la misma serie, un tono más claro para texto. */
+    --cifra-ingreso: #d9a441;
+    --cifra-egreso: #7ea6dc;
+    /* Pergamino translúcido para rejillas, pistas y zonas al pasar. */
+    --trazo-tenue: rgba(240, 234, 214, 0.08);
+    --trazo-medio: rgba(240, 234, 214, 0.25);
+    --relleno-tenue: rgba(240, 234, 214, 0.06);
+    --relleno-paso: rgba(240, 234, 214, 0.05);
+    --relleno-medio: rgba(240, 234, 214, 0.18);
+    /* Visor de comprobantes. */
+    --velo: rgba(0, 0, 0, 0.82);
+    --fondo-visor: #000000;
+    /* Insignias y avisos: un color por significado, con su fondo tenue. */
+    --ok-tenue: rgba(138, 154, 120, 0.16);
+    --pendiente-tenue: rgba(201, 168, 76, 0.14);
+    --alerta-tenue: rgba(255, 107, 107, 0.13);
+    --favor: #7ea6dc;
+    --favor-tenue: rgba(126, 166, 220, 0.14);
+    --neutro: #9a9284;
+    --neutro-tenue: rgba(154, 146, 132, 0.14);
+  }
+
   /* ── Base del panel ── */
   body {
     background: var(--md-sys-color-background);
@@ -60,7 +93,12 @@
     color: var(--gold-light);
   }
 
+  /*
+   * width: 100% importa: body es flex en columna y, con margin auto, main tomaba
+   * el ancho de su contenido. Una tabla larga lo ensanchaba más allá de la pantalla.
+   */
   .panel {
+    width: 100%;
     max-width: var(--content-max);
     margin: 0 auto;
     padding: 1.5rem 1.25rem 4rem;
@@ -68,6 +106,64 @@
 
   .panel--angosto {
     max-width: 32rem;
+  }
+
+  /* Título con sus acciones al lado; en celular las acciones bajan. */
+  .encabezado {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .encabezado > :first-child {
+    margin-bottom: 0;
+  }
+
+  .encabezado__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  /*
+   * Rejilla de tarjetas. min(…, 100%) evita que una columna pida más ancho que
+   * la pantalla: a 360px se vuelve una sola columna sin salirse.
+   */
+  .rejilla {
+    --rejilla-min: 20rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--rejilla-min), 100%), 1fr));
+    gap: 1.25rem;
+  }
+
+  .rejilla--ancha {
+    --rejilla-min: 22rem;
+  }
+
+  .rejilla--media {
+    --rejilla-min: 18rem;
+  }
+
+  /* Seis tarjetas de pendientes: tres y tres en escritorio. */
+  .rejilla--pendientes {
+    --rejilla-min: 17rem;
+    gap: 1rem;
+  }
+
+  .rejilla--chica {
+    --rejilla-min: 12rem;
+    gap: 1rem;
+  }
+
+  /* Agrupa en fila lo que en una pantalla angosta puede bajar de renglón. */
+  .fila {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
   }
 
   .pila {
@@ -97,7 +193,9 @@
     border-bottom: 1px solid var(--gold-border);
   }
 
+  /* Referencia del menú del celular, que se despliega justo debajo. */
   .barra__fila {
+    position: relative;
     max-width: var(--content-max);
     margin: 0 auto;
     padding: 0.6rem 1.25rem;
@@ -140,6 +238,97 @@
     color: var(--md-sys-color-on-surface-variant);
   }
 
+  /*
+   * Menú del celular: un <details> que se despliega bajo la barra. En pantallas
+   * anchas no se muestra y queda la barra de enlaces de siempre.
+   */
+  .menu-movil {
+    display: none;
+  }
+
+  .menu-movil__boton {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    padding: 0 0.9rem;
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--radius-md);
+    color: var(--md-sys-color-on-surface);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .menu-movil__boton::-webkit-details-marker {
+    display: none;
+  }
+
+  .menu-movil__boton::before {
+    content: '☰' / '';
+    font-size: 1rem;
+    color: var(--gold);
+  }
+
+  .menu-movil[open] .menu-movil__boton::before {
+    content: '✕' / '';
+  }
+
+  .menu-movil__boton:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  .menu-movil__lista {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+    gap: 0.75rem 1.5rem;
+    padding: 0.75rem 1rem 1.25rem;
+    background: var(--md-sys-color-surface-container);
+    border-bottom: 1px solid var(--gold-border);
+    box-shadow: var(--shadow-md);
+  }
+
+  .menu-movil__titulo {
+    font-family: var(--font-label);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0.25rem 0 0.15rem;
+  }
+
+  .menu-movil__lista a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 0.35rem;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    color: var(--md-sys-color-on-surface);
+    text-decoration: none;
+  }
+
+  .menu-movil__usuario {
+    font-size: 0.85rem;
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0.35rem 0 0.6rem;
+  }
+
+  .menu-movil__sesion .btn {
+    min-height: 44px;
+  }
+
+  .menu-movil__lista a[aria-current='page'] {
+    color: var(--gold);
+    font-weight: 600;
+  }
+
   .barra__contexto {
     max-width: var(--content-max);
     margin: 0 auto;
@@ -178,6 +367,24 @@
     border-radius: var(--radius-sm);
     padding: 0.5rem 0.6rem;
     font: inherit;
+    /* 16px como mínimo: con menos, el iPhone acerca la pantalla al tocar el campo. */
+    font-size: max(16px, 1em);
+  }
+
+  /* Altura cómoda para el dedo, salvo en casillas y opciones. */
+  .campo input:not([type='checkbox'], [type='radio']),
+  .campo select {
+    min-height: 44px;
+  }
+
+  .campo textarea {
+    min-height: 5.5rem;
+  }
+
+  .campo input[type='checkbox'],
+  .campo input[type='radio'] {
+    width: auto;
+    min-height: 0;
   }
 
   .campo input:focus-visible,
@@ -220,6 +427,32 @@
     margin-top: 1.25rem;
   }
 
+  /*
+   * Botones del panel: letra normal, sin mayúsculas espaciadas (eso es del sitio
+   * público) y con altura cómoda para el dedo.
+   */
+  .btn {
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    padding: 0.55rem 1.1rem;
+    min-height: 42px;
+    justify-content: center;
+    border-radius: var(--radius-md);
+  }
+
+  .btn--ghost {
+    border-color: var(--md-sys-color-outline);
+  }
+
+  .btn--chico {
+    padding: 0.25rem 0.7rem;
+    font-size: 0.82rem;
+    min-height: 32px;
+  }
+
   .confirmacion label {
     display: flex;
     gap: 0.55rem;
@@ -234,19 +467,64 @@
     flex-shrink: 0;
   }
 
-  /* ── Avisos ── */
+  /*
+   * ── Avisos ──
+   * Cuatro tipos con su ícono: éxito tras guardar, información, cuidado y error.
+   * Sin modificador es información. El ícono es decorativo: el texto ya lo dice.
+   */
   .aviso {
-    border-left: 3px solid var(--md-sys-color-primary);
-    background: var(--md-sys-color-surface-container);
-    border-radius: var(--radius-sm);
-    padding: 0.7rem 0.9rem;
+    --aviso-color: var(--favor);
+    --aviso-fondo: var(--favor-tenue);
+    --aviso-icono: 'i';
+    position: relative;
+    border: 1px solid var(--aviso-color);
+    background: var(--aviso-fondo);
+    border-radius: var(--radius-md);
+    padding: 0.7rem 0.9rem 0.7rem 2.6rem;
     margin-bottom: 1.25rem;
     font-size: 0.9rem;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .aviso::before {
+    content: var(--aviso-icono) / '';
+    position: absolute;
+    left: 0.85rem;
+    top: 0.8rem;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--aviso-color);
+    color: var(--near-black);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .aviso--exito {
+    --aviso-color: var(--md-sys-color-tertiary);
+    --aviso-fondo: var(--ok-tenue);
+    --aviso-icono: '✓';
+  }
+
+  .aviso--info {
+    --aviso-color: var(--favor);
+    --aviso-fondo: var(--favor-tenue);
+    --aviso-icono: 'i';
+  }
+
+  .aviso--cuidado {
+    --aviso-color: var(--gold);
+    --aviso-fondo: var(--pendiente-tenue);
+    --aviso-icono: '!';
   }
 
   .aviso--error {
-    border-left-color: var(--md-sys-color-error);
-    color: var(--md-sys-color-on-surface);
+    --aviso-color: var(--md-sys-color-error);
+    --aviso-fondo: var(--alerta-tenue);
+    --aviso-icono: '×';
   }
 
   .aviso ul {
@@ -271,7 +549,12 @@
   }
 
   /* ── Tablas ── */
+  /*
+   * La tabla se desplaza dentro de su caja, no la página. position: relative
+   * mantiene adentro también lo que va posicionado (textos solo para lectores).
+   */
   .tabla-envoltura {
+    position: relative;
     overflow-x: auto;
   }
 
@@ -320,33 +603,62 @@
     border-bottom: none;
   }
 
-  /* ── Insignias de estado ── */
+  /*
+   * ── Insignias de estado ──
+   * Un color por significado, nunca dos significados en un color:
+   *   ok         al corriente, pagado, cerrado
+   *   pendiente  por vencer, registrado, abierto
+   *   alerta     debe, rechazado, por comprobar, atrasado
+   *   favor      saldo a favor del hermano
+   *   neutro     datos del plan o del registro (modalidad, promoción, por venir)
+   *   cancelado  lo que ya no cuenta
+   * Sin modificador se ve como neutro.
+   */
   .insignia {
     display: inline-block;
-    font-family: var(--font-label);
-    font-size: 0.68rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    padding: 0.1rem 0.45rem;
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 0.15rem 0.55rem;
     border-radius: 999px;
-    border: 1px solid var(--md-sys-color-outline);
-    color: var(--md-sys-color-on-surface-variant);
+    border: 1px solid transparent;
+    background: var(--neutro-tenue);
+    color: var(--neutro);
     white-space: nowrap;
+    vertical-align: 0.1em;
   }
 
   .insignia--ok {
-    border-color: var(--md-sys-color-tertiary);
+    background: var(--ok-tenue);
     color: var(--md-sys-color-tertiary);
   }
 
   .insignia--pendiente {
-    border-color: var(--gold);
+    background: var(--pendiente-tenue);
     color: var(--gold);
   }
 
   .insignia--alerta {
-    border-color: var(--md-sys-color-error);
+    background: var(--alerta-tenue);
     color: var(--md-sys-color-error);
+  }
+
+  .insignia--favor {
+    background: var(--favor-tenue);
+    color: var(--favor);
+  }
+
+  .insignia--neutro {
+    background: var(--neutro-tenue);
+    color: var(--neutro);
+  }
+
+  .insignia--cancelado {
+    background: transparent;
+    border: 1px dashed var(--md-sys-color-outline);
+    color: var(--neutro);
+    text-decoration: line-through;
   }
 
   /* ── Acceso ── */
@@ -395,7 +707,7 @@
 .visor__fondo {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.82);
+  background: var(--velo);
   cursor: pointer;
 }
 
@@ -413,8 +725,8 @@
   max-width: 100%;
   max-height: calc(90vh - 3.5rem);
   object-fit: contain;
-  border: 1px solid var(--color-borde, #6b5b2e);
-  background: #000000;
+  border: 1px solid var(--md-sys-color-outline);
+  background: var(--fondo-visor);
 }
 
 .visor__pie {
@@ -422,13 +734,6 @@
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-}
-
-/* Señal de que un texto trae historia en su tooltip al pasar el cursor. */
-.con-historia {
-  cursor: help;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
 }
 
 /* ── Gráficas del tablero: SVG del servidor, paleta validada en oscuro ─────── */
@@ -448,53 +753,53 @@
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  color: var(--md-sys-color-on-surface-variant);
   margin-bottom: 0.5rem;
 }
 
 .grafica__rejilla {
-  stroke: rgba(240, 234, 214, 0.08);
+  stroke: var(--trazo-tenue);
   stroke-width: 1;
 }
 
 .grafica__base {
-  stroke: rgba(240, 234, 214, 0.25);
+  stroke: var(--trazo-medio);
   stroke-width: 1;
 }
 
 .grafica__eje {
-  font-size: 10.5px;
-  fill: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  font-size: 13px;
+  fill: var(--md-sys-color-on-surface-variant);
 }
 
 /* Paleta de series validada sobre #141414: oro #C08A1E y azul #4C7FC4. */
 .grafica__ingreso,
 .grafica__muestra--ingreso {
-  fill: #c08a1e;
-  background: #c08a1e;
+  fill: var(--serie-ingreso);
+  background: var(--serie-ingreso);
 }
 
 .grafica__egreso,
 .grafica__muestra--egreso {
-  fill: #4c7fc4;
-  background: #4c7fc4;
+  fill: var(--serie-egreso);
+  background: var(--serie-egreso);
 }
 
 .grafica__linea {
   fill: none;
-  stroke: #c08a1e;
+  stroke: var(--serie-ingreso);
   stroke-width: 2;
   stroke-linejoin: round;
 }
 
 .grafica__area {
-  fill: rgba(192, 138, 30, 0.12);
+  fill: var(--serie-ingreso-tenue);
   stroke: none;
 }
 
 .grafica__punto {
-  fill: #c08a1e;
-  stroke: #141414;
+  fill: var(--serie-ingreso);
+  stroke: var(--fondo-grafica);
   stroke-width: 2;
 }
 
@@ -502,7 +807,7 @@
   display: flex;
   gap: 1.2rem;
   font-size: 0.82rem;
-  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  color: var(--md-sys-color-on-surface-variant);
   margin-top: 0.4rem;
 }
 
@@ -522,12 +827,12 @@
   height: 14px;
   border-radius: 4px;
   overflow: hidden;
-  background: rgba(240, 234, 214, 0.06);
+  background: var(--relleno-tenue);
 }
 
 .avance__cobrado { background: var(--md-sys-color-tertiary); }
 .avance__vencido { background: var(--md-sys-color-error); }
-.avance__porvencer { background: rgba(240, 234, 214, 0.18); }
+.avance__porvencer { background: var(--relleno-medio); }
 
 /* ── Tablero por periodo: filtro, cifras y reparto por concepto ────────────── */
 
@@ -554,7 +859,7 @@
 /* Cuatro cifras del periodo. */
 .cifras-periodo {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
   gap: 1rem;
 }
 
@@ -565,14 +870,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-.cifras-periodo__valor--ingreso { color: #d9a441; }
-.cifras-periodo__valor--egreso { color: #7ea6dc; }
+.cifras-periodo__valor--ingreso { color: var(--cifra-ingreso); }
+.cifras-periodo__valor--egreso { color: var(--cifra-egreso); }
 .cifras-periodo__valor--negativo { color: var(--md-sys-color-error); }
 
 .cifras-periodo__nota {
   font-size: 0.82rem;
   margin: 0.3rem 0 0;
-  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* Reparto por concepto: barra horizontal, monto y porcentaje. */
@@ -605,7 +910,7 @@
   grid-column: 1 / -1;
   height: 8px;
   border-radius: 4px;
-  background: rgba(240, 234, 214, 0.06);
+  background: var(--relleno-tenue);
   overflow: hidden;
 }
 
@@ -615,12 +920,12 @@
   border-radius: 4px;
 }
 
-.reparto__barra--ingreso { background: #c08a1e; }
-.reparto__barra--egreso { background: #4c7fc4; }
+.reparto__barra--ingreso { background: var(--serie-ingreso); }
+.reparto__barra--egreso { background: var(--serie-egreso); }
 
 .reparto__detalle {
   font-size: 0.78rem;
-  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* Meses de la gráfica como enlaces: zona de clic invisible que se marca al pasar. */
@@ -630,16 +935,23 @@
 
 .grafica__mes:hover .grafica__zona,
 .grafica__mes:focus-visible .grafica__zona {
-  fill: rgba(240, 234, 214, 0.05);
+  fill: var(--relleno-paso);
 }
 
 .grafica__zona--elegida,
 .grafica__mes:hover .grafica__zona--elegida {
-  fill: rgba(192, 138, 30, 0.14);
+  fill: var(--serie-ingreso-elegida);
 }
 
-.grafica__mes:focus-visible {
+/* Foco visible con teclado: el mes se enmarca en dorado. */
+.grafica__mes:focus {
   outline: none;
+}
+
+.grafica__mes:focus-visible .grafica__zona {
+  fill: var(--relleno-paso);
+  stroke: var(--gold);
+  stroke-width: 2;
 }
 
 .grafica__cifras {
@@ -649,5 +961,656 @@
 
 .grafica__cifras summary {
   cursor: pointer;
-  color: var(--md-sys-color-on-surface-variant, #b8b0a0);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* ── Utilidades: sustituyen los style= que se repetían en las páginas ─────── */
+
+@layer app {
+  /* Con !important: una utilidad dice exactamente lo que el style= decía. */
+  .sin-margen { margin: 0 !important; }
+  .arriba-0 { margin-top: 0 !important; }
+  .arriba-xs { margin-top: 0.5rem !important; }
+  .arriba-s { margin-top: 0.75rem !important; }
+  .arriba-m { margin-top: 1rem !important; }
+  .arriba-l { margin-top: 1.25rem !important; }
+  .arriba-xl { margin-top: 1.5rem !important; }
+  .abajo-0 { margin-bottom: 0 !important; }
+  .abajo-xxs { margin-bottom: 0.2rem !important; }
+  .abajo-l { margin-bottom: 1.25rem !important; }
+  .letra-mini { font-size: 0.78rem !important; }
+  .letra-menor { font-size: 0.8rem !important; }
+  .letra-chica { font-size: 0.85rem !important; }
+  .letra-media { font-size: 0.9rem !important; }
+  .en-bloque { display: block !important; }
+  .en-linea { display: inline !important; margin: 0 !important; }
+  .ancho-auto { width: auto !important; }
+  .derecha { text-align: right !important; }
+  .preformado { white-space: pre-line !important; }
+  .separa-izq { margin-left: 0.5rem !important; }
+  .sangria { padding-left: 1.2rem !important; }
+
+  summary {
+    cursor: pointer;
+  }
+
+  /* Cifra grande de una tarjeta. */
+  .cifra-grande {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cifra-grande__unidad {
+    font-size: 1rem;
+  }
+
+  /* Línea de contexto bajo una cifra. */
+  .nota-cifra {
+    font-size: 0.82rem;
+    margin: 0.3rem 0 0;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+}
+
+/* ── Pantallas chicas: 768px tableta, 480px teléfono ──────────────────────── */
+
+@layer app {
+  @media (max-width: 768px) {
+    .barra__nav {
+      display: none;
+    }
+
+    .menu-movil {
+      display: block;
+    }
+
+    .barra__fila {
+      gap: 0.5rem 0.75rem;
+    }
+
+    .barra__marca {
+      margin-right: auto;
+    }
+
+    /* Usuario y Salir pasan al final del menú, para que la barra quepa en un renglón. */
+    .barra__usuario,
+    .barra__salir {
+      display: none;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .panel {
+      padding: 1rem 1rem 3rem;
+    }
+
+    .barra__fila,
+    .barra__contexto {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    .tarjeta {
+      padding: 0.9rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.45rem;
+    }
+
+    .tabla th,
+    .tabla td {
+      padding: 0.4rem 0.45rem;
+    }
+
+    .filtros .campo {
+      min-width: 0;
+      flex: 1 1 100%;
+    }
+
+    /* El botón principal ocupa todo el ancho y el secundario va debajo. */
+    .formulario__acciones {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .formulario__acciones .btn {
+      width: 100%;
+      min-height: 44px;
+    }
+
+    .encabezado .fila,
+    .encabezado__acciones {
+      width: 100%;
+    }
+
+    .encabezado .fila .btn,
+    .encabezado__acciones .btn {
+      flex: 1 1 auto;
+    }
+
+    .visor {
+      padding: 0.75rem;
+    }
+  }
+}
+
+@layer app {
+  /* Anchos de formulario: los campos no se estiran a todo el panel. */
+  .formulario--estrecho {
+    max-width: 20rem;
+  }
+
+  .formulario--angosto {
+    max-width: 28rem;
+  }
+
+  .formulario--medio {
+    max-width: 40rem;
+  }
+
+  /* Columnas lado a lado que bajan una debajo de otra cuando no caben. */
+  .columnas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem 2rem;
+  }
+
+  .columnas__una {
+    flex: 1 1 min(16rem, 100%);
+    min-width: 0;
+  }
+}
+
+@layer app {
+  /* Panel de una acción sobre un renglón de tabla (exentar un mes, por ejemplo). */
+  .panel-accion {
+    background: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.1rem;
+    scroll-margin-top: 1rem;
+  }
+
+  .panel-accion h3 {
+    margin-bottom: 0.35rem;
+  }
+
+  .tabla a[aria-current='true'] {
+    font-weight: 600;
+    text-decoration: underline;
+  }
+}
+
+@layer app {
+  /*
+   * Primera columna fija al desplazar la tabla de lado: el nombre no se pierde.
+   * --tabla-fondo es el fondo de lo que hay detrás, para que la celda tape.
+   */
+  .tabla--fija {
+    --tabla-fondo: var(--md-sys-color-background);
+  }
+
+  .tarjeta .tabla--fija {
+    --tabla-fondo: var(--md-sys-color-surface-container-low);
+  }
+
+  .tabla--fija tr > :first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--tabla-fondo);
+    box-shadow: 1px 0 0 var(--md-sys-color-outline-variant), 6px 0 8px -6px rgb(0 0 0 / 0.6);
+  }
+
+  /* El nombre es encabezado del renglón, pero se ve como texto normal. */
+  .tabla--fija tbody th {
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    color: inherit;
+    font-weight: 400;
+  }
+
+  @media (max-width: 480px) {
+    .tabla--fija tr > :first-child {
+      max-width: 9.5rem;
+      white-space: normal;
+    }
+  }
+
+  /* Insignia que abre un globo. */
+  .insignia--boton {
+    cursor: pointer;
+    font: inherit;
+    font-family: var(--font-body);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+  }
+
+  /* Globo (popover nativo): detalle de un mes o historia de un plan. */
+  .globo {
+    width: min(20rem, calc(100vw - 2rem));
+    margin: auto;
+    padding: 1rem 1.1rem;
+    background: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    font-size: 0.9rem;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .globo::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  .globo__titulo {
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+  }
+
+  .globo__texto {
+    margin: 0 0 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .globo__datos {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .globo__datos dt {
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .globo__datos dd {
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .globo__pie {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+  }
+}
+
+@layer app {
+  /* Lo que solo tiene sentido en una pantalla o en la otra. */
+  @media (min-width: 481px) {
+    .solo-celular {
+      display: none !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .solo-escritorio {
+      display: none !important;
+    }
+  }
+
+  /* Tarjetas de hermano (cápitas en celular). */
+  .tarjetas-hermano {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .tarjeta-hermano {
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 0.85rem;
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .tarjeta-hermano__cab {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+    font-weight: 600;
+  }
+
+  .tarjeta-hermano__plan {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+  }
+
+  .tarjeta-hermano__vencido {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 0;
+  }
+
+  .tarjeta-hermano__vencido .cifra-grande {
+    font-size: 1.45rem;
+  }
+
+  /* Historia del plan, a la vista con un toque y no con el cursor. */
+  .historia {
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+    max-width: 18rem;
+  }
+
+  .historia summary {
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .historia p {
+    margin: 0.3rem 0 0;
+    color: var(--md-sys-color-on-surface-variant);
+    white-space: normal;
+  }
+}
+
+@layer app {
+  /* ── Pasos del cierre del mes ── */
+  .pasos {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr));
+    gap: 0.5rem;
+    counter-reset: paso;
+  }
+
+  .paso {
+    counter-increment: paso;
+  }
+
+  .paso__enlace {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.1rem 0.5rem;
+    align-items: baseline;
+    height: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+    color: var(--md-sys-color-on-surface);
+    text-decoration: none;
+  }
+
+  a.paso__enlace:hover {
+    border-color: var(--md-sys-color-outline);
+  }
+
+  a.paso__enlace:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  .paso__simbolo {
+    grid-row: span 2;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .paso__titulo {
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+
+  .paso__titulo::before {
+    content: counter(paso) '. ';
+    color: var(--md-sys-color-on-surface-variant);
+    font-weight: 400;
+  }
+
+  .paso__detalle {
+    font-size: 0.8rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .paso--hecho .paso__enlace {
+    border-color: var(--md-sys-color-tertiary);
+  }
+
+  .paso--hecho .paso__simbolo {
+    color: var(--md-sys-color-tertiary);
+  }
+
+  .paso--falta .paso__enlace {
+    border-color: var(--gold);
+    background: var(--pendiente-tenue);
+  }
+
+  .paso--falta .paso__simbolo,
+  .paso--falta .paso__detalle {
+    color: var(--gold);
+  }
+
+  .paso--bloqueado .paso__enlace {
+    opacity: 0.65;
+  }
+
+  @media (max-width: 480px) {
+    .pasos {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  /* ── Arqueo inicial ── */
+  .tarjeta--accion {
+    border-color: var(--gold-border);
+  }
+
+  /* Lo ya registrado se lee distinto de un formulario por llenar. */
+  .tarjeta--registro {
+    background: transparent;
+    border-style: dashed;
+  }
+
+  .arqueo__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    margin: 0 0 0.5rem;
+  }
+
+  .arqueo__par {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(7.5rem, 100%), 1fr));
+    gap: 0 0.75rem;
+  }
+
+  .arqueo__cuadre {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+  }
+
+  .explicacion {
+    margin: 0 0 1rem;
+    font-size: 0.88rem;
+  }
+
+  .explicacion summary {
+    color: var(--md-sys-color-primary);
+  }
+
+  .explicacion p {
+    margin: 0.5rem 0 0;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+}
+
+@layer app {
+  /* Gráfica por mes en el teléfono: un renglón por mes, barras horizontales. */
+  .barras-mes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .barras-mes__fila {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+    color: var(--md-sys-color-on-surface);
+    text-decoration: none;
+  }
+
+  a.barras-mes__fila:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+  }
+
+  .barras-mes__fila--elegida {
+    background: var(--serie-ingreso-elegida);
+  }
+
+  .barras-mes__nombre {
+    font-size: 0.85rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .barras-mes__pista {
+    display: grid;
+    gap: 3px;
+  }
+
+  .barras-mes__barra {
+    display: block;
+    height: 7px;
+    border-radius: 2px;
+    min-width: 0;
+  }
+
+  .barras-mes__resultado {
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    min-width: 4.5rem;
+  }
+
+  .barras-mes__resultado--negativo {
+    color: var(--md-sys-color-error);
+  }
+
+  .solo-lectores {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@layer app {
+  /* ── Tablero: bloque, tarjeta y cifra ── */
+  .bloque {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+
+  .bloque__titulo {
+    font-size: 1.55rem;
+    margin: 0;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--gold-border);
+  }
+
+  .tarjeta__etiqueta {
+    font-family: var(--font-label);
+    font-size: 0.74rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 0 0 0.5rem;
+    line-height: 1.3;
+  }
+
+  /* Tarjeta de pendiente: el enlace Ver siempre al pie, a la misma altura. */
+  .tarjeta--pendiente {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tarjeta--pendiente .nota-cifra {
+    flex: 1;
+  }
+
+  .tarjeta__ver {
+    align-self: flex-start;
+    margin-top: 0.6rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
+  /* Leyenda de la barra de avance, en dos columnas. */
+  .leyenda-avance {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 1.5rem;
+    margin: 0.85rem 0 0.25rem;
+    font-size: 0.88rem;
+  }
+
+  .leyenda-avance div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    padding-bottom: 0.3rem;
+  }
+
+  .leyenda-avance dt {
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .leyenda-avance dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 480px) {
+    .bloque__titulo {
+      font-size: 1.3rem;
+    }
+
+    /* !important: la regla base de .cifras-periodo vive fuera de las capas. */
+    .cifras-periodo {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 0.6rem !important;
+    }
+
+    .cifras-periodo .cifra-grande {
+      font-size: 1.3rem;
+    }
+
+    .cifras-periodo .tarjeta {
+      padding: 0.75rem;
+    }
+  }
 }

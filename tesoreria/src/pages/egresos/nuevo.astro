@@ -170,16 +170,15 @@ Astro.response.status = estado;
       ayuda="Obligatorio en los pagos de grado a la Gran Logia."
     />
 
-    <div class="campo">
+    <div class="campo confirmacion">
       <span class="campo__etiqueta">{ETIQUETAS.requiere_comprobacion}</span>
-      <label style="display: block; font-size: 0.85rem;">
+      <label>
         <input
           type="checkbox"
           name="requiere_comprobacion"
-          style="width: auto;"
           checked={valores.requiere_comprobacion === 'on'}
         />
-        {' '}Se entrega dinero y después se comprueba con recibos
+        <span>Se entrega dinero y después se comprueba con recibos</span>
       </label>
       <span class="campo__ayuda">
         Márcalo para compras de vino, alimentos y gastos parecidos. Si no lo marcas, al

@@ -1,5 +1,6 @@
 ---
 /* Cortes del ejercicio, mes por mes, con los saldos encadenados. */
+import { cuenta } from '@lib/texto';
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import Aviso from '@componentes/Aviso.astro';
 import { controlBolsas, cortesDelAnio, vistaBolsas } from '@lib/datos/cortes';
@@ -54,7 +55,7 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
 
   {
     control.desde && (
-      <p class="apagado" style="font-size: 0.9rem;">
+      <p class="apagado letra-media">
         Banco y efectivo se llevan por separado desde {nombrePeriodo(control.desde)}
         {control.arqueo
           ? `, con el arqueo inicial del ${formatoFechaCorta(control.arqueo.fecha)}.`
@@ -77,7 +78,7 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
           <th scope="col" class="num">Banco</th>
           <th scope="col" class="num">Efectivo</th>
           <th scope="col">Estado</th>
-          <th scope="col" />
+          <th scope="col">Acción</th>
         </tr>
       </thead>
       <tbody>
@@ -86,7 +87,7 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
             const periodo = c.periodo.slice(0, 7);
             const futuro = periodo > hoy;
             return (
-              <tr style={futuro ? 'opacity: 0.55;' : undefined}>
+              <tr>
                 <td>
                   <a href={`/cortes/${periodo}`}>{nombrePeriodo(periodo)}</a>
                 </td>
@@ -113,28 +114,29 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
                         <>
                           {' '}
                           <span class="insignia insignia--alerta">
-                            Reabierto {c.reaperturas}
+                            Reabierto {cuenta(c.reaperturas ?? 0, 'vez', 'veces')}
                           </span>
                         </>
                       )}
                     </>
                   ) : futuro ? (
-                    <span class="apagado">Por venir</span>
+                    <span class="insignia insignia--neutro">Por venir</span>
                   ) : (
                     <span class="insignia insignia--pendiente">Abierto</span>
                   )}
                 </td>
                 <td>
-                  <a href={`/cortes/${periodo}`}>
-                    {c.estado_corte === 'cerrado' ? 'Ver' : 'Revisar y cerrar'}
-                  </a>
-                  {' · '}
-                  <a href={`/cortes/${periodo}/imprimir`}>Imprimir</a>
-                  {!futuro && (
-                    <>
-                      {' · '}
-                      <a href={`/cortes/${periodo}/informe`}>Informe</a>
-                    </>
+                  {/* Una sola acción: el enlace del mes ya lleva a revisarlo. */}
+                  {c.estado_corte === 'cerrado' ? (
+                    <a class="btn btn--ghost btn--chico" href={`/cortes/${periodo}/imprimir`}>
+                      Imprimir
+                    </a>
+                  ) : futuro ? (
+                    <span class="apagado">—</span>
+                  ) : (
+                    <a class="btn btn--primary btn--chico" href={`/cortes/${periodo}#cerrar`}>
+                      Cerrar
+                    </a>
                   )}
                 </td>
               </tr>
@@ -147,7 +149,7 @@ const saldoActual = cortes.find((c) => c.periodo.slice(0, 7) === hoy)?.saldo_fin
 
   {
     ultimoCerrado && (
-      <p class="apagado" style="font-size: 0.85rem;">
+      <p class="apagado letra-chica">
         Último mes cerrado: {nombrePeriodo(ultimoCerrado.periodo.slice(0, 7))}
         {ultimoCerrado.cerrado_nombre && <> por {ultimoCerrado.cerrado_nombre}</>}
         {ultimoCerrado.cerrado_en && <> el {formatoMomento(ultimoCerrado.cerrado_en)}</>}.

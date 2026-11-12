@@ -51,10 +51,10 @@ const hayAlgo = Boolean(general) || porCampo.length > 0;
 {
   hayAlgo && (
     <div class="aviso aviso--error" role="alert">
-      {general && <p style="margin: 0;">{general}</p>}
+      {general && <p class="sin-margen">{general}</p>}
       {porCampo.length > 0 && (
         <>
-          {!general && <p style="margin: 0;">Revisa lo siguiente:</p>}
+          {!general && <p class="sin-margen">Revisa lo siguiente:</p>}
           <ul>
             {porCampo.map(([campo, mensaje]) => (
               <li>

@@ -224,6 +224,7 @@ Astro.response.status = estado;
   {
     sinModalidad && !aviso && (
       <Aviso
+        tipo="cuidado"
         texto={`Todavía no tiene modalidad de cápita para ${ejercicio.anio}, así que no se le cobra nada.`}
         enlaces={[enlaceModalidad]}
       />
@@ -231,10 +232,10 @@ Astro.response.status = estado;
   }
   {seccion === null && <ResumenErrores errores={errores} />}
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <div>
-      <h1 style="margin-bottom: 0.2rem;">{hermano.nombre_completo}</h1>
-      <p class="apagado" style="margin: 0;">
+      <h1 class="abajo-xxs">{hermano.nombre_completo}</h1>
+      <p class="apagado sin-margen">
         {NOMBRE_GRADO[hermano.grado]}
         {hermano.cargo_nombre && <> · {hermano.cargo_nombre}</>}
         {hermano.estatus === 'baja' && (
@@ -247,13 +248,13 @@ Astro.response.status = estado;
         )}
       </p>
     </div>
-    <div style="display: flex; gap: 0.6rem;">
+    <div class="fila">
       <a class="btn btn--ghost" href={`/hermanos/${id}/editar`}>Editar</a>
       <a class="btn btn--ghost" href={`/capitas/hermano/${id}`}>Estado de cápitas</a>
     </div>
   </div>
 
-  <div class="pila" style="margin-top: 1.5rem;">
+  <div class="pila arriba-xl">
     <section class="tarjeta">
       <h2>Datos</h2>
       <div class="tabla-envoltura">
@@ -309,7 +310,7 @@ Astro.response.status = estado;
               hermano.notas && (
                 <tr>
                   <th scope="row">Notas</th>
-                  <td style="white-space: pre-line;">{hermano.notas}</td>
+                  <td class="preformado">{hermano.notas}</td>
                 </tr>
               )
             }
@@ -332,12 +333,12 @@ Astro.response.status = estado;
         Lo que cada organismo sabe de este hermano, como consulta. Son realidades
         separadas del padrón interno: se registran, no se deducen ni se concilian aquí.
       </p>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.25rem;">
+      <div class="rejilla rejilla--media">
         {
           ORGANISMOS.map((org) => (
             <div>
               <h3>{org.titulo}</h3>
-              <p class="apagado" style="font-size: 0.85rem;">{org.nota}</p>
+              <p class="apagado letra-chica">{org.nota}</p>
               <p style="margin: 0 0 0.5rem;">
                 <span
                   class:list={[
@@ -357,7 +358,7 @@ Astro.response.status = estado;
                 )}
               </p>
               {org.registro?.observaciones && (
-                <p class="apagado" style="font-size: 0.85rem;">{org.registro.observaciones}</p>
+                <p class="apagado letra-chica">{org.registro.observaciones}</p>
               )}
               <details open={seccion === org.accion}>
                 <summary>Actualizar</summary>
@@ -439,9 +440,9 @@ Astro.response.status = estado;
         )
       }
 
-      <details style="margin-top: 1rem;" open={seccion === 'grado'}>
-        <summary style="cursor: pointer;">Registrar aumento de salario o exaltación</summary>
-        <div style="margin-top: 1rem;">
+      <details class="arriba-m" open={seccion === 'grado'}>
+        <summary>Registrar aumento de salario o exaltación</summary>
+        <div class="arriba-m">
           {seccion === 'grado' && <ResumenErrores errores={errores} />}
           <Formulario csrf={sesion.csrfToken} nonce={nonceGrado} accionInterna="grado">
             <Selector
@@ -488,9 +489,9 @@ Astro.response.status = estado;
       {
         hermano.estatus === 'activo' ? (
           <details open={seccion === 'baja'}>
-            <summary style="cursor: pointer;">Dar de baja a este hermano</summary>
-            <div style="margin-top: 1rem;">
-              <p class="apagado" style="font-size: 0.85rem;">
+            <summary>Dar de baja a este hermano</summary>
+            <div class="arriba-m">
+              <p class="apagado letra-chica">
                 La baja conserva los adeudos anteriores y libera su cargo del cuadro. Los
                 meses posteriores a la baja dejan de cobrarse.
               </p>
@@ -526,7 +527,7 @@ Astro.response.status = estado;
           </details>
         ) : (
           <Formulario csrf={sesion.csrfToken} nonce={nonceReactivar} accionInterna="reactivar">
-            <p class="apagado" style="font-size: 0.85rem;">
+            <p class="apagado letra-chica">
               Reactivar lo devuelve al padrón activo. Su cápita del ejercicio se revisa
               aparte, en el módulo de cápitas.
             </p>

@@ -122,9 +122,9 @@ Astro.response.status = estado;
   <Aviso texto={aviso} />
   <ResumenErrores errores={errores} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <div>
-      <h1 style="margin-bottom: 0.2rem;">Gran Tesorería</h1>
+      <h1 class="abajo-xxs">Gran Tesorería</h1>
       <p class="apagado" style="margin: 0; font-size: 0.9rem; max-width: 46rem;">
         Aquí se lleva lo que la Gran Tesorería le cobra a la logia. Cada cobro que llega
         (la cuota del mes, una regularización o un trámite) se captura como una
@@ -132,7 +132,7 @@ Astro.response.status = estado;
         Estar <strong>a plomo</strong> quiere decir estar al corriente con esos pagos.
       </p>
     </div>
-    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+    <div class="fila">
       <a class="btn btn--primary" href="/gran-tesoreria/obligaciones/nueva">Capturar obligación</a>
       <a class="btn btn--primary" href="/gran-tesoreria/tramites/nuevo">Capturar trámite</a>
       <a class="btn btn--ghost" href="/gran-tesoreria/membresias">Membresías</a>
@@ -140,11 +140,11 @@ Astro.response.status = estado;
     </div>
   </div>
 
-  <div class="pila" style="margin-top: 1.25rem;">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1.25rem;">
+  <div class="pila arriba-l">
+    <div class="rejilla rejilla--media">
       <section class="tarjeta">
         <h2>Estatus ante la Gran Tesorería</h2>
-        <p style="margin: 0;">
+        <p class="sin-margen">
           {
             aplomo.ordinario_a_plomo ? (
               <span class="insignia insignia--ok">A plomo (al corriente) en lo ordinario</span>
@@ -172,13 +172,13 @@ Astro.response.status = estado;
         <h2>Tarifas vigentes</h2>
         {
           tarifas.length === 0 ? (
-            <p class="apagado" style="margin: 0;">
+            <p class="apagado sin-margen">
               Sin tarifas capturadas. <a href="/gran-tesoreria/tarifas">Captúralas</a> desde la
               Ley de Ingresos de la Gran Logia.
             </p>
           ) : (
             <>
-              <p style="margin: 0;">
+              <p class="sin-margen">
                 {capita ? (
                   <>
                     Cápita: <strong>{formatoMXN(capita.monto_centavos)}</strong>{' '}
@@ -254,7 +254,7 @@ Astro.response.status = estado;
               <button class="btn btn--primary" type="submit">
                 Generar egreso de pago con las marcadas
               </button>
-              <span class="apagado" style="font-size: 0.8rem;">
+              <span class="apagado letra-menor">
                 El egreso pasa por las dos firmas. Cuando registres la entrega del dinero, el
                 pago a la Gran Tesorería queda asentado solo en estas obligaciones.
               </span>

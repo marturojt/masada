@@ -52,9 +52,9 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
 
   <Aviso texto={aviso} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <h1>Cápitas {anio}</h1>
-    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+    <div class="fila">
       <a class="btn btn--primary" href="/capitas/pagos/nuevo">Registrar pago</a>
       <a class="btn btn--ghost" href="/capitas/asignar">Asignar modalidad</a>
     </div>
@@ -62,8 +62,8 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
 
   {
     faltantes.length > 0 && (
-      <div class="aviso aviso--error">
-        <p style="margin: 0;">
+      <div class="aviso aviso--cuidado">
+        <p class="sin-margen">
           {faltantes.length === 1 ? 'Un hermano activo' : `${faltantes.length} hermanos activos`} sin modalidad de cápita asignada para {anio}.
           Mientras no la tengan, no se les puede registrar un pago.
         </p>
@@ -83,7 +83,7 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
   {
     estados.length === 0 ? (
       <div class="tarjeta">
-        <p style="margin: 0;">
+        <p class="sin-margen">
           Todavía no hay cápitas asignadas en {anio}. Empieza por
           <a href="/capitas/asignar"> asignar la modalidad</a> de cada hermano.
         </p>
@@ -92,10 +92,62 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
       <>
         <MatrizCapitas anio={anio} adeudos={adeudos} estados={estados} planes={mapaPlanes} />
 
-        <section class="tarjeta" style="margin-top: 1.5rem;">
+        <section class="tarjeta arriba-xl">
           <h2>Estado por hermano</h2>
-          <div class="tabla-envoltura">
-            <table class="tabla">
+          <p class="apagado letra-chica">
+            Los totales del ejercicio están en la barra de arriba.
+          </p>
+
+          {/* En celular, una tarjeta por hermano en lugar de ocho columnas. */}
+          <ul class="tarjetas-hermano solo-celular">
+            {estados.map((e) => (
+              <li class="tarjeta-hermano">
+                <div class="tarjeta-hermano__cab">
+                  <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>
+                  {e.al_corriente ? (
+                    <span class="insignia insignia--ok">Al corriente</span>
+                  ) : (
+                    <span class="insignia insignia--alerta">
+                      {textoSituacion(e.modalidad, e.meses_vencidos)}
+                    </span>
+                  )}
+                </div>
+                <p class="tarjeta-hermano__plan">
+                  {e.modalidad ? (
+                    <span class="insignia insignia--neutro">{NOMBRE_MODALIDAD[e.modalidad]}</span>
+                  ) : (
+                    <span class="apagado">Sin modalidad</span>
+                  )}
+                  {e.saldo_a_favor_centavos > 0 && (
+                    <span class="insignia insignia--favor">
+                      A favor {formatoMXN(e.saldo_a_favor_centavos)}
+                    </span>
+                  )}
+                </p>
+                {e.vencido_centavos > 0 && (
+                  <p class="tarjeta-hermano__vencido">
+                    <span class="apagado">Vencido</span>
+                    <span class="cifra-grande">{formatoMXN(e.vencido_centavos)}</span>
+                  </p>
+                )}
+                <p class="apagado letra-menor sin-margen">
+                  Esperado {formatoMXN(e.esperado_centavos)} · Pagado{' '}
+                  {formatoMXN(e.pagado_centavos)}
+                  {e.por_vencer_centavos > 0 && <> · Por vencer {formatoMXN(e.por_vencer_centavos)}</>}
+                  {e.condonado_centavos > 0 && <> · Exento {formatoMXN(e.condonado_centavos)}</>}
+                </p>
+                {e.modalidad && (
+                  <details class="historia">
+                    <summary>Historia del plan</summary>
+                    <p>{historiaDelPlan(mapaPlanes.get(e.hermano_id))}</p>
+                  </details>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div class="tabla-envoltura solo-escritorio">
+            <table class="tabla tabla--fija">
               <thead>
                 <tr>
                   <th scope="col">Hermano</th>
@@ -111,14 +163,18 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
               <tbody>
                 {estados.map((e) => (
                   <tr>
-                    <td>
+                    <th scope="row">
                       <a href={`/capitas/hermano/${e.hermano_id}`}>{e.nombre_completo}</a>
-                    </td>
+                      {e.modalidad && (
+                        <details class="historia">
+                          <summary>Historia del plan</summary>
+                          <p>{historiaDelPlan(mapaPlanes.get(e.hermano_id))}</p>
+                        </details>
+                      )}
+                    </th>
                     <td>
                       {e.modalidad ? (
-                        <span class="con-historia" title={historiaDelPlan(mapaPlanes.get(e.hermano_id))}>
-                          {NOMBRE_MODALIDAD[e.modalidad]}
-                        </span>
+                        NOMBRE_MODALIDAD[e.modalidad]
                       ) : (
                         <span class="apagado">Sin asignar</span>
                       )}
@@ -145,7 +201,7 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                       {e.saldo_a_favor_centavos > 0 && (
                         <>
                           {' '}
-                          <span class="insignia insignia--pendiente">
+                          <span class="insignia insignia--favor">
                             A favor {formatoMXN(e.saldo_a_favor_centavos)}
                           </span>
                         </>
@@ -154,23 +210,12 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="2">Totales</td>
-                  <td class="num">{formatoMXN(resumen?.esperado ?? 0)}</td>
-                  <td class="num">{formatoMXN(resumen?.pagado ?? 0)}</td>
-                  <td class="num">{formatoMXN(resumen?.condonado ?? 0)}</td>
-                  <td class="num">{formatoMXN(resumen?.vencido ?? 0)}</td>
-                  <td class="num">{formatoMXN(resumen?.por_vencer ?? 0)}</td>
-                  <td />
-                </tr>
-              </tfoot>
             </table>
           </div>
         </section>
 
         {conAdeudo.length > 0 && (
-          <section class="tarjeta" style="margin-top: 1.25rem;">
+          <section class="tarjeta arriba-l">
             <h2>Cartera de adeudos</h2>
             <ul>
               {conAdeudo.map((e) => (
@@ -188,9 +233,9 @@ const aFavor = estados.filter((e) => e.saldo_a_favor_centavos > 0);
         )}
 
         {aFavor.length > 0 && (
-          <section class="tarjeta" style="margin-top: 1.25rem;">
+          <section class="tarjeta arriba-l">
             <h2>Saldos a favor</h2>
-            <p class="apagado" style="font-size: 0.85rem;">
+            <p class="apagado letra-chica">
               Dinero recibido que todavía no cubre ningún mes. No se aplica solo: desde la
               ficha de cada hermano se aplica a sus meses pendientes, se le devuelve o se
               convierte en donativo.

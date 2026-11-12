@@ -89,7 +89,7 @@ Astro.response.status = estado;
 
   <h1>Membresía de {nombrePeriodo(membresia.periodo_referencia.slice(0, 7))}</h1>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Documento</h2>
       <div class="tabla-envoltura">
@@ -122,7 +122,7 @@ Astro.response.status = estado;
             {membresia.observaciones && (
               <tr>
                 <th scope="row">Observaciones</th>
-                <td style="white-space: pre-line;">{membresia.observaciones}</td>
+                <td class="preformado">{membresia.observaciones}</td>
               </tr>
             )}
           </tbody>
@@ -134,7 +134,7 @@ Astro.response.status = estado;
       renglones.length > 0 && (
         <section class="tarjeta">
           <h2>Hermanos reportados</h2>
-          <p class="apagado" style="font-size: 0.85rem;">
+          <p class="apagado letra-chica">
             Capturados cuando la membresía se llevaba renglón por renglón. Se conservan para
             consulta; ya no se agregan.
           </p>
@@ -170,9 +170,9 @@ Astro.response.status = estado;
       soyVM && (
         <section class="tarjeta">
           <details open={errores.motivo !== undefined || errores.confirmo !== undefined}>
-            <summary style="cursor: pointer;">Eliminar esta membresía</summary>
-            <div style="margin-top: 0.75rem; max-width: 26rem;">
-              <p class="apagado" style="font-size: 0.85rem;">
+            <summary>Eliminar esta membresía</summary>
+            <div class="arriba-s formulario--angosto">
+              <p class="apagado letra-chica">
                 Solo si se registró por error, por ejemplo dos veces. Es un documento de
                 consulta: no afecta cuentas ni obligaciones. Queda en la bitácora con su motivo.
               </p>

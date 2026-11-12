@@ -116,11 +116,11 @@ Astro.response.status = estado;
     {fundamentos.length > 0 && <> Vigentes según: {fundamentos.join('; ')}.</>}
   </p>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     {
       grupos.length === 0 ? (
         <section class="tarjeta">
-          <p class="apagado" style="margin: 0;">Sin tarifas vigentes capturadas.</p>
+          <p class="apagado sin-margen">Sin tarifas vigentes capturadas.</p>
         </section>
       ) : (
         <section class="tarjeta">
@@ -162,12 +162,12 @@ Astro.response.status = estado;
 
     <section class="tarjeta" id="capturar">
       <h2>Capturar monto</h2>
-      <p class="apagado" style="font-size: 0.85rem;">
+      <p class="apagado letra-chica">
         Para cambiar el monto de una tarifa, elígela. Para una que no existe, deja la tarifa
         en blanco y llena grupo y nombre. Una vigencia que ya empezó pide su fundamento,
         por ejemplo el decreto de la ley.
       </p>
-      <div style="max-width: 28rem;">
+      <div class="formulario--angosto">
         <Formulario csrf={sesion.csrfToken} nonce={nonce}>
           <Selector
             nombre="clave"

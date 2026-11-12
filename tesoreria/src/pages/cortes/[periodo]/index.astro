@@ -259,6 +259,67 @@ const egresosSinTerminar = egresosEnTramite.filter(
 const evidenciasDelMes = evidencias.filter((e) => e.fecha.startsWith(periodo));
 const gtSinCubrir = !aplomo.cubierto_hasta || aplomo.cubierto_hasta.slice(0, 7) < periodo;
 
+/*
+ * Pasos del cierre, arriba de la página y en orden, cada uno con su estado y un
+ * enlace a su sección. Solo resumen lo que la página ya calculó.
+ */
+type EstadoPaso = 'hecho' | 'falta' | 'opcional' | 'bloqueado' | 'revisar';
+interface Paso {
+  titulo: string;
+  estado: EstadoPaso;
+  detalle: string;
+  href: string | null;
+}
+const pasos: Paso[] = [
+  {
+    titulo: 'Movimientos',
+    estado: cerrado ? 'hecho' : 'revisar',
+    detalle: cuenta(movimientos.length, 'movimiento', 'movimientos'),
+    href: '#movimientos',
+  },
+];
+if (control.desde === periodo) {
+  pasos.push({
+    titulo: 'Arqueo inicial',
+    estado: arqueoDeEsteMes ? 'hecho' : 'falta',
+    detalle: arqueoDeEsteMes ? 'Registrado' : 'Falta',
+    href: '#arqueo',
+  });
+}
+if (!esFuturo) {
+  pasos.push({
+    titulo: 'Informe de tenida',
+    estado: mensaje ? 'hecho' : 'opcional',
+    detalle: mensaje ? 'Con mensaje' : 'Opcional',
+    href: '#informe',
+  });
+}
+pasos.push(
+  cerrado
+    ? { titulo: 'Cerrar el mes', estado: 'hecho', detalle: 'Cerrado', href: null }
+    : esFuturo
+      ? { titulo: 'Cerrar el mes', estado: 'bloqueado', detalle: 'Mes por venir', href: null }
+      : sePuedeCerrar
+        ? { titulo: 'Cerrar el mes', estado: 'falta', detalle: 'Listo para cerrar', href: '#cerrar' }
+        : {
+            titulo: 'Cerrar el mes',
+            estado: 'bloqueado',
+            detalle: mesAnteriorAbierto
+              ? `Falta cerrar ${nombrePeriodo(mesAnteriorAbierto).split(' ')[0]}`
+              : faltaArqueo
+                ? 'Tras el arqueo'
+                : 'Faltan comprobaciones',
+            href: '#cerrar',
+          },
+);
+const SIMBOLO_PASO: Record<EstadoPaso, string> = {
+  hecho: '✓',
+  falta: '●',
+  opcional: '○',
+  revisar: '○',
+  bloqueado: '◌',
+};
+
 const nonceCierre = await emitirNonce(sesion.idHash, 'corte_cerrar');
 const nonceReapertura = await emitirNonce(sesion.idHash, 'corte_reabrir');
 const nonceMensaje = esFuturo ? '' : await emitirNonce(sesion.idHash, 'informe_mensaje');
@@ -286,10 +347,10 @@ Astro.response.status = estado;
   <Aviso texto={aviso} enlaces={avisoEnlaces} />
   {seccion === null && <ResumenErrores errores={errores} />}
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <div>
-      <h1 style="margin-bottom: 0.2rem;">Corte de {nombrePeriodo(periodo)}</h1>
-      <p class="apagado" style="margin: 0;">
+      <h1 class="abajo-xxs">Corte de {nombrePeriodo(periodo)}</h1>
+      <p class="apagado sin-margen">
         {
           cerrado ? (
             <span class="insignia insignia--ok">Cerrado</span>
@@ -304,7 +365,7 @@ Astro.response.status = estado;
             <>
               {' '}
               <span class="insignia insignia--alerta">
-                Reabierto {guardado.reaperturas} vez(ces)
+                Reabierto {cuenta(guardado.reaperturas, 'vez', 'veces')}
               </span>
             </>
           )
@@ -314,7 +375,29 @@ Astro.response.status = estado;
     <a class="btn btn--ghost" href={`/cortes/${periodo}/imprimir`}>Vista para imprimir</a>
   </div>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <ol class="pasos" aria-label="Pasos del cierre">
+    {
+      pasos.map((p) => (
+        <li class:list={['paso', `paso--${p.estado}`]}>
+          {p.href ? (
+            <a class="paso__enlace" href={p.href}>
+              <span class="paso__simbolo" aria-hidden="true">{SIMBOLO_PASO[p.estado]}</span>
+              <span class="paso__titulo">{p.titulo}</span>
+              <span class="paso__detalle">{p.detalle}</span>
+            </a>
+          ) : (
+            <span class="paso__enlace">
+              <span class="paso__simbolo" aria-hidden="true">{SIMBOLO_PASO[p.estado]}</span>
+              <span class="paso__titulo">{p.titulo}</span>
+              <span class="paso__detalle">{p.detalle}</span>
+            </span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Resumen</h2>
       <div class="tabla-envoltura">
@@ -395,7 +478,7 @@ Astro.response.status = estado;
 
       {
         cerrado && guardado && (
-          <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+          <p class="apagado letra-chica abajo-0">
             Cerrado por {guardado.cerrado_nombre}
             {guardado.cerrado_en && <> el {formatoMomento(guardado.cerrado_en)}</>}.
             {guardado.observaciones && <> {guardado.observaciones}</>}
@@ -405,11 +488,104 @@ Astro.response.status = estado;
     </section>
 
     {
+      pideArqueo && (
+        <section class="tarjeta tarjeta--accion" id="arqueo">
+          <h2>Arqueo inicial</h2>
+          <p class="arqueo__meta">
+            <span class="apagado">Debe sumar</span>
+            <span class="cifra-grande" data-arqueo-total={String(caja.saldo)}>
+              {formatoMXN(caja.saldo)}
+            </span>
+          </p>
+          <p class="apagado letra-media">
+            Cuenta el sobre y revisa el saldo del banco el mismo día. Este mes no se puede
+            cerrar sin el arqueo, y se hace una sola vez.
+          </p>
+          <details class="explicacion">
+            <summary>¿Qué es el arqueo inicial?</summary>
+            <p>
+              Desde {nombrePeriodo(periodo)} se lleva por separado lo que hay en el banco y
+              lo que hay en efectivo. Para arrancar, anotas aquí las dos cantidades que
+              contaste y el sistema registra el traspaso que haga falta para que el desglose
+              quede igual a lo contado. El total no cambia.
+            </p>
+            <p>
+              Las dos cantidades deben sumar {formatoMXN(caja.saldo)}, que es lo que el
+              sistema tiene registrado del ejercicio. Si no suman, falta capturar algo o
+              registrar un ajuste.
+            </p>
+          </details>
+
+          {seccion === 'arqueo' && <ResumenErrores errores={errores} />}
+
+          <div class="formulario--angosto">
+            <Formulario csrf={sesion.csrfToken} nonce={nonceArqueo} accionInterna="arqueo">
+              <Campo
+                nombre="fecha"
+                etiqueta="Fecha del arqueo"
+                tipo="date"
+                valor={previo('arqueo', 'fecha', hoyISO().startsWith(periodo) ? hoyISO() : `${periodo}-01`)}
+                error={errores.fecha}
+                requerido
+              />
+              <div class="arqueo__par">
+                <Campo
+                  nombre="banco"
+                  etiqueta="En el banco"
+                  valor={previo('arqueo', 'banco', '')}
+                  modoTeclado="decimal"
+                  monto
+                  error={errores.banco}
+                  ayuda="Estado de cuenta o banca en línea."
+                  requerido
+                />
+                <Campo
+                  nombre="efectivo"
+                  etiqueta="En efectivo"
+                  valor={previo('arqueo', 'efectivo', '')}
+                  modoTeclado="decimal"
+                  monto
+                  error={errores.efectivo}
+                  ayuda="Lo contado en el sobre."
+                  requerido
+                />
+              </div>
+              <p class="arqueo__cuadre" data-arqueo-cuadre aria-live="polite" hidden></p>
+              <div class="formulario__acciones">
+                <button class="btn btn--primary" type="submit">Registrar arqueo</button>
+              </div>
+            </Formulario>
+          </div>
+        </section>
+      )
+    }
+
+    {
+      arqueoDeEsteMes && (
+        <section class="tarjeta tarjeta--registro" id="arqueo">
+          <h2>
+            Arqueo inicial <span class="insignia insignia--ok">Registrado</span>
+          </h2>
+          <p class="apagado letra-media abajo-0">
+            El {formatoFechaCorta(arqueoDeEsteMes.fecha)} se contaron{' '}
+            {formatoMXN(arqueoDeEsteMes.banco_contado_centavos)} en el banco y{' '}
+            {formatoMXN(arqueoDeEsteMes.efectivo_contado_centavos)} en efectivo. El sistema
+            traía {formatoMXN(arqueoDeEsteMes.banco_sistema_centavos)} en el banco
+            {arqueoDeEsteMes.traspaso_id
+              ? ', así que se registró un traspaso por la diferencia.'
+              : ', así que no hizo falta traspaso.'}{' '}
+            Lo registró {arqueoDeEsteMes.creado_nombre}.
+          </p>
+        </section>
+      )
+    }
+
+    {
       (ingresos.length > 0 || egresos.length > 0) && (
         <section class="tarjeta">
           <h2>Por concepto</h2>
-          <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
-            <div style="flex: 1; min-width: 15rem;">
+          <div class="columnas">
+            <div class="columnas__una">
               <h3>Ingresos</h3>
               {ingresos.length === 0 ? (
                 <p class="apagado">Sin ingresos.</p>
@@ -434,7 +610,7 @@ Astro.response.status = estado;
                 </div>
               )}
             </div>
-            <div style="flex: 1; min-width: 15rem;">
+            <div class="columnas__una">
               <h3>Egresos</h3>
               {egresos.length === 0 ? (
                 <p class="apagado">Sin egresos.</p>
@@ -551,7 +727,7 @@ Astro.response.status = estado;
       )
     }
 
-    <section class="tarjeta">
+    <section class="tarjeta" id="movimientos">
       <h2>Movimientos del mes</h2>
       <TablaMovimientos
         movimientos={movimientos}
@@ -565,10 +741,10 @@ Astro.response.status = estado;
 
       {
         soyVM && movimientos.length > 0 && (
-          <details style="margin-top: 1rem;" open={seccion === 'ajustar'}>
-            <summary style="cursor: pointer;">Corregir un movimiento con un ajuste</summary>
-            <div style="margin-top: 0.75rem;">
-              <p class="apagado" style="font-size: 0.85rem;">
+          <details class="arriba-m" open={seccion === 'ajustar'}>
+            <summary>Corregir un movimiento con un ajuste</summary>
+            <div class="arriba-s">
+              <p class="apagado letra-chica">
                 {cerrado
                   ? 'El mes está cerrado, así que no se edita: se registra un movimiento de signo contrario en el mes abierto, ligado al original.'
                   : 'El libro no borra movimientos, ni siquiera en un mes abierto: una captura equivocada se corrige con uno de signo contrario ligado al original. Si además era un pago de cápita, los meses que cubría se liberan solos.'}
@@ -590,13 +766,13 @@ Astro.response.status = estado;
                           {formatoFechaCorta(m.fecha)} · {m.concepto_nombre}
                           {m.hermano_nombre && <> · <strong>{m.hermano_nombre}</strong></>}
                           <br />
-                          <span class="apagado" style="font-size: 0.8rem;">
+                          <span class="apagado letra-menor">
                             {m.descripcion}
                           </span>
                           {(ajustados.get(m.id) ?? 0) > 0 && (
                             <>
                               <br />
-                              <span class="insignia insignia--pendiente">
+                              <span class="insignia insignia--neutro">
                                 Ya ajustado por {formatoMXN(ajustados.get(m.id) ?? 0)}, neto{' '}
                                 {formatoMXN(m.monto_centavos - (ajustados.get(m.id) ?? 0))}
                               </span>
@@ -632,9 +808,8 @@ Astro.response.status = estado;
                             <Campo nombre="motivo" etiqueta="Motivo" requerido />
                             <div class="formulario__acciones">
                               <button
-                                class="btn btn--ghost"
+                                class="btn btn--ghost btn--chico"
                                 type="submit"
-                                style="padding: 0.2rem 0.7rem; font-size: 0.75rem;"
                               >
                                 Registrar ajuste
                               </button>
@@ -657,13 +832,13 @@ Astro.response.status = estado;
       !esFuturo && (
         <section class="tarjeta" id="informe">
           <h2>Informe de tenida</h2>
-          <p class="apagado" style="font-size: 0.9rem;">
+          <p class="apagado letra-media">
             El informe que se lee a los hermanos lleva un texto que arma el sistema con las
             cifras de este mes y, debajo, tu mensaje. No nombra a quienes deben, solo da
             cifras. El mensaje se puede escribir o corregir aunque el mes ya esté cerrado.
           </p>
           {seccion === 'mensaje' && <ResumenErrores errores={errores} />}
-          <div style="max-width: 40rem;">
+          <div class="formulario--medio">
             <Formulario csrf={sesion.csrfToken} nonce={nonceMensaje} accionInterna="mensaje">
               <Campo
                 nombre="mensaje"
@@ -689,86 +864,10 @@ Astro.response.status = estado;
     }
 
     {
-      pideArqueo && (
-        <section class="tarjeta" id="arqueo">
-          <h2>Arqueo inicial</h2>
-          <p class="apagado" style="font-size: 0.9rem;">
-            Desde {nombrePeriodo(periodo)} se lleva por separado lo que hay en el banco y lo
-            que hay en efectivo. Para arrancar, cuenta el sobre y revisa el saldo del banco
-            el mismo día, y anota aquí las dos cantidades. El sistema registra el traspaso
-            que haga falta para que el desglose quede igual a lo contado. El total no cambia.
-          </p>
-          <p class="apagado" style="font-size: 0.9rem;">
-            Las dos cantidades deben sumar <strong>{formatoMXN(caja.saldo)}</strong>, que es
-            lo que el sistema tiene registrado del ejercicio. Si no suman, falta capturar
-            algo o registrar un ajuste. Este mes no se puede cerrar sin el arqueo, y el
-            arqueo se hace una sola vez.
-          </p>
-
-          {seccion === 'arqueo' && <ResumenErrores errores={errores} />}
-
-          <div style="max-width: 30rem;">
-            <Formulario csrf={sesion.csrfToken} nonce={nonceArqueo} accionInterna="arqueo">
-              <Campo
-                nombre="fecha"
-                etiqueta="Fecha del arqueo"
-                tipo="date"
-                valor={previo('arqueo', 'fecha', hoyISO().startsWith(periodo) ? hoyISO() : `${periodo}-01`)}
-                error={errores.fecha}
-                requerido
-              />
-              <Campo
-                nombre="banco"
-                etiqueta="En el banco"
-                valor={previo('arqueo', 'banco', '')}
-                modoTeclado="decimal"
-                monto
-                error={errores.banco}
-                ayuda="El saldo del estado de cuenta o de la banca en línea ese día."
-                requerido
-              />
-              <Campo
-                nombre="efectivo"
-                etiqueta="En efectivo"
-                valor={previo('arqueo', 'efectivo', '')}
-                modoTeclado="decimal"
-                monto
-                error={errores.efectivo}
-                ayuda="Lo que hay contado en el sobre."
-                requerido
-              />
-              <div class="formulario__acciones">
-                <button class="btn btn--primary" type="submit">Registrar arqueo</button>
-              </div>
-            </Formulario>
-          </div>
-        </section>
-      )
-    }
-
-    {
-      arqueoDeEsteMes && (
-        <section class="tarjeta">
-          <h2>Arqueo inicial</h2>
-          <p class="apagado" style="font-size: 0.9rem; margin-bottom: 0;">
-            El {formatoFechaCorta(arqueoDeEsteMes.fecha)} se contaron{' '}
-            {formatoMXN(arqueoDeEsteMes.banco_contado_centavos)} en el banco y{' '}
-            {formatoMXN(arqueoDeEsteMes.efectivo_contado_centavos)} en efectivo. El sistema
-            traía {formatoMXN(arqueoDeEsteMes.banco_sistema_centavos)} en el banco
-            {arqueoDeEsteMes.traspaso_id
-              ? ', así que se registró un traspaso por la diferencia.'
-              : ', así que no hizo falta traspaso.'}{' '}
-            Lo registró {arqueoDeEsteMes.creado_nombre}.
-          </p>
-        </section>
-      )
-    }
-
-    {
       !cerrado && !esFuturo && (
         <section class="tarjeta" id="cerrar">
           <h2>Cerrar el mes</h2>
-          <p class="apagado" style="font-size: 0.9rem;">
+          <p class="apagado letra-media">
             {movimientos.length === 0
               ? `Al cerrar, ${nombrePeriodo(periodo)} queda sellado sin movimientos y deja de admitir capturas.`
               : movimientos.length === 1
@@ -806,7 +905,7 @@ Astro.response.status = estado;
           )}
 
           {sePuedeCerrar && (egresosSinTerminar.length > 0 || evidenciasDelMes.length > 0 || gtSinCubrir) && (
-            <div class="aviso">
+            <div class="aviso aviso--cuidado">
               <p>Antes de cerrar, revisa:</p>
               <ul>
                 {egresosSinTerminar.length > 0 && (
@@ -839,7 +938,7 @@ Astro.response.status = estado;
           {seccion === 'cerrar' && <ResumenErrores errores={errores} />}
 
           {sePuedeCerrar && (
-            <div style="max-width: 30rem;">
+            <div class="formulario--angosto">
               <Formulario csrf={sesion.csrfToken} nonce={nonceCierre} accionInterna="cerrar">
                 <Campo
                   nombre="observaciones"
@@ -871,7 +970,7 @@ Astro.response.status = estado;
         <section class="tarjeta">
           <h2>Reapertura</h2>
           {reaperturas.length > 0 && (
-            <ul style="font-size: 0.85rem;">
+            <ul class="letra-chica">
               {reaperturas.map((r) => (
                 <li>
                   {formatoMomento(r.reabierto_en)} · {r.reabierto_nombre}: {r.motivo}
@@ -882,9 +981,9 @@ Astro.response.status = estado;
 
           {soyVM ? (
             <details open={seccion === 'reabrir'}>
-              <summary style="cursor: pointer;">Reabrir este corte</summary>
-              <div style="margin-top: 0.75rem; max-width: 30rem;">
-                <p class="apagado" style="font-size: 0.85rem;">
+              <summary>Reabrir este corte</summary>
+              <div class="arriba-s formulario--angosto">
+                <p class="apagado letra-chica">
                   Es excepcional y queda registrado para siempre. Lo normal es corregir con
                   un movimiento de ajuste en el mes abierto. Solo se puede reabrir el
                   último mes cerrado.
@@ -909,7 +1008,7 @@ Astro.response.status = estado;
               </div>
             </details>
           ) : (
-            <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+            <p class="apagado letra-chica abajo-0">
               La reapertura de un corte la autoriza el Venerable Maestro.
             </p>
           )}
@@ -918,3 +1017,47 @@ Astro.response.status = estado;
     }
   </div>
 </LayoutAdmin>
+
+<script>
+  /*
+   * Mejora progresiva del arqueo: mientras se escribe, dice si banco más efectivo
+   * ya da el total. Sin JavaScript el formulario funciona igual y el servidor
+   * valida la suma de todos modos.
+   */
+  const total = document.querySelector<HTMLElement>('[data-arqueo-total]');
+  const linea = document.querySelector<HTMLElement>('[data-arqueo-cuadre]');
+  const banco = document.querySelector<HTMLInputElement>('#arqueo input[name="banco"]');
+  const efectivo = document.querySelector<HTMLInputElement>('#arqueo input[name="efectivo"]');
+
+  const aCentavos = (texto: string): number | null => {
+    const limpio = texto.replace(/[$,\s]/g, '');
+    if (limpio === '' || !/^\d+(\.\d{0,2})?$/.test(limpio)) return null;
+    return Math.round(Number(limpio) * 100);
+  };
+  const pesos = (centavos: number): string =>
+    (centavos / 100).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+
+  if (total && linea && banco && efectivo) {
+    const esperado = Number(total.dataset.arqueoTotal);
+    const revisar = (): void => {
+      const b = aCentavos(banco.value);
+      const e = aCentavos(efectivo.value);
+      if (b === null || e === null) {
+        linea.hidden = true;
+        return;
+      }
+      const diferencia = esperado - (b + e);
+      linea.hidden = false;
+      linea.className = `arqueo__cuadre insignia ${diferencia === 0 ? 'insignia--ok' : 'insignia--alerta'}`;
+      linea.textContent =
+        diferencia === 0
+          ? '✓ Cuadra con lo registrado'
+          : diferencia > 0
+            ? `Faltan ${pesos(diferencia)} para cuadrar`
+            : `Sobran ${pesos(-diferencia)}`;
+    };
+    banco.addEventListener('input', revisar);
+    efectivo.addEventListener('input', revisar);
+    revisar();
+  }
+</script>

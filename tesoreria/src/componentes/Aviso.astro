@@ -14,15 +14,22 @@ interface Props {
   texto: string | null | undefined;
   detalle?: string | null;
   enlaces?: Enlace[];
+  /** Atajo de tipo="error", lo usan las páginas que ya lo pasaban. */
   error?: boolean;
+  /**
+   * exito tras guardar (lo normal con ?ok=), info para explicar, cuidado para lo
+   * que conviene atender y error para lo que no se pudo hacer.
+   */
+  tipo?: 'exito' | 'info' | 'cuidado' | 'error';
 }
 
 const { texto, detalle, enlaces = [], error = false } = Astro.props;
+const tipo = error ? 'error' : (Astro.props.tipo ?? 'exito');
 ---
 
 {
   texto && (
-    <div class:list={['aviso', { 'aviso--error': error }]} role={error ? 'alert' : 'status'}>
+    <div class:list={['aviso', `aviso--${tipo}`]} role={tipo === 'error' ? 'alert' : 'status'}>
       <p class="aviso__texto">{texto}</p>
       {detalle && <p class="aviso__detalle">{detalle}</p>}
       {enlaces.length > 0 && (

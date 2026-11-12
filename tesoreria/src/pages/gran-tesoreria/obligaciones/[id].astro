@@ -222,7 +222,7 @@ Astro.response.status = estado;
   <Aviso texto={aviso} enlaces={avisoEnlaces} />
   <ResumenErrores errores={errores} etiquetas={ETIQUETAS} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <h1>{obligacion.folio}</h1>
     <span class:list={['insignia', CLASE_ESTATUS[obligacion.estatus]]}>
       {NOMBRE_ESTATUS_OBLIGACION[obligacion.estatus]}
@@ -239,7 +239,7 @@ Astro.response.status = estado;
     )
   }
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <section class="tarjeta">
       <h2>Datos del documento</h2>
       <div class="tabla-envoltura">
@@ -326,7 +326,7 @@ Astro.response.status = estado;
 
       {
         viva && obligacion.saldo_centavos > 0 && enTramite && (
-          <p id="pagar" style="font-size: 0.9rem;">
+          <p id="pagar" class="letra-media">
             Ya está en trámite el egreso <a href={`/egresos/${enTramite.id}`}>{enTramite.folio}</a>
             {enTramite.estado === 'registrado'
               ? ', que espera las dos firmas.'
@@ -337,7 +337,7 @@ Astro.response.status = estado;
       {
         viva && obligacion.saldo_centavos > 0 && !enTramite && (
           <div id="pagar">
-            <p class="apagado" style="font-size: 0.85rem;">
+            <p class="apagado letra-chica">
               Para pagarla se genera un egreso. Después lleva la firma del tesorero y la del
               V∴M∴, y al registrar la entrega el pago a la Gran Tesorería queda asentado solo.
             </p>
@@ -398,7 +398,7 @@ Astro.response.status = estado;
                   <th class="num">
                     {formatoMXN(totalDetalle)}
                     {totalDetalle !== obligacion.monto_reportado_centavos && (
-                      <span class="insignia insignia--pendiente" style="margin-left: 0.5rem;">
+                      <span class="insignia insignia--alerta separa-izq">
                         difiere del reportado
                       </span>
                     )}
@@ -513,15 +513,15 @@ Astro.response.status = estado;
       soyVM && obligacion.estatus !== 'cancelada' && (
         <section class="tarjeta">
           <details open={seccion === 'corregir'}>
-            <summary style="cursor: pointer;">
-              <h2 style="display: inline; margin: 0;">Corregir la captura</h2>
+            <summary>
+              <h2 class="en-linea">Corregir la captura</h2>
             </summary>
-            <p class="apagado" style="font-size: 0.85rem; margin-top: 0.75rem;">
+            <p class="apagado letra-chica arriba-s">
               Para errores de captura: los meses que ampara, la fecha del documento y, en un
               trámite, qué trámite es. El monto no se toca. Mover los meses de una ordinaria
               cambia el a plomo. El antes y el después quedan en la bitácora.
             </p>
-            <div style="max-width: 28rem;">
+            <div class="formulario--angosto">
               <Formulario csrf={sesion.csrfToken} nonce={nonceCorreccion} accionInterna="corregir">
                 {obligacion.tipo === 'tramite' && (
                   <>
@@ -542,7 +542,7 @@ Astro.response.status = estado;
                     />
                   </>
                 )}
-                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <div class="fila">
                   <Campo
                     nombre="periodo_desde"
                     etiqueta={ETIQUETAS.periodo_desde!}
@@ -561,7 +561,7 @@ Astro.response.status = estado;
                   />
                 </div>
                 {obligacion.tipo === 'tramite' && (
-                  <p class="apagado" style="font-size: 0.8rem; margin-top: 0;">
+                  <p class="apagado letra-menor arriba-0">
                     En un trámite los meses solo cuentan si es ajuste de cápitas; en los demás
                     quedan en el mes de la solicitud.
                   </p>

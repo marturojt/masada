@@ -1,0 +1,14 @@
+/*
+ * Tipografías de la logia, servidas desde el propio panel (sin pedir nada a
+ * Google al cargar). Solo el juego latino y solo los pesos que se usan.
+ * Todas traen font-display: swap.
+ */
+@import '@fontsource/cormorant-garamond/latin-400.css';
+@import '@fontsource/cormorant-garamond/latin-500.css';
+@import '@fontsource/cormorant-garamond/latin-600.css';
+@import '@fontsource/cinzel/latin-400.css';
+@import '@fontsource/cinzel/latin-600.css';
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';

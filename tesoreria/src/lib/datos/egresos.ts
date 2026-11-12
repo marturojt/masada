@@ -26,9 +26,9 @@ export const NOMBRE_ESTADO_EGRESO: Record<EstadoEgreso, string> = {
 
 export const CLASE_ESTADO_EGRESO: Record<EstadoEgreso, string> = {
   registrado: 'insignia--pendiente',
-  autorizado: 'insignia--pendiente',
+  autorizado: 'insignia--ok',
   rechazado: 'insignia--alerta',
-  cancelado: '',
+  cancelado: 'insignia--cancelado',
   pagado: 'insignia--ok',
   por_comprobar: 'insignia--alerta',
   comprobado: 'insignia--ok',

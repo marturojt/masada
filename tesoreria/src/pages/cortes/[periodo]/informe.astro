@@ -151,7 +151,7 @@ const personasCuotas = new Set(cuotas.map((c) => c.hermano_id)).size;
           <td class="num">{formatoMXN(calculado.total_egresos_centavos)}</td>
           {anterior && <td class="num">{formatoMXN(anterior.total_egresos_centavos)}</td>}
         </tr>
-        <tr>
+        <tr class="saldo-final">
           <th scope="row"><strong>Saldo final</strong></th>
           <td class="num"><strong>{formatoMXN(calculado.saldo_final_centavos)}</strong></td>
           {anterior && <td class="num">{formatoMXN(anterior.saldo_final_centavos)}</td>}
@@ -189,6 +189,11 @@ const personasCuotas = new Set(cuotas.map((c) => c.hermano_id)).size;
             </tr>
           </thead>
           <tbody>
+            {ingresos.length > 0 && (
+              <tr class="grupo">
+                <th scope="colgroup" colspan="3">Ingresos</th>
+              </tr>
+            )}
             {ingresos.map((t) => (
               <tr>
                 <td>{t.concepto_nombre}</td>
@@ -196,11 +201,16 @@ const personasCuotas = new Set(cuotas.map((c) => c.hermano_id)).size;
                 <td class="num">{formatoCifra(t.monto_centavos)}</td>
               </tr>
             ))}
+            {egresosPorConcepto.length > 0 && (
+              <tr class="grupo">
+                <th scope="colgroup" colspan="3">Egresos</th>
+              </tr>
+            )}
             {egresosPorConcepto.map((t) => (
               <tr>
                 <td>{t.concepto_nombre}</td>
                 <td class="num">{t.movimientos}</td>
-                <td class="num">({formatoCifra(t.monto_centavos)})</td>
+                <td class="num">{formatoCifra(t.monto_centavos)}</td>
               </tr>
             ))}
           </tbody>

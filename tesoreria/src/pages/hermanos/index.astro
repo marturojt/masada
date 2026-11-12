@@ -65,15 +65,15 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
 
   <Aviso texto={aviso} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <h1>Padrón</h1>
-    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+    <div class="fila">
       <a class="btn btn--primary" href="/hermanos/nuevo">Alta de hermano</a>
       <a class="btn btn--ghost" href="/hermanos/candidatos">Candidatos ({enProceso})</a>
     </div>
   </div>
 
-  <p class="apagado" style="font-size: 0.85rem;">
+  <p class="apagado letra-chica">
     Filtrar:
     {
       (
@@ -116,7 +116,7 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
   {
     hermanos.length === 0 ? (
       <div class="tarjeta">
-        <p style="margin: 0;">
+        <p class="sin-margen">
           No hay hermanos con ese filtro. Empieza con
           <a href="/hermanos/nuevo">el alta de un hermano</a>, o importa el cuadro del sitio
           con <code>npm run sembrar -- --desde-sitio</code>.
@@ -165,9 +165,9 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
 
   {
     cuotas.length > 0 && (
-      <section class="tarjeta" id="cuotas" style="margin-top: 1.5rem;">
+      <section class="tarjeta arriba-xl" id="cuotas">
         <h2>Cuotas de grado por cobrar</h2>
-        <p class="apagado" style="font-size: 0.85rem;">
+        <p class="apagado letra-chica">
           Lo que hermanos y candidatos deben a la logia por su iniciación, afiliación,
           aumento o exaltación. Se salda capturando el ingreso de la cuota a su nombre.
         </p>

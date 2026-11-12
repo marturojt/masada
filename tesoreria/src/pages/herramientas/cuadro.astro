@@ -79,28 +79,28 @@ const vistaPast = JSON.stringify(past?.documento ?? { items: [] }, null, 2);
 
   <section class="tarjeta">
     <h2>Cómo se publica</h2>
-    <p style="font-size: 0.9rem;">
+    <p class="letra-media">
       Desde la carpeta <code>tesoreria/</code>:
     </p>
     <pre style="font-size: 0.85rem; overflow-x: auto;"><code>npm run exportar:cuadro
 npm run exportar:cuadro -- --escribir</code></pre>
-    <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+    <p class="apagado letra-chica abajo-0">
       El primero solo muestra el diff. El segundo escribe los archivos del sitio. Después,
       en la raíz del repositorio, <code>npm run build</code> valida el esquema y confirma
       que el sitio compila.
     </p>
   </section>
 
-  <section class="tarjeta" style="margin-top: 1.25rem;">
+  <section class="tarjeta arriba-l">
     <h2>cuadro/{anio}.json</h2>
     <pre style="font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap;"><code
       set:text={vistaPrevia}
     /></pre>
   </section>
 
-  <section class="tarjeta" style="margin-top: 1.25rem;">
+  <section class="tarjeta arriba-l">
     <h2>pastmasters/historico.json</h2>
-    <p class="apagado" style="font-size: 0.85rem;">
+    <p class="apagado letra-chica">
       Los Venerables Maestros de ejercicios ya concluidos, más el histórico capturado de
       los años sin registro. El V∴M∴ vigente no aparece aquí, porque un past master es
       siempre de un año que ya terminó.
@@ -110,7 +110,7 @@ npm run exportar:cuadro -- --escribir</code></pre>
     /></pre>
     {
       pastMasters.length > 0 && (
-        <p class="apagado" style="font-size: 0.8rem; margin-bottom: 0;">
+        <p class="apagado letra-menor abajo-0">
           {cuenta(pastMasters.filter((p) => p.derivado).length, 'derivado', 'derivados')} del cuadro y{' '}
           {pastMasters.filter((p) => !p.derivado).length} del histórico capturado.
         </p>

@@ -101,7 +101,7 @@ Astro.response.status = estado;
     <input type="hidden" name="naturaleza" value={concepto.naturaleza} />
     <div class="campo">
       <span class="campo__etiqueta">Naturaleza</span>
-      <p style="margin: 0;">
+      <p class="sin-margen">
         {concepto.naturaleza === 'ingreso' ? 'Ingreso' : 'Egreso'}
         <span class="apagado"> · no se puede cambiar</span>
       </p>
@@ -110,29 +110,29 @@ Astro.response.status = estado;
 
     <div class="campo">
       <span class="campo__etiqueta">Reglas</span>
-      <label style="display: block; font-size: 0.85rem;">
+      <label class="en-bloque letra-chica">
         <input
           type="checkbox"
           name="requiere_hermano"
-          style="width: auto;"
+          class="ancho-auto"
           checked={concepto.requiere_hermano}
         />
         {' '}Exige indicar el hermano
       </label>
-      <label style="display: block; font-size: 0.85rem;">
+      <label class="en-bloque letra-chica">
         <input
           type="checkbox"
           name="requiere_comprobante"
-          style="width: auto;"
+          class="ancho-auto"
           checked={concepto.requiere_comprobante}
         />
         {' '}Exige imagen de comprobante
       </label>
-      <label style="display: block; font-size: 0.85rem;">
+      <label class="en-bloque letra-chica">
         <input
           type="checkbox"
           name="por_comprobar_por_defecto"
-          style="width: auto;"
+          class="ancho-auto"
           checked={concepto.por_comprobar_por_defecto}
         />
         {' '}Normalmente se entrega por comprobar

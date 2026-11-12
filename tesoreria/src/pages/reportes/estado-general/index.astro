@@ -27,9 +27,9 @@ const estado = await estadoGeneral(anio);
     <span><a href={`/reportes/estado-general.csv?anio=${anio}`}>Descargar CSV</a></span>
   </div>
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
-    <h1 style="margin-bottom: 0.2rem;">Estado general</h1>
-    <div style="display: flex; gap: 0.5rem;">
+  <div class="encabezado">
+    <h1 class="abajo-xxs">Estado general</h1>
+    <div class="fila">
       <a class="btn btn--ghost" href={`/reportes/estado-general/imprimir?anio=${anio}`}>Vista para imprimir</a>
       <a class="btn btn--ghost" href={`/reportes/estado-general.csv?anio=${anio}`}>Descargar CSV</a>
     </div>
@@ -39,7 +39,7 @@ const estado = await estadoGeneral(anio);
     deben, a diferencia del informe de tenida. {resumenEnPalabras(estado)}
   </p>
 
-  <div class="pila" style="margin-top: 1.25rem;">
+  <div class="pila arriba-l">
     <EstadoGeneral estado={estado} />
   </div>
 </LayoutAdmin>

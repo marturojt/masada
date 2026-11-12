@@ -7,6 +7,9 @@
  *
  * Con `anio`, cada mes es un enlace que filtra el tablero a ese mes, y el mes
  * elegido se resalta. Las cifras exactas van en una tabla desplegable.
+ *
+ * En el teléfono el SVG se encogería hasta no leerse, así que ahí se pinta otra
+ * cosa: un renglón por mes con dos barras horizontales y el resultado.
  */
 import type { FlujoMes } from '@lib/datos/movimientos';
 import { formatoMXN } from '@lib/dinero';
@@ -50,11 +53,19 @@ const xMes = (i: number) => MARGEN.izquierda + i * anchoMes;
 
 const cifra = (v: number) => formatoMXN(v).replace('.00', '');
 const lineas = [1, 2, 3].map((n) => n * paso);
+
+/* Celular: solo los meses con movimiento, más el elegido aunque esté vacío. */
+const mesesConDatos = flujo.filter(
+  (f) => f.ingresos > 0 || f.egresos > 0 || (anio && periodoDe(f.mes) === seleccionado),
+);
+const porcentaje = (v: number) => (v > 0 ? Math.max((v / maximo) * 100, 1.5) : 0);
+const conSigno = (v: number) => (v < 0 ? `−${cifra(-v)}` : v > 0 ? `+${cifra(v)}` : cifra(0));
 ---
 
 <figure class="grafica">
   <figcaption class="grafica__titulo">Ingresos y egresos por mes</figcaption>
   <svg
+    class="solo-escritorio"
     viewBox={`0 0 ${ANCHO} ${ALTO}`}
     role="img"
     aria-label="Barras de ingresos y egresos de cada mes del ejercicio"
@@ -132,6 +143,41 @@ const lineas = [1, 2, 3].map((n) => n * paso);
       </a>
     ))}
   </svg>
+  <ol class="barras-mes solo-celular" aria-label="Ingresos y egresos de cada mes">
+    {mesesConDatos.length === 0 && <li class="apagado">Sin movimientos en el ejercicio.</li>}
+    {mesesConDatos.map((f) => {
+      const contenido = (
+        <>
+          <span class="barras-mes__nombre">{MESES_CORTOS[f.mes - 1]}</span>
+          <span class="barras-mes__pista" aria-hidden="true">
+            <span class="barras-mes__barra grafica__muestra--ingreso" style={`width: ${porcentaje(f.ingresos)}%;`}></span>
+            <span class="barras-mes__barra grafica__muestra--egreso" style={`width: ${porcentaje(f.egresos)}%;`}></span>
+          </span>
+          <span class:list={['barras-mes__resultado', { 'barras-mes__resultado--negativo': f.ingresos < f.egresos }]}>
+            {conSigno(f.ingresos - f.egresos)}
+          </span>
+          <span class="solo-lectores">
+            {`${MESES[f.mes - 1]}: ingresos ${formatoMXN(f.ingresos)}, egresos ${formatoMXN(f.egresos)}`}
+          </span>
+        </>
+      );
+      return (
+        <li>
+          {anio ? (
+            <a
+              class:list={['barras-mes__fila', { 'barras-mes__fila--elegida': periodoDe(f.mes) === seleccionado }]}
+              href={enlaceDe(f.mes)}
+              aria-current={periodoDe(f.mes) === seleccionado ? 'true' : undefined}
+            >
+              {contenido}
+            </a>
+          ) : (
+            <span class="barras-mes__fila">{contenido}</span>
+          )}
+        </li>
+      );
+    })}
+  </ol>
   <div class="grafica__leyenda">
     <span><span class="grafica__muestra grafica__muestra--ingreso"></span> Ingresos</span>
     <span><span class="grafica__muestra grafica__muestra--egreso"></span> Egresos</span>

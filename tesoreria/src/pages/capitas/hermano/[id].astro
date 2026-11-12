@@ -56,6 +56,8 @@ const anio = anioDeUrl(Astro.url, ejercicios, vigente.anio);
 let errores: Record<string, string> = {};
 let estado = 200;
 let seccion: string | null = null;
+/* Lo que se escribió al exentar, para volver a pintar el panel si hubo error. */
+let valoresExentar: Record<string, string> = {};
 
 if (Astro.request.method === 'POST') {
   const entrada = await leerFormulario(Astro);
@@ -198,6 +200,7 @@ if (Astro.request.method === 'POST') {
       proposito: 'capita_exencion',
       sesion,
     });
+    valoresExentar = r.valores;
     if (!r.ok) {
       errores = r.errores;
       estado = r.estado;
@@ -280,6 +283,18 @@ const folios = new Map(
   ]),
 );
 const noncesExentar = await emitirNonces(sesion.idHash, 'capita_exencion', meses.length);
+/*
+ * Exentar se hace en un panel bajo la tabla, no dentro de la celda: así la tabla
+ * no cambia de ancho. El mes llega por ?exentar=<cargo> o, tras un error, por lo
+ * que se envió. Solo se acepta un mes de este hermano que todavía deba algo.
+ */
+const exentarPedido = valoresExentar.capita_cargo_id ?? Astro.url.searchParams.get('exentar');
+const iExentar = puedeExentar
+  ? meses.findIndex((m) => String(m.capita_cargo_id) === exentarPedido && m.saldo_centavos > 0)
+  : -1;
+const mesExentar = iExentar >= 0 ? meses[iExentar] : undefined;
+const enlaceExentar = (cargo: number): string =>
+  `/capitas/hermano/${id}?anio=${anio}&exentar=${cargo}#exentar`;
 const noncesQuitarEx = await emitirNonces(
   sesion.idHash,
   'capita_exencion_quitar',
@@ -311,16 +326,16 @@ Astro.response.status = estado;
   <Aviso texto={aviso} detalle={avisoDetalle} enlaces={avisoEnlaces} />
   <ResumenErrores errores={errores} etiquetas={{ monto: 'Monto', motivo: 'Motivo' }} />
 
-  <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between;">
+  <div class="encabezado">
     <div>
-      <h1 style="margin-bottom: 0.2rem;">{hermano.nombre_completo}</h1>
-      <p class="apagado" style="margin: 0;">
+      <h1 class="abajo-xxs">{hermano.nombre_completo}</h1>
+      <p class="apagado sin-margen">
         {NOMBRE_GRADO[hermano.grado]}
         {plan && <> · {NOMBRE_MODALIDAD[plan.modalidad]}</>}
         {!plan && <> · sin modalidad asignada</>}
       </p>
     </div>
-    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+    <div class="fila">
       <a class="btn btn--primary" href={`/capitas/pagos/nuevo?hermano=${id}`}>
         Registrar pago
       </a>
@@ -333,7 +348,7 @@ Astro.response.status = estado;
 
   {
     cuenta && (
-      <section class="tarjeta" style="margin-top: 1.25rem;">
+      <section class="tarjeta arriba-l">
         <h2>Resumen del ejercicio</h2>
         <div class="tabla-envoltura">
           <table class="tabla">
@@ -382,7 +397,7 @@ Astro.response.status = estado;
           </table>
         </div>
         {plan?.modalidad === 'promocion' && plan.autorizado_nombre && (
-          <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+          <p class="apagado letra-chica abajo-0">
             Anual preferencial autorizada por {plan.autorizado_nombre}
             {plan.autorizado_en && <> el {formatoMomento(plan.autorizado_en)}</>}
             {plan.motivo && <>. {plan.motivo}</>}
@@ -390,9 +405,9 @@ Astro.response.status = estado;
         )}
         {plan && puedeExentar && meses.some((m) => m.clase === 'promocion' && m.pagado_centavos > 0 && m.saldo_centavos > 0) && (
           <details open={seccion === 'convertir'} style="margin-top: 0.75rem;">
-            <summary style="cursor: pointer;">Convertir la promoción a mensual</summary>
-            <div style="margin-top: 0.75rem; max-width: 22rem;">
-              <p class="apagado" style="font-size: 0.85rem;">
+            <summary>Convertir la promoción a mensual</summary>
+            <div class="arriba-s formulario--estrecho">
+              <p class="apagado letra-chica">
                 Para el trato de "un tramo con promoción y el resto mes a mes": lo ya
                 pagado salda la promoción (el resto se condona, con motivo) y nacen
                 mensualidades de {formatoMXN(vigente.capita_mensual_centavos)} desde el
@@ -431,22 +446,22 @@ Astro.response.status = estado;
 
   {
     disponible > 0 && (
-      <section class="tarjeta" style="margin-top: 1.25rem;">
+      <section class="tarjeta arriba-l">
         <h2>Saldo a favor: {formatoMXN(disponible)}</h2>
-        <p class="apagado" style="font-size: 0.85rem;">
+        <p class="apagado letra-chica">
           Dinero recibido que no cubre ningún mes todavía. Tres salidas: aplicarlo a
           meses pendientes (incluidos los del ejercicio siguiente, si ya está abierto),
           devolvérselo al hermano como un egreso con sus dos firmas, o convertirlo en
           donativo con su consentimiento. No se arrastra solo a futuros años.
         </p>
         {seccion?.startsWith('saldo') && <ResumenErrores errores={errores} />}
-        <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
+        <div class="columnas">
           <Formulario
             csrf={sesion.csrfToken}
             nonce={nonceSaldoAplicar}
             accionInterna="saldo_aplicar"
           >
-            <p style="font-size: 0.9rem; margin-top: 0;">
+            <p class="letra-media arriba-0">
               {mesesDelSaldo.length > 0
                 ? `Se aplicaría a ${listaDeMeses(mesesDelSaldo)}.`
                 : `No hay meses pendientes en ${anio}. Si ya está abierto el ejercicio siguiente, se aplica a sus meses.`}
@@ -455,15 +470,15 @@ Astro.response.status = estado;
               texto="Confirmo que el hermano está de acuerdo en usar su saldo a favor así."
               error={seccion === 'saldo_aplicar' ? errores.confirmo : undefined}
             />
-            <div class="formulario__acciones" style="margin-top: 0;">
+            <div class="formulario__acciones arriba-0">
               <button class="btn btn--primary" type="submit">
                 Aplicar a meses pendientes
               </button>
             </div>
           </Formulario>
           <details open={seccion === 'saldo_devolver'}>
-            <summary style="cursor: pointer;">Devolver al hermano</summary>
-            <div style="margin-top: 0.75rem; max-width: 18rem;">
+            <summary>Devolver al hermano</summary>
+            <div class="arriba-s formulario--estrecho">
               <Formulario
                 csrf={sesion.csrfToken}
                 nonce={nonceSaldoDevolver}
@@ -487,9 +502,9 @@ Astro.response.status = estado;
             </div>
           </details>
           <details open={seccion === 'saldo_donar'}>
-            <summary style="cursor: pointer;">Convertir en donativo</summary>
-            <div style="margin-top: 0.75rem; max-width: 18rem;">
-              <p class="apagado" style="font-size: 0.85rem;">
+            <summary>Convertir en donativo</summary>
+            <div class="arriba-s formulario--estrecho">
+              <p class="apagado letra-chica">
                 Con el consentimiento del hermano. El dinero ya está en la caja: el total
                 no cambia, solo deja de ser cápita y queda como donativo, con su recibo.
               </p>
@@ -536,9 +551,8 @@ Astro.response.status = estado;
     )
   }
 
-  <section class="tarjeta" style="margin-top: 1.25rem;">
+  <section class="tarjeta arriba-l">
     <h2>Mes por mes</h2>
-    {seccion === 'exentar' && <ResumenErrores errores={errores} />}
     {
       meses.length === 0 ? (
         <p class="apagado">
@@ -567,7 +581,7 @@ Astro.response.status = estado;
                     {m.clase === 'promocion' && (
                       <>
                         {' '}
-                        <span class="insignia insignia--pendiente">Anual preferencial</span>
+                        <span class="insignia insignia--neutro">Anual preferencial</span>
                       </>
                     )}
                   </td>
@@ -589,40 +603,13 @@ Astro.response.status = estado;
                   {puedeExentar && (
                     <td>
                       {m.saldo_centavos > 0 ? (
-                        <details open={seccion === 'exentar'}>
-                          <summary style="cursor: pointer; font-size: 0.8rem;">Exentar</summary>
-                          <div style="min-width: 14rem; padding-top: 0.5rem;">
-                            <Formulario
-                              csrf={sesion.csrfToken}
-                              nonce={noncesExentar[i] ?? ''}
-                              accionInterna="exentar"
-                            >
-                              <input
-                                type="hidden"
-                                name="capita_cargo_id"
-                                value={String(m.capita_cargo_id)}
-                              />
-                              <Campo
-                                nombre={`monto`}
-                                etiqueta="Monto a exentar"
-                                valor={aPesosTexto(m.saldo_centavos)}
-                                modoTeclado="decimal"
-                                monto
-                                requerido
-                              />
-                              <Campo nombre="motivo" etiqueta="Motivo" requerido />
-                              <div class="formulario__acciones">
-                                <button
-                                  class="btn btn--primary"
-                                  type="submit"
-                                  style="padding: 0.2rem 0.7rem; font-size: 0.75rem;"
-                                >
-                                  Exentar mes
-                                </button>
-                              </div>
-                            </Formulario>
-                          </div>
-                        </details>
+                        <a
+                          class="letra-chica"
+                          href={enlaceExentar(m.capita_cargo_id)}
+                          aria-current={i === iExentar ? 'true' : undefined}
+                        >
+                          Exentar…
+                        </a>
                       ) : (
                         <span class="apagado">—</span>
                       )}
@@ -636,15 +623,60 @@ Astro.response.status = estado;
       )
     }
     {
+      mesExentar && (
+        <section id="exentar" class="panel-accion formulario--angosto arriba-m">
+          <h3>Exentar {nombrePeriodo(mesExentar.periodo.slice(0, 7))}</h3>
+          <p class="apagado letra-chica">
+            Debe {formatoMXN(mesExentar.saldo_centavos)} de ese mes. Lo exento deja de
+            cobrarse y queda registrado con su motivo.
+          </p>
+          {seccion === 'exentar' && <ResumenErrores errores={errores} />}
+          <Formulario
+            csrf={sesion.csrfToken}
+            nonce={noncesExentar[iExentar] ?? ''}
+            accionInterna="exentar"
+          >
+            <input
+              type="hidden"
+              name="capita_cargo_id"
+              value={String(mesExentar.capita_cargo_id)}
+            />
+            <Campo
+              nombre="monto"
+              etiqueta="Monto a exentar"
+              valor={valoresExentar.monto ?? aPesosTexto(mesExentar.saldo_centavos)}
+              error={seccion === 'exentar' ? errores.monto : undefined}
+              modoTeclado="decimal"
+              monto
+              requerido
+            />
+            <Campo
+              nombre="motivo"
+              etiqueta="Motivo"
+              valor={valoresExentar.motivo}
+              error={seccion === 'exentar' ? errores.motivo : undefined}
+              requerido
+            />
+            <div class="formulario__acciones">
+              <button class="btn btn--primary" type="submit">
+                Exentar {nombrePeriodo(mesExentar.periodo.slice(0, 7)).split(' ')[0]}
+              </button>
+              <a class="btn btn--ghost" href={`/capitas/hermano/${id}?anio=${anio}`}>Cancelar</a>
+            </div>
+          </Formulario>
+        </section>
+      )
+    }
+    {
       !puedeExentar && (
-        <p class="apagado" style="font-size: 0.85rem; margin-bottom: 0;">
+        <p class="apagado letra-chica abajo-0">
           Las exenciones las autoriza el Venerable Maestro.
         </p>
       )
     }
   </section>
 
-  <section class="tarjeta" style="margin-top: 1.25rem;">
+  <section class="tarjeta arriba-l">
     <h2>Pagos registrados</h2>
     {
       pagos.length === 0 ? (
@@ -673,7 +705,7 @@ Astro.response.status = estado;
                     {p.aplicado_centavos < p.monto_centavos && (
                       <>
                         {' '}
-                        <span class="insignia insignia--pendiente">A favor</span>
+                        <span class="insignia insignia--favor">A favor</span>
                       </>
                     )}
                   </td>
@@ -706,7 +738,7 @@ Astro.response.status = estado;
 
   {
     condonaciones.length > 0 && (
-      <section class="tarjeta" style="margin-top: 1.25rem;">
+      <section class="tarjeta arriba-l">
         <h2>Exenciones</h2>
         <div class="tabla-envoltura">
           <table class="tabla">
@@ -742,9 +774,8 @@ Astro.response.status = estado;
                           value={String(c.capita_cargo_id)}
                         />
                         <button
-                          class="btn btn--ghost"
+                          class="btn btn--ghost btn--chico"
                           type="submit"
-                          style="padding: 0.15rem 0.6rem; font-size: 0.72rem;"
                         >
                           Quitar
                         </button>
