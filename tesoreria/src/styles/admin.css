@@ -356,15 +356,26 @@
     gap: 1.1rem;
   }
 
-  /* En escritorio el popover se muestra siempre, como columna normal. */
+  /*
+   * En escritorio el popover se muestra siempre, como columna fija a la
+   * izquierda bajo la barra. Va con position: fixed y su inset completo: si se
+   * deja inset: auto, el top se pierde y el menú se va con el scroll.
+   */
   @media (min-width: 769px) {
     .lateral[popover] {
       display: flex;
-      inset: auto;
-      width: auto;
+      position: fixed;
+      inset: 3.5rem auto 0 0;
+      width: 16rem;
+      height: auto;
+      max-height: none;
       margin: 0;
       border-width: 0 1px 0 0;
       color: inherit;
+    }
+
+    .app__contenido {
+      grid-column: 2;
     }
   }
 
