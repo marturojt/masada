@@ -1,0 +1,36 @@
+---
+/*
+ * Un filtro de opciones excluyentes como control segmentado: etiqueta a la
+ * izquierda y las opciones en una barra de botones unidos, con la elegida
+ * rellena. Son enlaces, sin JavaScript: la vista filtrada vive en la dirección
+ * y se puede guardar o compartir.
+ */
+interface Opcion {
+  texto: string;
+  href: string;
+  activa: boolean;
+  /** Cuántos hay con esa opción, si se sabe. */
+  cuenta?: number;
+}
+
+interface Props {
+  etiqueta: string;
+  opciones: Opcion[];
+}
+
+const { etiqueta, opciones } = Astro.props;
+---
+
+<div class="segmentos">
+  <span class="segmentos__etiqueta" id={`seg-${etiqueta}`}>{etiqueta}</span>
+  <nav class="segmentos__grupo" aria-labelledby={`seg-${etiqueta}`}>
+    {
+      opciones.map((o) => (
+        <a class="segmentos__opcion" href={o.href} aria-current={o.activa ? 'true' : undefined}>
+          {o.texto}
+          {o.cuenta !== undefined && <span class="segmentos__cuenta">{o.cuenta}</span>}
+        </a>
+      ))
+    }
+  </nav>
+</div>

@@ -1183,6 +1183,15 @@
       padding: 1rem 1rem 3rem;
     }
 
+    /*
+     * En el teléfono la etiqueta del filtro va arriba, igual en todos. Con el
+     * contenedor delante, porque la regla base de .segmentos va después.
+     */
+    .barra-filtros .segmentos {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
     .barra__fila,
     .barra__contexto {
       padding-left: 1rem;
@@ -1650,6 +1659,76 @@
 
   .barras-mes__resultado--negativo {
     color: var(--md-sys-color-error);
+  }
+
+  /* ── Filtros como control segmentado ── */
+  .barra-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    align-items: center;
+    margin: 0.5rem 0 1.25rem;
+  }
+
+  .segmentos {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+    min-width: 0;
+  }
+
+  .segmentos__etiqueta {
+    font-family: var(--font-label);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .segmentos__grupo {
+    display: inline-flex;
+    flex-wrap: wrap;
+    padding: 3px;
+    gap: 2px;
+    background: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--radius-md);
+  }
+
+  .segmentos .segmentos__opcion {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.1rem;
+    padding: 0 0.85rem;
+    border-radius: calc(var(--radius-md) - 2px);
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 0.88rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .segmentos .segmentos__opcion:hover {
+    background: var(--relleno-paso);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .segmentos .segmentos__opcion[aria-current='true'] {
+    background: var(--gold);
+    color: var(--md-sys-color-background);
+    font-weight: 600;
+  }
+
+  .segmentos .segmentos__opcion:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  .segmentos__cuenta {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
   }
 
   .tabla .sin-corte {

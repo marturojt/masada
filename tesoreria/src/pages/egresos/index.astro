@@ -5,6 +5,7 @@
  * que GT ya cobró y aún no tiene egreso se muestra aparte, para que nada se pierda.
  */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Segmentos from '@componentes/Segmentos.astro';
 import Aviso from '@componentes/Aviso.astro';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
 import {
@@ -170,25 +171,19 @@ const conFiltro = (valor?: string): string => {
     )
   }
 
-  <p class="apagado letra-chica">
-    Filtrar:{' '}
-    <a href={conFiltro()} style={!estado ? 'color: var(--gold); font-weight: 600;' : undefined}>
-      Todos
-    </a>
-    {
-      ESTADOS.map((e) => (
-        <>
-          {' · '}
-          <a
-            href={conFiltro(e)}
-            style={estado === e ? 'color: var(--gold); font-weight: 600;' : undefined}
-          >
-            {NOMBRE_ESTADO_EGRESO[e].split(',')[0]}
-          </a>
-        </>
-      ))
-    }
-  </p>
+  <div class="barra-filtros">
+    <Segmentos
+      etiqueta="Estado"
+      opciones={[
+        { texto: 'Todos', href: conFiltro(), activa: !estado },
+        ...ESTADOS.map((e) => ({
+          texto: NOMBRE_ESTADO_EGRESO[e].split(',')[0]!,
+          href: conFiltro(e),
+          activa: estado === e,
+        })),
+      ]}
+    />
+  </div>
 
   {
     egresos.length === 0 ? (

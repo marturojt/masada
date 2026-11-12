@@ -1,6 +1,7 @@
 ---
 /* Padrón de hermanos, con filtros por estatus y grado en la barra de direcciones. */
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
+import Segmentos from '@componentes/Segmentos.astro';
 import Aviso from '@componentes/Aviso.astro';
 import { avisoDe } from '@lib/formulario';
 import { requerirSesion } from '@lib/sesion';
@@ -73,45 +74,33 @@ const conFiltro = (cambios: Record<string, string | undefined>): string => {
     </div>
   </div>
 
-  <p class="apagado letra-chica">
-    Filtrar:
-    {
-      (
+  <div class="barra-filtros">
+    <Segmentos
+      etiqueta="Estatus"
+      opciones={(
         [
           ['activo', 'Activos'],
           ['baja', 'Bajas'],
           ['todos', 'Todos'],
         ] as const
-      ).map(([valor, texto]) => (
-        <>
-          {' '}
-          <a
-            href={conFiltro({ estatus: valor })}
-            style={estatus === valor ? 'color: var(--gold); font-weight: 600;' : undefined}
-          >
-            {texto}
-          </a>
-        </>
-      ))
-    }
-    {' · '}
-    <a href={conFiltro({ grado: undefined })} style={!grado ? 'color: var(--gold); font-weight: 600;' : undefined}>
-      Todos los grados
-    </a>
-    {
-      (['maestro', 'companero', 'aprendiz'] as const).map((g) => (
-        <>
-          {' '}
-          <a
-            href={conFiltro({ grado: g })}
-            style={grado === g ? 'color: var(--gold); font-weight: 600;' : undefined}
-          >
-            {NOMBRE_GRADO_PLURAL[g]}
-          </a>
-        </>
-      ))
-    }
-  </p>
+      ).map(([valor, texto]) => ({
+        texto,
+        href: conFiltro({ estatus: valor }),
+        activa: estatus === valor,
+      }))}
+    />
+    <Segmentos
+      etiqueta="Grado"
+      opciones={[
+        { texto: 'Todos', href: conFiltro({ grado: undefined }), activa: !grado },
+        ...(['maestro', 'companero', 'aprendiz'] as const).map((g) => ({
+          texto: NOMBRE_GRADO_PLURAL[g],
+          href: conFiltro({ grado: g }),
+          activa: grado === g,
+        })),
+      ]}
+    />
+  </div>
 
   {
     hermanos.length === 0 ? (
