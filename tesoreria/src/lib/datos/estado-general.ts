@@ -26,6 +26,21 @@ export interface AdeudoHermano {
   por_vencer_centavos: number;
 }
 
+/** Cómo va cada hermano con sus cápitas del ejercicio, deba o no. */
+export interface CapitaHermano {
+  hermano_id: number;
+  nombre: string;
+  baja: boolean;
+  modalidad: string;
+  situacion: string;
+  al_corriente: boolean;
+  esperado_centavos: number;
+  pagado_centavos: number;
+  vencido_centavos: number;
+  por_vencer_centavos: number;
+  saldo_a_favor_centavos: number;
+}
+
 export interface EstadoGeneral {
   anio: number;
   caja: {
@@ -43,6 +58,8 @@ export interface EstadoGeneral {
     porVencer: number;
     alCorriente: number;
     adeudos: AdeudoHermano[];
+    /** Todos los hermanos con plan en el ejercicio, primero los que deben. */
+    hermanos: CapitaHermano[];
   };
   saldosAFavor: { hermano_id: number; nombre: string; saldo_centavos: number }[];
   gt: {
@@ -109,6 +126,20 @@ export async function estadoGeneral(anio: number): Promise<EstadoGeneral> {
       por_vencer_centavos: e.por_vencer_centavos,
     }));
 
+  const hermanos = estados.map((e) => ({
+    hermano_id: e.hermano_id,
+    nombre: e.nombre_completo,
+    baja: e.estatus === 'baja',
+    modalidad: e.modalidad ? NOMBRE_MODALIDAD[e.modalidad] : 'Sin modalidad',
+    situacion: e.vencido_centavos > 0 ? textoSituacion(e.modalidad, e.meses_vencidos) : 'Al corriente',
+    al_corriente: e.vencido_centavos === 0,
+    esperado_centavos: e.esperado_centavos,
+    pagado_centavos: e.pagado_centavos,
+    vencido_centavos: e.vencido_centavos,
+    por_vencer_centavos: e.por_vencer_centavos,
+    saldo_a_favor_centavos: e.saldo_a_favor_centavos,
+  }));
+
   const saldosAFavor = estados
     .filter((e) => e.saldo_a_favor_centavos > 0)
     .map((e) => ({
@@ -135,6 +166,7 @@ export async function estadoGeneral(anio: number): Promise<EstadoGeneral> {
       porVencer: resumen?.por_vencer ?? 0,
       alCorriente: resumen?.al_corriente ?? 0,
       adeudos,
+      hermanos,
     },
     saldosAFavor,
     gt: {
@@ -178,8 +210,8 @@ export function filasCSV(e: EstadoGeneral): { encabezados: string[]; filas: (str
   if (e.capitas.condonado > 0) fila('Cápitas', 'Exento', null, null, e.capitas.condonado);
   fila('Cápitas', 'Vencido', null, `${e.capitas.adeudos.length} ${e.capitas.adeudos.length === 1 ? 'hermano' : 'hermanos'} con adeudo`, e.capitas.vencido);
   fila('Cápitas', 'Por vencer en el año', null, null, e.capitas.porVencer);
-  for (const a of e.capitas.adeudos) {
-    fila('Adeudo de cápita', a.situacion, a.nombre, a.modalidad, a.vencido_centavos);
+  for (const h of e.capitas.hermanos) {
+    fila('Cápitas por hermano', h.situacion, h.nombre, `${h.modalidad}. Pagado ${pesos(h.pagado_centavos)}, por vencer ${pesos(h.por_vencer_centavos)}`, h.vencido_centavos);
   }
 
   for (const s of e.saldosAFavor) {

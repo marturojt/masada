@@ -7,12 +7,14 @@
  * Es de uso interno: lleva nombres de hermanos y de beneficiarios.
  */
 import { consulta } from '../db';
+import { adeudosDelAnio, estadosDeCuenta, NOMBRE_MODALIDAD, planesVigentes, type AdeudoMes, type EstadoCuenta, type PlanConHistoria } from './capitas';
 import { cortesDelAnio, type CorteCalculado } from './cortes';
 import { listarEgresos, NOMBRE_ESTADO_EGRESO, type EgresoFila } from './egresos';
 import { estadoGeneral, filasCSV as filasCSVGeneral, type EstadoGeneral } from './estado-general';
 import { saldoDeCaja } from './movimientos';
 import { listarTraspasos, type TraspasoFila } from './traspasos';
-import { nombrePeriodo } from '../fechas';
+import { MESES_CORTOS, nombrePeriodo } from '../fechas';
+import { matrizPorHermano, SIN_CARGO, TEXTO_MES } from '../capitas-matriz';
 import { cuenta } from '../texto';
 import { formatoMXN } from '../dinero';
 import { NOMBRE_BOLSA, type Bolsa } from '../tipos';
@@ -96,6 +98,8 @@ export interface MesDetalle extends CorteCalculado {
 
 export interface EstadoDetallado {
   general: EstadoGeneral;
+  /** Los mismos datos que la matriz de /capitas. */
+  matriz: { adeudos: AdeudoMes[]; estados: EstadoCuenta[]; planes: PlanConHistoria[] };
   resumen: {
     apertura: number;
     ingresosCapturados: number;
@@ -195,13 +199,16 @@ function porConceptoNeto(movs: MovimientoDetalle[], correcciones: Correccion[]):
 }
 
 export async function estadoDetallado(anio: number): Promise<EstadoDetallado> {
-  const [general, caja, cortes, libro, ciclo, traspasos] = await Promise.all([
+  const [general, caja, cortes, libro, ciclo, traspasos, adeudos, estados, planes] = await Promise.all([
     estadoGeneral(anio),
     saldoDeCaja(anio),
     cortesDelAnio(anio),
     libroDelEjercicio(anio),
     listarEgresos({ anio }),
     listarTraspasos(anio),
+    adeudosDelAnio(anio),
+    estadosDeCuenta(anio),
+    planesVigentes(anio),
   ]);
 
   /* Los meses se nombran aquí, no en SQL: así no dependen del idioma de la base. */
@@ -274,6 +281,7 @@ export async function estadoDetallado(anio: number): Promise<EstadoDetallado> {
 
   return {
     general,
+    matriz: { adeudos, estados, planes },
     resumen: {
       apertura: caja.apertura,
       ingresosCapturados,
@@ -335,6 +343,7 @@ export function filasCSVDetallado(d: EstadoDetallado): {
     'Bolsa',
     'Comprobante',
     'Capturó',
+    ...MESES_CORTOS,
   ];
   const filas: (string | number | null)[][] = general.filas.map((f) => [...f, null, null, null, null, null]);
 
@@ -414,6 +423,24 @@ export function filasCSVDetallado(d: EstadoDetallado): {
     ]);
   }
 
+  /* Matriz de cápitas: una fila por hermano y el estado de cada mes en texto. */
+  const rejilla = matrizPorHermano(d.matriz.adeudos);
+  for (const e of d.matriz.estados) {
+    const fila = rejilla.get(e.hermano_id);
+    filas.push([
+      'Cápitas mes por mes',
+      e.modalidad ? NOMBRE_MODALIDAD[e.modalidad] : 'Sin modalidad',
+      e.nombre_completo,
+      e.estatus === 'baja' ? 'De baja. El monto es lo vencido' : 'El monto es lo vencido',
+      pesos(e.vencido_centavos),
+      null, null, null, null, null,
+      ...Array.from({ length: 12 }, (_, i) => {
+        const cargo = fila?.get(i + 1);
+        return cargo ? TEXTO_MES[cargo.estado_pago] ?? cargo.estado_pago : SIN_CARGO;
+      }),
+    ]);
+  }
+
   for (const g of d.ciclo) {
     filas.push([
       'Ciclo de egresos',
@@ -444,5 +471,9 @@ export function filasCSVDetallado(d: EstadoDetallado): {
     ]);
   }
 
-  return { encabezados, filas };
+  /* Todas las filas con el mismo número de columnas, para que Excel no se confunda. */
+  return {
+    encabezados,
+    filas: filas.map((f) => (f.length < encabezados.length ? [...f, ...Array(encabezados.length - f.length).fill(null)] : f)),
+  };
 }

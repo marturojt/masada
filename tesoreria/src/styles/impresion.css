@@ -322,6 +322,59 @@
     padding: 0.25rem 0.25rem;
   }
 
+  /* Matriz de cápitas en papel: símbolos centrados, por forma y no por color. */
+  .hoja .matriz-impresa {
+    font-size: 8pt;
+  }
+
+  .hoja .matriz-impresa caption {
+    text-align: left;
+    font-size: 8pt;
+    color: #5a5040;
+    padding-bottom: 0.2rem;
+  }
+
+  .hoja .matriz-impresa th,
+  .hoja .matriz-impresa td {
+    padding: 0.15rem 0.2rem;
+  }
+
+  .hoja .matriz-impresa th {
+    font-size: 6.5pt;
+    letter-spacing: 0;
+  }
+
+  .hoja .matriz-impresa tbody th {
+    font-family: inherit;
+    font-size: 8pt;
+    text-transform: none;
+    color: #111111;
+    border-bottom: 1px solid #dddddd;
+  }
+
+  .hoja .matriz-impresa__mes {
+    text-align: center;
+    width: 2.1rem;
+  }
+
+  .hoja .matriz-impresa__marca {
+    color: #5a5040;
+    font-size: 7pt;
+  }
+
+  /* El bloque de la matriz sí se parte entre hojas; sus renglones no. */
+  .hoja .matriz-bloque {
+    break-inside: auto;
+  }
+
+  .hoja .matriz-impresa thead {
+    display: table-header-group;
+  }
+
+  .hoja .matriz-impresa tr {
+    break-inside: avoid;
+  }
+
   .hoja .resumen-palabras {
     font-size: 10pt;
     margin: 0 0 0.8rem;

@@ -3,6 +3,7 @@
 import LayoutImpresion from '@layouts/LayoutImpresion.astro';
 import EstadoGeneral from '@componentes/EstadoGeneral.astro';
 import IngresosEgresosDetalle from '@componentes/IngresosEgresosDetalle.astro';
+import MatrizCapitasImpresa from '@componentes/MatrizCapitasImpresa.astro';
 import { estadoDetallado } from '@lib/datos/estado-detallado';
 import { resumenEnPalabras } from '@lib/datos/estado-general';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
@@ -25,6 +26,10 @@ const detalle = await estadoDetallado(anio);
 >
   <p class="resumen-palabras">{resumenEnPalabras(detalle.general)}</p>
   <EstadoGeneral estado={detalle.general} impresion />
+  <section class="bloque-impreso matriz-bloque">
+    <h2>Cápitas {anio}, mes por mes</h2>
+    <MatrizCapitasImpresa anio={anio} adeudos={detalle.matriz.adeudos} estados={detalle.matriz.estados} />
+  </section>
   <IngresosEgresosDetalle detalle={detalle} impresion />
   <p class="sello">
     Documento de uso interno de la tesorería. Generado por {sesion.usuario.nombre} el{' '}

@@ -8,6 +8,7 @@ import { formatoCifra } from '@lib/dinero';
 import { MESES_CORTOS, nombrePeriodo } from '@lib/fechas';
 
 import { historiaDelPlan, type PlanConHistoria } from '@lib/capitas-historia';
+import { LEYENDA_MATRIZ, matrizPorHermano, SIMBOLO_MES, TEXTO_MES } from '@lib/capitas-matriz';
 
 interface Props {
   anio: number;
@@ -15,26 +16,14 @@ interface Props {
   /** Historia del plan por hermano, para el tooltip de la modalidad. */
   planes?: Map<number, PlanConHistoria>;
   estados: EstadoCuenta[];
+  /** Si la página ya pone su propio título, el de la tabla queda solo para lectores. */
+  conTitulo?: boolean;
 }
 
-const { anio, adeudos, estados, planes } = Astro.props;
+const { anio, adeudos, estados, planes, conTitulo = true } = Astro.props;
 
-/* hermano -> mes (1..12) -> cargo del mes */
-const porHermano = new Map<number, Map<number, AdeudoMes>>();
-for (const a of adeudos) {
-  const mes = Number(a.periodo.slice(5, 7));
-  const fila = porHermano.get(a.hermano_id) ?? new Map<number, AdeudoMes>();
-  fila.set(mes, a);
-  porHermano.set(a.hermano_id, fila);
-}
-
-const SIMBOLO: Record<string, string> = {
-  cubierto: '●',
-  parcial: '◐',
-  vencido_parcial: '◐',
-  vencido: '✕',
-  pendiente: '·',
-};
+const porHermano = matrizPorHermano(adeudos);
+const SIMBOLO = SIMBOLO_MES;
 
 const CLASE: Record<string, string> = {
   cubierto: 'celda--cubierto',
@@ -44,13 +33,7 @@ const CLASE: Record<string, string> = {
   pendiente: 'celda--pendiente',
 };
 
-const ETIQUETA: Record<string, string> = {
-  cubierto: 'cubierto',
-  parcial: 'parcial',
-  vencido_parcial: 'vencido, pago parcial',
-  vencido: 'vencido',
-  pendiente: 'pendiente',
-};
+const ETIQUETA = TEXTO_MES;
 
 /* Estado para el globo de cada mes, con la insignia de su significado. */
 const ESTADO: Record<string, string> = {
@@ -85,7 +68,7 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
 -->
 <div class="tabla-envoltura">
   <table class="tabla tabla--matriz tabla--fija">
-    <caption>Cápitas {anio}, mes por mes</caption>
+    <caption class:list={[!conTitulo && 'solo-lectores']}>Cápitas {anio}, mes por mes</caption>
     <thead>
       <tr>
         <th scope="col">Hermano</th>
@@ -206,7 +189,7 @@ const SIN_CARGOS: Map<number, AdeudoMes> = new Map();
 </div>
 
 <p class="apagado letra-menor">
-  Toca un mes para ver el detalle. ● cubierto · ◐ parcial · ✕ vencido · · pendiente · – sin cargo ese mes
+  Toca un mes para ver el detalle. {LEYENDA_MATRIZ}
 </p>
 
 <style>

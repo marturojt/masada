@@ -82,36 +82,57 @@ const totalEgresos =
   </div>
 
   {
-    e.capitas.adeudos.length > 0 && (
+    e.capitas.hermanos.length > 0 && (
       <>
-        <h3>Hermanos con adeudo</h3>
+        <h3>Cómo va cada hermano</h3>
+        <p class="apagado letra-media">
+          Todos los hermanos con plan de cápitas en {e.anio}, primero los que deben.
+        </p>
         <div class={envoltura}>
-        <table class={tabla}>
+        <table class:list={[tabla, 'libro']}>
           <thead>
             <tr>
               <th scope="col">Hermano</th>
               <th scope="col">Modalidad</th>
               <th scope="col">Situación</th>
+              <th scope="col" class="num">Esperado</th>
+              <th scope="col" class="num">Pagado</th>
               <th scope="col" class="num">Vencido</th>
               <th scope="col" class="num">Por vencer</th>
             </tr>
           </thead>
           <tbody>
-            {e.capitas.adeudos.map((a) => (
+            {e.capitas.hermanos.map((h) => (
               <tr>
-                <td><a href={liga(`/capitas/hermano/${a.hermano_id}`)}>{a.nombre}</a></td>
-                <td>{a.modalidad}</td>
-                <td>{a.situacion}</td>
-                <td class="num">{formatoMXN(a.vencido_centavos)}</td>
-                <td class="num">{a.por_vencer_centavos > 0 ? formatoMXN(a.por_vencer_centavos) : '—'}</td>
+                <td>
+                  <a href={liga(`/capitas/hermano/${h.hermano_id}`)}>{h.nombre}</a>
+                  {h.baja && <span class="nota-linea en-bloque letra-menor apagado">De baja</span>}
+                </td>
+                <td>{h.modalidad}</td>
+                <td>
+                  {impresion ? (
+                    h.situacion
+                  ) : (
+                    <span class:list={['insignia', h.al_corriente ? 'insignia--ok' : 'insignia--alerta']}>{h.situacion}</span>
+                  )}
+                  {h.saldo_a_favor_centavos > 0 && (
+                    <span class="nota-linea en-bloque letra-menor apagado">A favor {formatoMXN(h.saldo_a_favor_centavos)}</span>
+                  )}
+                </td>
+                <td class="num">{formatoMXN(h.esperado_centavos)}</td>
+                <td class="num">{formatoMXN(h.pagado_centavos)}</td>
+                <td class="num">{h.vencido_centavos > 0 ? formatoMXN(h.vencido_centavos) : '—'}</td>
+                <td class="num">{h.por_vencer_centavos > 0 ? formatoMXN(h.por_vencer_centavos) : '—'}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
               <td colspan="3">Total</td>
-              <td class="num">{formatoMXN(e.capitas.adeudos.reduce((s, a) => s + a.vencido_centavos, 0))}</td>
-              <td class="num">{formatoMXN(e.capitas.adeudos.reduce((s, a) => s + a.por_vencer_centavos, 0))}</td>
+              <td class="num">{formatoMXN(e.capitas.hermanos.reduce((s, h) => s + h.esperado_centavos, 0))}</td>
+              <td class="num">{formatoMXN(e.capitas.hermanos.reduce((s, h) => s + h.pagado_centavos, 0))}</td>
+              <td class="num">{formatoMXN(e.capitas.hermanos.reduce((s, h) => s + h.vencido_centavos, 0))}</td>
+              <td class="num">{formatoMXN(e.capitas.hermanos.reduce((s, h) => s + h.por_vencer_centavos, 0))}</td>
             </tr>
           </tfoot>
         </table>

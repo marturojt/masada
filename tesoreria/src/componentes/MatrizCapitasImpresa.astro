@@ -1,0 +1,56 @@
+---
+/*
+ * Matriz de cápitas para papel: hermano por los doce meses, con los mismos
+ * símbolos que /capitas. Sin botones ni globos; el encabezado de meses se
+ * repite en cada hoja y ningún renglón se parte entre dos páginas.
+ */
+import type { AdeudoMes, EstadoCuenta } from '@lib/datos/capitas';
+import { LEYENDA_MATRIZ, matrizPorHermano, SIMBOLO_MES, TEXTO_MES } from '@lib/capitas-matriz';
+import { MESES_CORTOS } from '@lib/fechas';
+
+interface Props {
+  anio: number;
+  adeudos: AdeudoMes[];
+  estados: EstadoCuenta[];
+}
+
+const { adeudos, estados } = Astro.props;
+const porHermano = matrizPorHermano(adeudos);
+const meses = Array.from({ length: 12 }, (_, i) => i + 1);
+---
+
+<table class="matriz-impresa">
+  <thead>
+    <tr>
+      <th scope="col">Hermano</th>
+      {meses.map((m) => <th scope="col" class="matriz-impresa__mes">{MESES_CORTOS[m - 1]}</th>)}
+    </tr>
+  </thead>
+  <tbody>
+    {
+      estados.map((e) => {
+        const fila = porHermano.get(e.hermano_id);
+        return (
+          <tr>
+            <th scope="row">
+              {e.nombre_completo}
+              {e.modalidad === 'promocion' && <span class="matriz-impresa__marca"> (promoción)</span>}
+              {e.estatus === 'baja' && <span class="matriz-impresa__marca"> (baja)</span>}
+            </th>
+            {meses.map((m) => {
+              const cargo = fila?.get(m);
+              return cargo ? (
+                <td class="matriz-impresa__mes" title={TEXTO_MES[cargo.estado_pago]}>
+                  {SIMBOLO_MES[cargo.estado_pago]}
+                </td>
+              ) : (
+                <td class="matriz-impresa__mes">–</td>
+              );
+            })}
+          </tr>
+        );
+      })
+    }
+  </tbody>
+</table>
+<p class="nota-linea">{LEYENDA_MATRIZ}</p>

@@ -7,6 +7,7 @@
 import LayoutAdmin from '@layouts/LayoutAdmin.astro';
 import EstadoGeneral from '@componentes/EstadoGeneral.astro';
 import IngresosEgresosDetalle from '@componentes/IngresosEgresosDetalle.astro';
+import MatrizCapitas from '@componentes/MatrizCapitas.astro';
 import { estadoDetallado } from '@lib/datos/estado-detallado';
 import { resumenEnPalabras } from '@lib/datos/estado-general';
 import { anioDeUrl, ejercicioVigente, listarEjercicios } from '@lib/datos/ejercicios';
@@ -46,6 +47,7 @@ const csv = `/reportes/estado-general-detallado.csv?anio=${anio}`;
   </p>
 
   <nav class="fila arriba-s letra-chica" aria-label="Secciones del reporte">
+    <a href="#matriz-capitas">Cápitas mes por mes</a>
     <a href="#ingresos-egresos">Ingresos y egresos</a>
     <a href="#libro-ingresos">Libro de ingresos</a>
     <a href="#libro-egresos">Libro de egresos</a>
@@ -55,6 +57,17 @@ const csv = `/reportes/estado-general-detallado.csv?anio=${anio}`;
 
   <div class="pila arriba-l">
     <EstadoGeneral estado={detalle.general} />
+    <section class="tarjeta" id="matriz-capitas">
+      <h2>Cápitas {anio}, mes por mes</h2>
+      <p class="apagado letra-media">La misma matriz de la página de Cápitas.</p>
+      <MatrizCapitas
+        conTitulo={false}
+        anio={anio}
+        adeudos={detalle.matriz.adeudos}
+        estados={detalle.matriz.estados}
+        planes={new Map(detalle.matriz.planes.map((p) => [p.hermano_id, p]))}
+      />
+    </section>
     <IngresosEgresosDetalle detalle={detalle} />
   </div>
 </LayoutAdmin>
